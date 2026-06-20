@@ -1,0 +1,13 @@
+# build / deps
+node_modules/
+main.js
+*.js.map
+
+# os
+.DS_Store
+
+# test vault runtime
+test-vault/.obsidian/workspace.json
+test-vault/.obsidian/workspace-mobile.json
+test-vault/.obsidian/plugins/
+test-vault/.obsidian/appearance.json
