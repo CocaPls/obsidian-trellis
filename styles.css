@@ -1,1 +1,19 @@
-/* TRELLIS — no styles yet (headless sync engine, MVP). */
+/* TRELLIS — sidebar tree view.
+   The view reuses Obsidian's native explorer classes (tree-item, nav-folder,
+   nav-file, collapse-icon), so the theme styles it like the real file explorer.
+   Only small tweaks live here. */
+
+.trellis-tree .trellis-tree-empty {
+	padding: 12px;
+	opacity: 0.6;
+	font-style: italic;
+}
+
+/* No collapse-icon size override — inherit Obsidian's native explorer size so
+   the arrow matches real folders exactly.
+
+   Keep only the collapsed rotation, in case the theme scopes it to the core
+   explorer and not our custom view. */
+.trellis-tree .tree-item.is-collapsed > .tree-item-self .collapse-icon svg {
+	transform: rotate(-90deg);
+}

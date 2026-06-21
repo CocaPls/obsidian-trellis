@@ -172,3 +172,124 @@ export function filterTagSuggestions(all: string[], query: string): string[] {
 	if (q === "") return all;
 	return all.filter((t) => t.toLowerCase().includes(q));
 }
+
+/** A node in the location-tag tree used by the sidebar tree view. */
+export interface TagTreeNode {
+	/** This level's name, e.g. "S88". Empty string for the synthetic root. */
+	segment: string;
+	/** Full tag path to this node, e.g. "trel/S88". Empty for the root. */
+	path: string;
+	children: TagTreeNode[];
+	/** Paths of notes whose location tag is *exactly* this node's path. */
+	notePaths: string[];
+}
+
+/**
+ * Build a nested tree from location-tag paths. The tag hierarchy ("trel/S88/L")
+ * already encodes the levels, so we just split on "/" and nest. A note hangs on
+ * the node whose path equals the note's full tag (so an index note tagged
+ * "trel/S88" becomes the head of the S88 branch). Children and notes are sorted.
+ */
+export function buildTagTree(
+	entries: { tagPath: string; notePath: string }[]
+): TagTreeNode {
+	const root: TagTreeNode = { segment: "", path: "", children: [], notePaths: [] };
+	for (const { tagPath, notePath } of entries) {
+		const segs = tagPath.split("/").filter(Boolean);
+		let node = root;
+		let acc = "";
+		for (const seg of segs) {
+			acc = acc ? `${acc}/${seg}` : seg;
+			let child = node.children.find((c) => c.segment === seg);
+			if (!child) {
+				child = { segment: seg, path: acc, children: [], notePaths: [] };
+				node.children.push(child);
+			}
+			node = child;
+		}
+		node.notePaths.push(notePath);
+	}
+	sortTagTree(root);
+	return root;
+}
+
+function sortTagTree(node: TagTreeNode): void {
+	node.children.sort((a, b) => a.segment.localeCompare(b.segment));
+	node.notePaths.sort();
+	node.children.forEach(sortTagTree);
+}
+
+/**
+ * Suggest the next child segment under a parent. If the existing direct-child
+ * segments are numeric, return max+1 zero-padded to width 2 ("01","02",…,"10").
+ * Otherwise (no numeric children) suggest "01". The user can overwrite it (e.g.
+ * a letter key for a new index level).
+ */
+export function nextChildSegment(childSegments: string[]): string {
+	const nums = childSegments
+		.filter((s) => /^\d+$/.test(s))
+		.map((s) => parseInt(s, 10));
+	if (nums.length === 0) return "01";
+	return String(Math.max(...nums) + 1).padStart(2, "0");
+}
+
+/** A node in the note-only tree: every node is a real note. Children are notes
+ *  whose nearest tagged ancestor is this note. */
+export interface NoteTreeNode {
+	notePath: string;
+	/** The note's full location-tag path, e.g. "trel/S88". */
+	tagPath: string;
+	children: NoteTreeNode[];
+}
+
+/**
+ * Build a tree of NOTES (not tag segments). Pure grouping levels with no note
+ * (e.g. "trel", "S77", "A" when no index note carries that exact tag) are made
+ * transparent — their note descendants bubble up to the nearest noted ancestor.
+ * So an index note tagged "trel/S88" becomes the parent of notes tagged
+ * "trel/S88/…", folder-style, and segment-only levels vanish.
+ */
+export function buildNoteTree(
+	entries: { tagPath: string; notePath: string }[]
+): NoteTreeNode[] {
+	return collapseToNotes(buildTagTree(entries));
+}
+
+/**
+ * Sort a note tree by a comparator, recursively (children too). Returns a new
+ * top-level array; the comparator is supplied by the caller (the plugin builds
+ * it from the sort key + direction, since mtime/ctime need file stats).
+ */
+export function sortNoteTree(
+	nodes: NoteTreeNode[],
+	compare: (a: NoteTreeNode, b: NoteTreeNode) => number
+): NoteTreeNode[] {
+	const sorted = [...nodes].sort(compare);
+	for (const node of sorted) {
+		node.children = sortNoteTree(node.children, compare);
+	}
+	return sorted;
+}
+
+function collapseToNotes(node: TagTreeNode): NoteTreeNode[] {
+	const out: NoteTreeNode[] = [];
+	for (const child of node.children) {
+		const descendants = collapseToNotes(child);
+		if (child.notePaths.length > 0) {
+			// First note at this exact tag heads the branch; extras (rare) are
+			// siblings with no children of their own.
+			out.push({
+				notePath: child.notePaths[0],
+				tagPath: child.path,
+				children: descendants,
+			});
+			for (let i = 1; i < child.notePaths.length; i++) {
+				out.push({ notePath: child.notePaths[i], tagPath: child.path, children: [] });
+			}
+		} else {
+			// No note here → transparent level; lift its descendants up.
+			out.push(...descendants);
+		}
+	}
+	return out;
+}

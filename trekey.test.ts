@@ -11,6 +11,10 @@ import {
 	normalizeTagList,
 	expandTagPrefixes,
 	filterTagSuggestions,
+	buildTagTree,
+	buildNoteTree,
+	sortNoteTree,
+	nextChildSegment,
 } from "./trekey.ts";
 
 const cfg: TrellisConfig = { namespace: "trel", separator: "-", keyPosition: "prefix" };
@@ -131,4 +135,86 @@ test("filterTagSuggestions is case-insensitive substring, order-preserving", () 
 	assert.deepEqual(filterTagSuggestions(all, "s99"), ["trel/S99", "trel/S99/A01"]);
 	assert.deepEqual(filterTagSuggestions(all, ""), all);
 	assert.deepEqual(filterTagSuggestions(all, "zzz"), []);
+});
+
+test("buildTagTree nests by tag path and hangs notes on exact-match nodes", () => {
+	const root = buildTagTree([
+		{ tagPath: "trel/S88/L/04", notePath: "S88L04.md" },
+		{ tagPath: "trel/S88/L/01", notePath: "S88L01.md" },
+		{ tagPath: "trel/S88", notePath: "S88.md" },
+		{ tagPath: "trel/S77/A01", notePath: "S77A01.md" },
+	]);
+
+	// root → trel
+	assert.equal(root.children.length, 1);
+	const trel = root.children[0];
+	assert.equal(trel.segment, "trel");
+	assert.equal(trel.path, "trel");
+
+	// trel → S77, S88 (sorted)
+	assert.deepEqual(trel.children.map((c) => c.segment), ["S77", "S88"]);
+
+	const s88 = trel.children[1];
+	assert.equal(s88.path, "trel/S88");
+	assert.deepEqual(s88.notePaths, ["S88.md"]); // index note hangs here
+	assert.deepEqual(s88.children.map((c) => c.segment), ["L"]);
+
+	// L → 01, 04 (sorted), each carrying its note
+	const l = s88.children[0];
+	assert.deepEqual(l.children.map((c) => c.segment), ["01", "04"]);
+	assert.deepEqual(l.children[0].notePaths, ["S88L01.md"]);
+	assert.deepEqual(l.children[1].notePaths, ["S88L04.md"]);
+});
+
+test("buildNoteTree shows only notes; segment-only levels are transparent", () => {
+	const roots = buildNoteTree([
+		{ tagPath: "trel/S88", notePath: "S88-trellis.md" },
+		{ tagPath: "trel/S88/A", notePath: "S88A-defs.md" },
+		{ tagPath: "trel/S88/A/01", notePath: "S88A01-def.md" },
+		{ tagPath: "trel/S77/A/01", notePath: "S77A01-other.md" }, // no S77/S77A index
+	]);
+
+	// Top level: S77A01 (no noted ancestor → bubbles to root) + S88-trellis.
+	assert.deepEqual(
+		roots.map((n) => n.notePath),
+		["S77A01-other.md", "S88-trellis.md"]
+	);
+
+	// S88-trellis heads its branch; A index nests under it; the segment levels
+	// "trel" / "S88" (as raw segments) never appear.
+	const s88 = roots[1];
+	assert.deepEqual(s88.children.map((n) => n.notePath), ["S88A-defs.md"]);
+	assert.deepEqual(s88.children[0].children.map((n) => n.notePath), ["S88A01-def.md"]);
+
+	// S77A01 had no S77/S77A index note, so it sits at root with no children.
+	assert.deepEqual(roots[0].children, []);
+});
+
+test("sortNoteTree sorts siblings recursively by the comparator", () => {
+	const roots = [
+		{
+			notePath: "S88.md",
+			tagPath: "trel/S88",
+			children: [
+				{ notePath: "S88L.md", tagPath: "trel/S88/L", children: [] },
+				{ notePath: "S88A.md", tagPath: "trel/S88/A", children: [] },
+			],
+		},
+		{ notePath: "S77.md", tagPath: "trel/S77", children: [] },
+	];
+	const asc = sortNoteTree(roots, (a, b) => a.notePath.localeCompare(b.notePath));
+	assert.deepEqual(asc.map((n) => n.notePath), ["S77.md", "S88.md"]);
+	assert.deepEqual(asc[1].children.map((n) => n.notePath), ["S88A.md", "S88L.md"]);
+
+	// reverse comparator → descending
+	const desc = sortNoteTree(roots, (a, b) => b.notePath.localeCompare(a.notePath));
+	assert.deepEqual(desc.map((n) => n.notePath), ["S88.md", "S77.md"]);
+});
+
+test("nextChildSegment suggests max+1 padded, or 01 when no numbers", () => {
+	assert.equal(nextChildSegment(["01", "02", "04"]), "05");
+	assert.equal(nextChildSegment(["09"]), "10");
+	assert.equal(nextChildSegment([]), "01");
+	assert.equal(nextChildSegment(["A", "B"]), "01"); // non-numeric → 01
+	assert.equal(nextChildSegment(["01", "A"]), "02"); // ignores non-numeric
 });
