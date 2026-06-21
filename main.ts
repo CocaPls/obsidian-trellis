@@ -23,6 +23,9 @@ import {
 	buildNoteTree,
 	sortNoteTree,
 	nextChildSegment,
+	parentTagPath,
+	extractTrekey,
+	trekeyToTagPath,
 } from "./trekey";
 import { TrellisTreeView, TRELLIS_TREE_VIEW } from "./tree-view";
 
@@ -39,10 +42,18 @@ type SortKey = "trekey" | "mtime" | "ctime";
  */
 
 /** Full plugin settings = conversion config + UI flags. */
+/** What one bootstrap pass wrote, kept so it can be undone. */
+interface BootstrapRecord {
+	path: string;
+	tag: string;
+}
+
 interface TrellisSettings extends TrellisConfig {
 	treeViewEnabled: boolean;
 	sortKey: SortKey;
 	sortAsc: boolean;
+	/** Files+tags written by the last bootstrap apply (for undo). */
+	lastBootstrap?: BootstrapRecord[];
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
@@ -92,7 +103,8 @@ export default class TrellisPlugin extends Plugin {
 					() => this.sortedNoteTree(),
 					() => this.settings.sortAsc,
 					() => void this.toggleSortDir(),
-					(parentTagPath) => this.newChildNote(parentTagPath)
+					(parentTagPath) => this.openNewNoteModal(parentTagPath),
+					() => this.newNoteFromActive()
 				)
 		);
 		this.ribbonEl = this.addRibbonIcon("list-tree", "TRELLIS tree", () =>
@@ -146,6 +158,19 @@ export default class TrellisPlugin extends Plugin {
 					void this.cascadeRename(from, to)
 				).open();
 			},
+		});
+
+		// Bootstrap an existing vault: read filename trekey prefixes and propose
+		// location tags. Dry-run only — shows a preview, writes nothing.
+		this.addCommand({
+			id: "bootstrap-preview",
+			name: "Bootstrap: preview tag assignment (dry-run)",
+			callback: () => this.bootstrapDryRun(),
+		});
+		this.addCommand({
+			id: "bootstrap-undo",
+			name: "Undo last bootstrap",
+			callback: () => void this.undoBootstrap(),
 		});
 
 		// Right-click a note → cascade-rename its location tag (From prefilled).
@@ -278,12 +303,30 @@ export default class TrellisPlugin extends Plugin {
 		this.rebuildTrees();
 	}
 
-	/** Open the new-child-note modal under a parent tag path. */
-	private newChildNote(parentTagPath: string) {
-		const suggested = nextChildSegment(this.childSegmentsOf(parentTagPath));
-		new NewChildNoteModal(this.app, parentTagPath, suggested, (segment, title) =>
-			void this.createChildNote(parentTagPath, segment, title)
+	/** Open the new-note modal with a parent prefilled (editable). Used by both
+	 *  the right-click entry (clicked node) and the header button (active note). */
+	private openNewNoteModal(initialParent: string) {
+		new NewChildNoteModal(
+			this.app,
+			initialParent,
+			(parent, segment, title) => void this.createChildNote(parent, segment, title)
 		).open();
+	}
+
+	/** Header "new note" button: prefill the parent from the active note, like
+	 *  the file explorer's create-at-current. File-explorer parity: an index note
+	 *  (has children → acts as a folder) gets a CHILD; a leaf note gets a SIBLING
+	 *  (created under its parent). Either way the parent stays editable. */
+	private newNoteFromActive() {
+		const active = this.app.workspace.getActiveFile();
+		const tag = active ? this.locationTagOf(active) : null;
+		if (!tag) {
+			this.openNewNoteModal("");
+			return;
+		}
+		const parent =
+			this.childSegmentsOf(tag).length > 0 ? tag : parentTagPath(tag);
+		this.openNewNoteModal(parent);
 	}
 
 	/** Direct-child segments already in use under a parent tag path. */
@@ -409,6 +452,73 @@ export default class TrellisPlugin extends Plugin {
 				: `TRELLIS: no files tagged ${from}`
 		);
 	}
+
+	/** Bootstrap dry-run: scan every markdown file, propose a location tag from
+	 *  its filename trekey prefix, and show a preview. Writes nothing — the user
+	 *  reviews before any real onboarding (apply step comes later). */
+	private bootstrapDryRun() {
+		const assign: { name: string; path: string; tag: string }[] = [];
+		const alreadyTagged: string[] = [];
+		const noTrekey: string[] = [];
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (this.locationTagOf(file)) {
+				alreadyTagged.push(file.basename);
+				continue;
+			}
+			const trekey = extractTrekey(file.basename, this.settings);
+			const tagPath = trekey ? trekeyToTagPath(trekey, this.settings) : null;
+			if (tagPath) assign.push({ name: file.basename, path: file.path, tag: tagPath });
+			else noTrekey.push(file.basename);
+		}
+		new BootstrapPreviewModal(this.app, assign, alreadyTagged, noTrekey, (rows) =>
+			void this.applyBootstrap(rows)
+		).open();
+	}
+
+	/** Apply: write the proposed location tag into each file's frontmatter
+	 *  (existing content preserved), recording what was written so it can be
+	 *  undone. Filenames usually don't change — the trekey is already there. */
+	private async applyBootstrap(assign: { path: string; tag: string }[]) {
+		const record: BootstrapRecord[] = [];
+		for (const r of assign) {
+			const file = this.app.vault.getAbstractFileByPath(r.path);
+			if (!(file instanceof TFile)) continue;
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				const tags = normalizeTagList(fm.tags);
+				if (!tags.includes(r.tag)) fm.tags = [...tags, r.tag];
+			});
+			record.push({ path: r.path, tag: r.tag });
+		}
+		this.settings.lastBootstrap = record;
+		await this.saveSettings();
+		new Notice(
+			`TRELLIS: bootstrapped ${record.length} file(s). Undo via "Undo last bootstrap".`
+		);
+	}
+
+	/** Undo the last bootstrap: remove exactly the tags it added. */
+	private async undoBootstrap() {
+		const record = this.settings.lastBootstrap ?? [];
+		if (record.length === 0) {
+			new Notice("TRELLIS: no bootstrap to undo");
+			return;
+		}
+		let undone = 0;
+		for (const r of record) {
+			const file = this.app.vault.getAbstractFileByPath(r.path);
+			if (!(file instanceof TFile)) continue;
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				const tags = normalizeTagList(fm.tags);
+				const next = tags.filter((t) => t !== r.tag);
+				if (next.length) fm.tags = next;
+				else delete fm.tags;
+			});
+			undone++;
+		}
+		this.settings.lastBootstrap = [];
+		await this.saveSettings();
+		new Notice(`TRELLIS: undid bootstrap on ${undone} file(s)`);
+	}
 }
 
 /** Two-field modal: which tag path to rename, and to what. */
@@ -472,22 +582,24 @@ class CascadeRenameModal extends Modal {
 	}
 }
 
-/** New-child-note modal: segment (auto-suggested, editable) + title. */
+/** New-note modal. Parent: prefilled by the caller (clicked node, or the active
+ *  note's location for the header button) and editable WITH tag autocomplete —
+ *  it picks an existing location, so completing it is safe. Segment: the user
+ *  assigns it by hand — TRELLIS is format-agnostic and must not guess the trekey
+ *  scheme (a wrong "01" in an alphabetic slot would just have to be retyped). */
 class NewChildNoteModal extends Modal {
-	private segment: string;
+	private parent: string;
+	private segment = "";
 	private title = "";
-	private readonly parentTagPath: string;
-	private readonly onSubmit: (segment: string, title: string) => void;
+	private readonly onSubmit: (parent: string, segment: string, title: string) => void;
 
 	constructor(
 		app: App,
-		parentTagPath: string,
-		suggestedSegment: string,
-		onSubmit: (segment: string, title: string) => void
+		initialParent: string,
+		onSubmit: (parent: string, segment: string, title: string) => void
 	) {
 		super(app);
-		this.parentTagPath = parentTagPath;
-		this.segment = suggestedSegment;
+		this.parent = initialParent;
 		this.onSubmit = onSubmit;
 	}
 
@@ -495,15 +607,24 @@ class NewChildNoteModal extends Modal {
 		const { contentEl } = this;
 		contentEl.createEl("h3", { text: "New note" });
 		contentEl.createEl("p", {
-			text: `Under ${this.parentTagPath}. Segment is auto-filled (a number) — edit it to a key for a new sub-level.`,
+			text: "Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself — TRELLIS does not guess the trekey scheme.",
 			cls: "setting-item-description",
 		});
 
 		new Setting(contentEl)
+			.setName("Parent")
+			.setDesc("Existing location tag to create under — type to search, ↑↓ + Enter")
+			.addText((t) => {
+				t.setPlaceholder("trel/S88")
+					.setValue(this.parent)
+					.onChange((v) => (this.parent = v.trim()));
+				new TagPathSuggest(this.app, t.inputEl, (v) => (this.parent = v));
+			});
+		new Setting(contentEl)
 			.setName("Segment")
-			.setDesc("Number (atom) or key (sub-level), e.g. 05 or C")
+			.setDesc("The identifier you assign for this level — e.g. a number 02, or a key C for a new sub-level")
 			.addText((t) =>
-				t.setValue(this.segment).onChange((v) => (this.segment = v.trim()))
+				t.setPlaceholder("e.g. 02 or C").onChange((v) => (this.segment = v.trim()))
 			);
 		new Setting(contentEl)
 			.setName("Title")
@@ -516,14 +637,80 @@ class NewChildNoteModal extends Modal {
 				.setButtonText("Create")
 				.setCta()
 				.onClick(() => {
-					if (this.segment) {
-						this.close();
-						this.onSubmit(this.segment, this.title);
-					} else {
-						new Notice("TRELLIS: segment is required");
+					if (!this.parent) {
+						new Notice("TRELLIS: parent is required");
+						return;
 					}
+					if (!this.segment) {
+						new Notice("TRELLIS: segment is required");
+						return;
+					}
+					this.close();
+					this.onSubmit(this.parent, this.segment, this.title);
 				})
 		);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+/** Bootstrap dry-run preview: lists files grouped by what would happen. Shows
+ *  only — the apply step (with backup) is a separate, later command. */
+class BootstrapPreviewModal extends Modal {
+	constructor(
+		app: App,
+		private readonly assign: { name: string; path: string; tag: string }[],
+		private readonly alreadyTagged: string[],
+		private readonly noTrekey: string[],
+		private readonly onApply: (rows: { path: string; tag: string }[]) => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: "Bootstrap — dry-run preview" });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: `${this.assign.length} file(s) would get a tag · ${this.alreadyTagged.length} already tagged (skipped) · ${this.noTrekey.length} have no recognizable trekey (skipped). Nothing is written.`,
+		});
+
+		if (this.assign.length) {
+			contentEl.createEl("h4", { text: `Will assign (${this.assign.length})` });
+			const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
+			for (const r of this.assign) {
+				const row = list.createDiv({ cls: "trellis-bootstrap-row" });
+				row.createSpan({ cls: "trellis-bootstrap-name", text: r.name });
+				row.createSpan({ cls: "trellis-bootstrap-arrow", text: " → " });
+				row.createSpan({ cls: "trellis-bootstrap-tag", text: "#" + r.tag });
+			}
+		}
+
+		if (this.noTrekey.length) {
+			contentEl.createEl("h4", {
+				text: `No trekey — skipped, check manually (${this.noTrekey.length})`,
+			});
+			const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
+			for (const n of this.noTrekey) {
+				list.createDiv({ cls: "trellis-bootstrap-skip", text: n });
+			}
+		}
+
+		const buttons = new Setting(contentEl);
+		if (this.assign.length) {
+			buttons.addButton((b) =>
+				b
+					.setButtonText(`Apply — tag ${this.assign.length} file(s)`)
+					.setWarning()
+					.onClick(() => {
+						this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
+						this.close();
+					})
+			);
+		}
+		buttons.addButton((b) => b.setButtonText("Close").onClick(() => this.close()));
 	}
 
 	onClose() {

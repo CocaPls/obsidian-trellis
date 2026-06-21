@@ -17,3 +17,30 @@
 .trellis-tree .tree-item.is-collapsed > .tree-item-self .collapse-icon svg {
 	transform: rotate(-90deg);
 }
+
+/* Bootstrap dry-run preview — scrollable file lists. */
+.trellis-bootstrap-list {
+	max-height: 40vh;
+	overflow-y: auto;
+	margin: 0.2em 0 0.8em;
+	padding: 0.4em 0.6em;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+}
+.trellis-bootstrap-row {
+	padding: 1px 0;
+}
+.trellis-bootstrap-name {
+	color: var(--text-normal);
+}
+.trellis-bootstrap-arrow {
+	color: var(--text-faint);
+}
+.trellis-bootstrap-tag {
+	color: var(--text-accent);
+}
+.trellis-bootstrap-skip {
+	padding: 1px 0;
+	color: var(--text-muted);
+}

@@ -20,6 +20,7 @@ export class TrellisTreeView extends ItemView {
 	private readonly getSortAsc: () => boolean;
 	private readonly onToggleSort: () => void;
 	private readonly onNewChild: (parentTagPath: string) => void;
+	private readonly onNewNote: () => void;
 	/** Tag paths whose children are hidden. Persists across refreshes. */
 	private readonly collapsed = new Set<string>();
 
@@ -28,13 +29,15 @@ export class TrellisTreeView extends ItemView {
 		getRoots: () => NoteTreeNode[],
 		getSortAsc: () => boolean,
 		onToggleSort: () => void,
-		onNewChild: (parentTagPath: string) => void
+		onNewChild: (parentTagPath: string) => void,
+		onNewNote: () => void
 	) {
 		super(leaf);
 		this.getRoots = getRoots;
 		this.getSortAsc = getSortAsc;
 		this.onToggleSort = onToggleSort;
 		this.onNewChild = onNewChild;
+		this.onNewNote = onNewNote;
 	}
 
 	getViewType(): string {
@@ -74,6 +77,9 @@ export class TrellisTreeView extends ItemView {
 		// Header with action buttons (native explorer look).
 		const header = container.createDiv({ cls: "nav-header" });
 		const buttons = header.createDiv({ cls: "nav-buttons-container" });
+		// New note — like the file explorer's new-note button, it creates at the
+		// current context (the active note's parent is prefilled in the modal).
+		this.addButton(buttons, "file-plus", "New note", () => this.onNewNote());
 		const asc = this.getSortAsc();
 		this.addButton(
 			buttons,
@@ -98,9 +104,13 @@ export class TrellisTreeView extends ItemView {
 			return;
 		}
 		const activePath = this.app.workspace.getActiveFile()?.path ?? null;
-		const treeRoot = nav.createDiv({ cls: "tree-item-children" });
+		// Render roots DIRECTLY under .nav-files-container. The core file
+		// explorer does NOT wrap top-level items in .tree-item-children — only
+		// each node's *children* get that wrapper. Wrapping the roots added a
+		// spurious top-level indent guide (border-inline-start) and one extra
+		// indent step, which made the tree look unlike the native explorer.
 		for (const node of roots) {
-			this.renderNode(treeRoot, node, activePath);
+			this.renderNode(nav, node, activePath);
 		}
 	}
 

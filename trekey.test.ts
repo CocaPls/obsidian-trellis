@@ -15,6 +15,7 @@ import {
 	buildNoteTree,
 	sortNoteTree,
 	nextChildSegment,
+	trekeyToTagPath,
 } from "./trekey.ts";
 
 const cfg: TrellisConfig = { namespace: "trel", separator: "-", keyPosition: "prefix" };
@@ -29,6 +30,33 @@ test("tagToTrekey ignores foreign namespaces and empties", () => {
 	assert.equal(tagToTrekey("#project/work", cfg), null);
 	assert.equal(tagToTrekey("#trel", cfg), null); // no trailing path
 	assert.equal(tagToTrekey("#trel/", cfg), null); // empty path
+});
+
+test("trekeyToTagPath decomposes a trekey into a hierarchical tag", () => {
+	assert.equal(trekeyToTagPath("S88", cfg), "trel/S88"); // package
+	assert.equal(trekeyToTagPath("S88A", cfg), "trel/S88/A"); // module
+	assert.equal(trekeyToTagPath("S88A01", cfg), "trel/S88/A/01"); // atom
+	assert.equal(trekeyToTagPath("S88B07", cfg), "trel/S88/B/07");
+});
+
+test("trekeyToTagPath keeps placeholder (0/00) slots for round-trip safety", () => {
+	assert.equal(trekeyToTagPath("S04001", cfg), "trel/S04/0/01"); // module "0" kept
+	assert.equal(trekeyToTagPath("S00L", cfg), "trel/S00/L"); // package "00" kept
+	assert.equal(trekeyToTagPath("P00001", cfg), "trel/P00/0/01"); // both kept
+	assert.equal(trekeyToTagPath("S00M", cfg), "trel/S00/M"); // master-log style
+});
+
+test("trekeyToTagPath round-trips with tagToTrekey (incl. placeholders)", () => {
+	for (const tk of ["S88", "S88A", "S88B07", "S04001", "S00M", "P00001"]) {
+		const tag = trekeyToTagPath(tk, cfg);
+		assert.equal(tagToTrekey("#" + tag, cfg), tk, `round-trip failed for ${tk}`);
+	}
+});
+
+test("trekeyToTagPath rejects trekeys that don't fit the scheme", () => {
+	assert.equal(trekeyToTagPath("S", cfg), null); // tier only, no package digits
+	assert.equal(trekeyToTagPath("hello", cfg), null);
+	assert.equal(trekeyToTagPath("88B07", cfg), null); // no leading tier letter
 });
 
 test("pickTrekey returns the first location tag, ignoring others", () => {

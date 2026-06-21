@@ -1,7 +1,7 @@
 {
 	"id": "trellis",
 	"name": "TRELLIS",
-	"version": "0.0.2",
+	"version": "0.0.4",
 	"minAppVersion": "1.4.0",
 	"description": "Sync a hierarchical location tag (source of truth) into the filename prefix (trekey), with a cascade rename command and a sidebar tree view of the tag hierarchy. Link-safe.",
 	"author": "CocaPls",

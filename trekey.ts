@@ -33,6 +33,43 @@ export function tagToTrekey(tag: string, cfg: TrellisConfig): string | null {
 }
 
 /**
+ * Parent of a tag path — drop the last segment. "trel/S77/A/01" → "trel/S77/A".
+ * A single-segment path (e.g. "trel") is returned unchanged. Used to place a
+ * new note as a SIBLING of a leaf note (under the leaf's parent).
+ */
+export function parentTagPath(tagPath: string): string {
+	const i = tagPath.lastIndexOf("/");
+	return i > 0 ? tagPath.slice(0, i) : tagPath;
+}
+
+/**
+ * Bootstrap helper — the INVERSE of tagToTrekey. Decompose a filename trekey
+ * ("S88B07") into a hierarchical location-tag path ("trel/S88/B/07") so an
+ * existing vault (trekey prefixes, no tags) can be onboarded.
+ *
+ * This is the ONE place that must know the trekey *scheme* (SPARK: a tier
+ * letter + 2-digit package as the first segment, then alternating module
+ * letter (1) + atom digits (2)). Placeholder slots ("0"/"00") are KEPT as
+ * segments — dropping them would break the round-trip with tagToTrekey (the
+ * tag is the source of truth, so the synced filename must rebuild the same
+ * 6-char trekey). Empty/segment-only levels are made transparent by the tree
+ * view, so kept placeholders don't clutter the UI.
+ *
+ * Best-effort: returns null when the trekey doesn't fit the scheme; the
+ * bootstrap dry-run shows every result (and every null) for human review
+ * before anything is written.
+ */
+export function trekeyToTagPath(trekey: string, cfg: TrellisConfig): string | null {
+	const m = trekey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
+	if (!m) return null;
+	const [, tier, pkg, mod, atom] = m;
+	const segs: string[] = [tier + pkg]; // tier + package (placeholder "00" kept)
+	if (mod !== undefined) segs.push(mod); // module letter (placeholder "0" kept)
+	if (atom !== undefined) segs.push(atom); // atom digits (placeholder "00" kept)
+	return `${cfg.namespace}/${segs.join("/")}`;
+}
+
+/**
  * Pick the first location tag (by config namespace) from a list of tags and
  * return its trekey, or null if none. TRELLIS treats one note as having one
  * location (note-to-tag 1:1) — first match wins.
