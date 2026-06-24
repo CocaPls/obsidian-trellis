@@ -28,6 +28,7 @@ import {
 	trekeyToTagPath,
 } from "./trekey";
 import { TrellisTreeView, TRELLIS_TREE_VIEW } from "./tree-view";
+import { t, setLang, LangSetting } from "./i18n";
 
 type SortKey = "trekey" | "mtime" | "ctime";
 
@@ -52,6 +53,8 @@ interface TrellisSettings extends TrellisConfig {
 	treeViewEnabled: boolean;
 	sortKey: SortKey;
 	sortAsc: boolean;
+	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
+	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
 	lastBootstrap?: BootstrapRecord[];
 }
@@ -63,6 +66,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeViewEnabled: true,
 	sortKey: "trekey",
 	sortAsc: true,
+	language: "auto",
 };
 
 export default class TrellisPlugin extends Plugin {
@@ -91,6 +95,7 @@ export default class TrellisPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		setLang(this.settings.language);
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
 
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
@@ -107,15 +112,15 @@ export default class TrellisPlugin extends Plugin {
 					() => this.newNoteFromActive()
 				)
 		);
-		this.ribbonEl = this.addRibbonIcon("list-tree", "TRELLIS tree", () =>
+		this.ribbonEl = this.addRibbonIcon("list-tree", t("view.treeName"), () =>
 			void this.activateTreeView()
 		);
 		this.addCommand({
 			id: "open-tree-view",
-			name: "Open tree view",
+			name: t("cmd.openTree"),
 			callback: () => {
 				if (this.settings.treeViewEnabled) void this.activateTreeView();
-				else new Notice("TRELLIS: tree view is off (enable it in settings)");
+				else new Notice(t("notice.treeOff"));
 			},
 		});
 		this.applyTreeViewState();
@@ -152,7 +157,7 @@ export default class TrellisPlugin extends Plugin {
 		// vault. The tag edits then drive each file's rename through syncFile.
 		this.addCommand({
 			id: "cascade-rename-tag",
-			name: "Rename location tag (cascade)",
+			name: t("cmd.cascade"),
 			callback: () => {
 				new CascadeRenameModal(this.app, (from, to) =>
 					void this.cascadeRename(from, to)
@@ -164,12 +169,12 @@ export default class TrellisPlugin extends Plugin {
 		// location tags. Dry-run only — shows a preview, writes nothing.
 		this.addCommand({
 			id: "bootstrap-preview",
-			name: "Bootstrap: preview tag assignment (dry-run)",
+			name: t("cmd.bootstrapPreview"),
 			callback: () => this.bootstrapDryRun(),
 		});
 		this.addCommand({
 			id: "bootstrap-undo",
-			name: "Undo last bootstrap",
+			name: t("cmd.bootstrapUndo"),
 			callback: () => void this.undoBootstrap(),
 		});
 
@@ -181,7 +186,7 @@ export default class TrellisPlugin extends Plugin {
 				if (from === null) return;
 				menu.addItem((item) =>
 					item
-						.setTitle("Rename location tag (cascade)")
+						.setTitle(t("cmd.cascade"))
 						.setIcon("tags")
 						.onClick(() =>
 							new CascadeRenameModal(
@@ -230,10 +235,10 @@ export default class TrellisPlugin extends Plugin {
 		try {
 			// renameFile = same path as a manual rename → wikilinks auto-update.
 			await this.app.fileManager.renameFile(file, newPath);
-			new Notice(`TRELLIS: ${file.basename} → ${newBasename}`);
+			new Notice(t("notice.renamed", { from: file.basename, to: newBasename }));
 		} catch (e) {
 			console.error("TRELLIS rename failed", e);
-			new Notice(`TRELLIS: rename failed for ${file.basename}`);
+			new Notice(t("notice.renameFailed", { name: file.basename }));
 		} finally {
 			this.renaming.delete(file.path);
 			// Release the new path after the follow-up events settle.
@@ -360,7 +365,7 @@ export default class TrellisPlugin extends Plugin {
 		const tagPath = `${parentTagPath}/${segment}`;
 		const trekey = tagToTrekey(`#${tagPath}`, this.settings);
 		if (!trekey) {
-			new Notice("TRELLIS: could not derive trekey (check namespace)");
+			new Notice(t("notice.noTrekey"));
 			return;
 		}
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
@@ -372,7 +377,7 @@ export default class TrellisPlugin extends Plugin {
 
 		const path = `${base}.md`;
 		if (this.app.vault.getAbstractFileByPath(path)) {
-			new Notice(`TRELLIS: "${base}" already exists`);
+			new Notice(t("notice.exists", { base }));
 			return;
 		}
 		const content = `---\ntags: [${tagPath}]\n---\n\n# ${safeTitle || trekey}\n`;
@@ -381,7 +386,7 @@ export default class TrellisPlugin extends Plugin {
 			await this.app.workspace.getLeaf(false).openFile(file);
 		} catch (e) {
 			console.error("TRELLIS create failed", e);
-			new Notice(`TRELLIS: failed to create "${base}"`);
+			new Notice(t("notice.createFailed", { base }));
 		}
 	}
 
@@ -448,8 +453,8 @@ export default class TrellisPlugin extends Plugin {
 		}
 		new Notice(
 			retagged > 0
-				? `TRELLIS: retagged ${retagged} file(s) ${from} → ${to}`
-				: `TRELLIS: no files tagged ${from}`
+				? t("notice.retagged", { n: retagged, from, to })
+				: t("notice.noFilesTagged", { from })
 		);
 	}
 
@@ -491,16 +496,14 @@ export default class TrellisPlugin extends Plugin {
 		}
 		this.settings.lastBootstrap = record;
 		await this.saveSettings();
-		new Notice(
-			`TRELLIS: bootstrapped ${record.length} file(s). Undo via "Undo last bootstrap".`
-		);
+		new Notice(t("notice.bootstrapped", { n: record.length }));
 	}
 
 	/** Undo the last bootstrap: remove exactly the tags it added. */
 	private async undoBootstrap() {
 		const record = this.settings.lastBootstrap ?? [];
 		if (record.length === 0) {
-			new Notice("TRELLIS: no bootstrap to undo");
+			new Notice(t("notice.noBootstrap"));
 			return;
 		}
 		let undone = 0;
@@ -517,7 +520,7 @@ export default class TrellisPlugin extends Plugin {
 		}
 		this.settings.lastBootstrap = [];
 		await this.saveSettings();
-		new Notice(`TRELLIS: undid bootstrap on ${undone} file(s)`);
+		new Notice(t("notice.undid", { n: undone }));
 	}
 }
 
@@ -539,39 +542,40 @@ class CascadeRenameModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "Rename location tag (cascade)" });
+		contentEl.createEl("h3", { text: t("modal.cascade.title") });
 		contentEl.createEl("p", {
-			text: "Rewrites this tag and everything under it across the vault. Filenames follow automatically.",
+			text: t("modal.cascade.desc"),
 			cls: "setting-item-description",
 		});
 
 		new Setting(contentEl)
-			.setName("From")
-			.setDesc("Existing tag — type to search, ↑↓ + Enter to pick")
-			.addText((t) => {
-				t.setPlaceholder("trel/S88")
+			.setName(t("modal.cascade.fromName"))
+			.setDesc(t("modal.cascade.fromDesc"))
+			.addText((input) => {
+				input
+					.setPlaceholder("trel/S88")
 					.setValue(this.from)
 					.onChange((v) => (this.from = v.trim()));
-				new TagPathSuggest(this.app, t.inputEl, (v) => (this.from = v));
+				new TagPathSuggest(this.app, input.inputEl, (v) => (this.from = v));
 			});
 		new Setting(contentEl)
-			.setName("To")
-			.setDesc("New tag path (free text)")
-			.addText((t) => {
-				t.setPlaceholder("trel/S99").onChange((v) => (this.to = v.trim()));
-				new TagPathSuggest(this.app, t.inputEl, (v) => (this.to = v));
+			.setName(t("modal.cascade.toName"))
+			.setDesc(t("modal.cascade.toDesc"))
+			.addText((input) => {
+				input.setPlaceholder("trel/S99").onChange((v) => (this.to = v.trim()));
+				new TagPathSuggest(this.app, input.inputEl, (v) => (this.to = v));
 			});
 
 		new Setting(contentEl).addButton((b) =>
 			b
-				.setButtonText("Rename")
+				.setButtonText(t("modal.cascade.submit"))
 				.setCta()
 				.onClick(() => {
 					if (this.from && this.to) {
 						this.close();
 						this.onSubmit(this.from, this.to);
 					} else {
-						new Notice("TRELLIS: fill in both fields");
+						new Notice(t("notice.fillBoth"));
 					}
 				})
 		);
@@ -605,44 +609,49 @@ class NewChildNoteModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "New note" });
+		contentEl.createEl("h3", { text: t("modal.newNote.title") });
 		contentEl.createEl("p", {
-			text: "Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself — TRELLIS does not guess the trekey scheme.",
+			text: t("modal.newNote.desc"),
 			cls: "setting-item-description",
 		});
 
 		new Setting(contentEl)
-			.setName("Parent")
-			.setDesc("Existing location tag to create under — type to search, ↑↓ + Enter")
-			.addText((t) => {
-				t.setPlaceholder("trel/S88")
+			.setName(t("modal.newNote.parentName"))
+			.setDesc(t("modal.newNote.parentDesc"))
+			.addText((input) => {
+				input
+					.setPlaceholder("trel/S88")
 					.setValue(this.parent)
 					.onChange((v) => (this.parent = v.trim()));
-				new TagPathSuggest(this.app, t.inputEl, (v) => (this.parent = v));
+				new TagPathSuggest(this.app, input.inputEl, (v) => (this.parent = v));
 			});
 		new Setting(contentEl)
-			.setName("Segment")
-			.setDesc("The identifier you assign for this level — e.g. a number 02, or a key C for a new sub-level")
-			.addText((t) =>
-				t.setPlaceholder("e.g. 02 or C").onChange((v) => (this.segment = v.trim()))
+			.setName(t("modal.newNote.segmentName"))
+			.setDesc(t("modal.newNote.segmentDesc"))
+			.addText((input) =>
+				input
+					.setPlaceholder(t("ph.segment"))
+					.onChange((v) => (this.segment = v.trim()))
 			);
 		new Setting(contentEl)
-			.setName("Title")
-			.addText((t) =>
-				t.setPlaceholder("note title").onChange((v) => (this.title = v.trim()))
+			.setName(t("modal.newNote.titleName"))
+			.addText((input) =>
+				input
+					.setPlaceholder(t("ph.noteTitle"))
+					.onChange((v) => (this.title = v.trim()))
 			);
 
 		new Setting(contentEl).addButton((b) =>
 			b
-				.setButtonText("Create")
+				.setButtonText(t("modal.newNote.submit"))
 				.setCta()
 				.onClick(() => {
 					if (!this.parent) {
-						new Notice("TRELLIS: parent is required");
+						new Notice(t("notice.parentRequired"));
 						return;
 					}
 					if (!this.segment) {
-						new Notice("TRELLIS: segment is required");
+						new Notice(t("notice.segmentRequired"));
 						return;
 					}
 					this.close();
@@ -671,14 +680,20 @@ class BootstrapPreviewModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "Bootstrap — dry-run preview" });
+		contentEl.createEl("h3", { text: t("modal.bootstrap.title") });
 		contentEl.createEl("p", {
 			cls: "setting-item-description",
-			text: `${this.assign.length} file(s) would get a tag · ${this.alreadyTagged.length} already tagged (skipped) · ${this.noTrekey.length} have no recognizable trekey (skipped). Nothing is written.`,
+			text: t("modal.bootstrap.summary", {
+				assign: this.assign.length,
+				already: this.alreadyTagged.length,
+				none: this.noTrekey.length,
+			}),
 		});
 
 		if (this.assign.length) {
-			contentEl.createEl("h4", { text: `Will assign (${this.assign.length})` });
+			contentEl.createEl("h4", {
+				text: t("modal.bootstrap.willAssign", { n: this.assign.length }),
+			});
 			const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
 			for (const r of this.assign) {
 				const row = list.createDiv({ cls: "trellis-bootstrap-row" });
@@ -690,7 +705,7 @@ class BootstrapPreviewModal extends Modal {
 
 		if (this.noTrekey.length) {
 			contentEl.createEl("h4", {
-				text: `No trekey — skipped, check manually (${this.noTrekey.length})`,
+				text: t("modal.bootstrap.noTrekey", { n: this.noTrekey.length }),
 			});
 			const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
 			for (const n of this.noTrekey) {
@@ -702,7 +717,7 @@ class BootstrapPreviewModal extends Modal {
 		if (this.assign.length) {
 			buttons.addButton((b) =>
 				b
-					.setButtonText(`Apply — tag ${this.assign.length} file(s)`)
+					.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
 					.setWarning()
 					.onClick(() => {
 						this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
@@ -710,7 +725,9 @@ class BootstrapPreviewModal extends Modal {
 					})
 			);
 		}
-		buttons.addButton((b) => b.setButtonText("Close").onClick(() => this.close()));
+		buttons.addButton((b) =>
+			b.setButtonText(t("modal.bootstrap.close")).onClick(() => this.close())
+		);
 	}
 
 	onClose() {
@@ -773,10 +790,27 @@ class TrellisSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Location tag namespace")
-			.setDesc(
-				"Tags under this namespace are the source of truth. e.g. 'trel' → #trel/S88/B07"
-			)
+			.setName(t("setting.langName"))
+			.setDesc(t("setting.langDesc"))
+			.addDropdown((dd) =>
+				dd
+					.addOption("auto", t("setting.langAuto"))
+					.addOption("ko", "한국어")
+					.addOption("en", "English")
+					.setValue(this.plugin.settings.language)
+					.onChange(async (value) => {
+						this.plugin.settings.language =
+							value === "ko" || value === "en" ? value : "auto";
+						setLang(this.plugin.settings.language);
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+						this.display(); // re-render this tab in the new language
+					})
+			);
+
+		new Setting(containerEl)
+			.setName(t("setting.nsName"))
+			.setDesc(t("setting.nsDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder("trel")
@@ -784,7 +818,7 @@ class TrellisSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						const v = value.trim().replace(/^#/, "").replace(/\/$/, "");
 						if (v === "") {
-							new Notice("TRELLIS: namespace cannot be empty");
+							new Notice(t("notice.nsEmpty"));
 							return;
 						}
 						this.plugin.settings.namespace = v;
@@ -793,15 +827,15 @@ class TrellisSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Separator")
-			.setDesc("Single character between the trekey and the title. e.g. '-'")
+			.setName(t("setting.sepName"))
+			.setDesc(t("setting.sepDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder("-")
 					.setValue(this.plugin.settings.separator)
 					.onChange(async (value) => {
 						if (value.length !== 1) {
-							new Notice("TRELLIS: separator must be exactly one character");
+							new Notice(t("notice.sepOneChar"));
 							return;
 						}
 						this.plugin.settings.separator = value;
@@ -810,12 +844,12 @@ class TrellisSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Key position")
-			.setDesc("Where the trekey sits in the filename.")
+			.setName(t("setting.posName"))
+			.setDesc(t("setting.posDesc"))
 			.addDropdown((dd) =>
 				dd
-					.addOption("prefix", "Prefix — start of filename (S88B07-title)")
-					.addOption("suffix", "Suffix — end of filename (title-S88B07)")
+					.addOption("prefix", t("setting.posPrefix"))
+					.addOption("suffix", t("setting.posSuffix"))
 					.setValue(this.plugin.settings.keyPosition)
 					.onChange(async (value) => {
 						this.plugin.settings.keyPosition =
@@ -825,26 +859,26 @@ class TrellisSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Sidebar tree view")
-			.setDesc(
-				"Show a collapsible tree of the location-tag hierarchy in the sidebar (ribbon icon + command)."
-			)
-			.addToggle((t) =>
-				t.setValue(this.plugin.settings.treeViewEnabled).onChange(async (value) => {
-					this.plugin.settings.treeViewEnabled = value;
-					await this.plugin.saveSettings();
-					this.plugin.applyTreeViewState();
-				})
+			.setName(t("setting.treeName"))
+			.setDesc(t("setting.treeDesc"))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.treeViewEnabled)
+					.onChange(async (value) => {
+						this.plugin.settings.treeViewEnabled = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyTreeViewState();
+					})
 			);
 
 		new Setting(containerEl)
-			.setName("Tree sort by")
-			.setDesc("Sort order in the tree (ascending/descending is toggled in the panel header).")
+			.setName(t("setting.sortName"))
+			.setDesc(t("setting.sortDesc"))
 			.addDropdown((dd) =>
 				dd
-					.addOption("trekey", "Trekey (name)")
-					.addOption("mtime", "Modified time")
-					.addOption("ctime", "Created time")
+					.addOption("trekey", t("setting.sortTrekey"))
+					.addOption("mtime", t("setting.sortMtime"))
+					.addOption("ctime", t("setting.sortCtime"))
 					.setValue(this.plugin.settings.sortKey)
 					.onChange(async (value) => {
 						this.plugin.settings.sortKey =

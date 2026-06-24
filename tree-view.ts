@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, TFile, Menu, setIcon } from "obsidian";
 import { NoteTreeNode } from "./trekey";
+import { t } from "./i18n";
 
 export const TRELLIS_TREE_VIEW = "trellis-tree-view";
 
@@ -45,7 +46,7 @@ export class TrellisTreeView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "TRELLIS tree";
+		return t("view.treeName");
 	}
 
 	getIcon(): string {
@@ -79,18 +80,18 @@ export class TrellisTreeView extends ItemView {
 		const buttons = header.createDiv({ cls: "nav-buttons-container" });
 		// New note — like the file explorer's new-note button, it creates at the
 		// current context (the active note's parent is prefilled in the modal).
-		this.addButton(buttons, "file-plus", "New note", () => this.onNewNote());
+		this.addButton(buttons, "file-plus", t("tree.newNote"), () => this.onNewNote());
 		const asc = this.getSortAsc();
 		this.addButton(
 			buttons,
 			asc ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow",
-			asc ? "Sort: ascending (click for descending)" : "Sort: descending (click for ascending)",
+			asc ? t("tree.sortAsc") : t("tree.sortDesc"),
 			() => this.onToggleSort()
 		);
-		this.addButton(buttons, "chevrons-down-up", "Collapse / expand all", () =>
+		this.addButton(buttons, "chevrons-down-up", t("tree.collapseAll"), () =>
 			this.toggleCollapseAll()
 		);
-		this.addButton(buttons, "crosshair", "Show current file", () =>
+		this.addButton(buttons, "crosshair", t("tree.showCurrent"), () =>
 			this.revealActiveFile()
 		);
 
@@ -99,7 +100,7 @@ export class TrellisTreeView extends ItemView {
 		if (roots.length === 0) {
 			nav.createDiv({
 				cls: "trellis-tree-empty",
-				text: "No location-tagged notes found.",
+				text: t("tree.empty"),
 			});
 			return;
 		}
@@ -174,7 +175,7 @@ export class TrellisTreeView extends ItemView {
 			const menu = new Menu();
 			menu.addItem((i) =>
 				i
-					.setTitle("New note here")
+					.setTitle(t("menu.newHere"))
 					.setIcon("file-plus")
 					.onClick(() => this.onNewChild(node.tagPath))
 			);
