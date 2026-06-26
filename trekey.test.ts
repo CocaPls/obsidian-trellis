@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TrellisConfig } from "./trekey.ts";
+import type { TrellisSchema } from "./trekey.ts";
 import {
+	DEFAULT_SCHEMA,
+	schemaFromLegacy,
 	tagToTrekey,
 	pickTrekey,
 	syncedBasename,
@@ -18,8 +20,8 @@ import {
 	trekeyToTagPath,
 } from "./trekey.ts";
 
-const cfg: TrellisConfig = { namespace: "trel", separator: "-", keyPosition: "prefix" };
-const cfgSuffix: TrellisConfig = { namespace: "trel", separator: "-", keyPosition: "suffix" };
+const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
+const cfgSuffix: TrellisSchema = schemaFromLegacy("trel", "-", "suffix");
 
 test("tagToTrekey strips namespace and slashes", () => {
 	assert.equal(tagToTrekey("#trel/S88/B07", cfg), "S88B07");
@@ -245,4 +247,39 @@ test("nextChildSegment suggests max+1 padded, or 01 when no numbers", () => {
 	assert.equal(nextChildSegment([]), "01");
 	assert.equal(nextChildSegment(["A", "B"]), "01"); // non-numeric → 01
 	assert.equal(nextChildSegment(["01", "A"]), "02"); // ignores non-numeric
+});
+
+// --- Multi-key data model (B09 "path B": filename = positional slot array) ---
+
+test("DEFAULT_SCHEMA reproduces the single-key prefix behaviour", () => {
+	assert.equal(tagToTrekey("#trel/S88/B07", DEFAULT_SCHEMA), "S88B07");
+	assert.equal(extractTrekey("S88B07-tree-idea", DEFAULT_SCHEMA), "S88B07");
+	assert.equal(syncedBasename("S88B07-old", "S88B99", DEFAULT_SCHEMA), "S88B99-old");
+});
+
+test("schemaFromLegacy maps keyPosition onto slot ORDER", () => {
+	assert.deepEqual(schemaFromLegacy("trel", "-", "prefix").slots.map((s) => s.role), ["tag", "name"]);
+	assert.deepEqual(schemaFromLegacy("trel", "-", "suffix").slots.map((s) => s.role), ["name", "tag"]);
+	assert.deepEqual(schemaFromLegacy("trel", "-", "prefix").separators, ["-"]);
+});
+
+test("namespace/separator/position are read from the slot array (custom schema)", () => {
+	// hand-built schema: different namespace ("tree") + separator ("_")
+	const schema: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "tree" }, { role: "name" }],
+		separators: ["_"],
+	};
+	assert.equal(tagToTrekey("#tree/S88/B07", schema), "S88B07");
+	assert.equal(tagToTrekey("#trel/S88/B07", schema), null); // wrong namespace
+	assert.equal(extractTrekey("S88B07_my_note", schema), "S88B07");
+	assert.equal(syncedBasename("S88B07_old", "S88B99", schema), "S88B99_old");
+});
+
+test("suffix slot order ([name, tag]) syncs the trailing trekey", () => {
+	const schema: TrellisSchema = {
+		slots: [{ role: "name" }, { role: "tag", namespace: "trel" }],
+		separators: ["-"],
+	};
+	assert.equal(extractTrekey("tree-idea-S88B07", schema), "S88B07");
+	assert.equal(syncedBasename("tree-idea-S88B07", "S88B99", schema), "tree-idea-S88B99");
 });

@@ -11,7 +11,13 @@ import {
 	debounce,
 } from "obsidian";
 import {
-	TrellisConfig,
+	TrellisSchema,
+	KeySlot,
+	defaultSchema,
+	schemaFromLegacy,
+	primaryNamespace,
+	primarySeparator,
+	tagPosition,
 	NoteTreeNode,
 	tagToTrekey,
 	pickTrekey,
@@ -38,18 +44,21 @@ type SortKey = "trekey" | "mtime" | "ctime";
  * When a note's location tag (e.g. #trel/…) changes, rewrite the filename
  * trekey slot to match, via the link-safe rename API. One direction only: the
  * tag is the source of truth. A cascade command renames a whole tag subtree.
- * Behaviour is driven by settings (namespace / separator / key position).
- * Deferred: multi-key, title-key upward sync, bootstrap, drift warnings.
+ * The filename key schema (slots + separators, B09) is configurable; the
+ * single-key default is a 2-slot [tag, name].
+ * Deferred: multi-key UI & parsing (data model ready), title-key upward sync,
+ * drift warnings.
  */
 
-/** Full plugin settings = conversion config + UI flags. */
 /** What one bootstrap pass wrote, kept so it can be undone. */
 interface BootstrapRecord {
 	path: string;
 	tag: string;
 }
 
-interface TrellisSettings extends TrellisConfig {
+interface TrellisSettings {
+	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
+	schema: TrellisSchema;
 	treeViewEnabled: boolean;
 	sortKey: SortKey;
 	sortAsc: boolean;
@@ -60,14 +69,19 @@ interface TrellisSettings extends TrellisConfig {
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
-	namespace: "trel",
-	separator: "-",
-	keyPosition: "prefix",
+	schema: defaultSchema(),
 	treeViewEnabled: true,
 	sortKey: "trekey",
 	sortAsc: true,
 	language: "auto",
 };
+
+/** Legacy (pre-multi-key) scalar config, as older saved data may hold it. */
+interface LegacyConfig {
+	namespace?: string;
+	separator?: string;
+	keyPosition?: "prefix" | "suffix";
+}
 
 export default class TrellisPlugin extends Plugin {
 	settings: TrellisSettings = { ...DEFAULT_SETTINGS };
@@ -207,7 +221,56 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) ?? {};
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		// Give settings its OWN schema so edits never mutate the shared default.
+		// Three cases: (a) saved schema → use it (loadData yields fresh objects);
+		// (b) legacy scalar config → migrate; (c) fresh install → own default.
+		if (!data.schema) {
+			const legacy = data as LegacyConfig;
+			const hasLegacy =
+				legacy.namespace !== undefined ||
+				legacy.separator !== undefined ||
+				legacy.keyPosition !== undefined;
+			this.settings.schema = hasLegacy
+				? schemaFromLegacy(
+						legacy.namespace ?? "trel",
+						legacy.separator ?? "-",
+						legacy.keyPosition ?? "prefix"
+					)
+				: defaultSchema();
+		}
+	}
+
+	// --- Single-key view of the schema (settings-tab read/write helpers) ----
+	// The settings tab exposes the default single-key knobs; these read/write
+	// them onto the schema's first tag slot, preserving any extra slots.
+
+	private firstTagSlot(): KeySlot {
+		const slot = this.settings.schema.slots.find((s) => s.role === "tag");
+		if (slot) return slot;
+		// Schema with no tag slot shouldn't happen; repair to a fresh default.
+		this.settings.schema = defaultSchema();
+		return this.settings.schema.slots.find((s) => s.role === "tag")!;
+	}
+
+	setPrimaryNamespace(ns: string) {
+		this.firstTagSlot().namespace = ns;
+	}
+
+	setPrimarySeparator(sep: string) {
+		if (this.settings.schema.separators.length === 0) this.settings.schema.separators = [sep];
+		else this.settings.schema.separators[0] = sep;
+	}
+
+	setKeyPosition(pos: "prefix" | "suffix") {
+		const s = this.settings.schema;
+		const tag = s.slots.find((x) => x.role === "tag");
+		const name = s.slots.find((x) => x.role === "name");
+		if (!tag) return;
+		s.slots = (pos === "suffix" ? [name, tag] : [tag, name]).filter(
+			(x): x is KeySlot => x !== undefined
+		);
 	}
 
 	async saveSettings() {
@@ -221,10 +284,10 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return;
 		const tags = getAllTags(cache) ?? [];
-		const trekey = pickTrekey(tags, this.settings);
+		const trekey = pickTrekey(tags, this.settings.schema);
 		if (trekey === null) return; // no location tag → never touch the file
 
-		const newBasename = syncedBasename(file.basename, trekey, this.settings);
+		const newBasename = syncedBasename(file.basename, trekey, this.settings.schema);
 		if (newBasename === null) return; // already in sync
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
@@ -251,7 +314,7 @@ export default class TrellisPlugin extends Plugin {
 	private sortedNoteTree(): NoteTreeNode[] {
 		if (this.treeCache) return this.treeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
-		const ns = this.settings.namespace;
+		const ns = primaryNamespace(this.settings.schema);
 		const prefix = `#${ns}/`;
 		const exact = `#${ns}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
@@ -337,7 +400,7 @@ export default class TrellisPlugin extends Plugin {
 	/** Direct-child segments already in use under a parent tag path. */
 	private childSegmentsOf(parentTagPath: string): string[] {
 		const segs: string[] = [];
-		const ns = this.settings.namespace;
+		const ns = primaryNamespace(this.settings.schema);
 		const prefix = `#${ns}/`;
 		const exact = `#${ns}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
@@ -363,16 +426,16 @@ export default class TrellisPlugin extends Plugin {
 		title: string
 	) {
 		const tagPath = `${parentTagPath}/${segment}`;
-		const trekey = tagToTrekey(`#${tagPath}`, this.settings);
+		const trekey = tagToTrekey(`#${tagPath}`, this.settings.schema);
 		if (!trekey) {
 			new Notice(t("notice.noTrekey"));
 			return;
 		}
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
-		const sep = this.settings.separator;
+		const sep = primarySeparator(this.settings.schema);
 		let base: string;
 		if (!safeTitle) base = trekey;
-		else if (this.settings.keyPosition === "suffix") base = `${safeTitle}${sep}${trekey}`;
+		else if (tagPosition(this.settings.schema) === "suffix") base = `${safeTitle}${sep}${trekey}`;
 		else base = `${trekey}${sep}${safeTitle}`;
 
 		const path = `${base}.md`;
@@ -424,7 +487,7 @@ export default class TrellisPlugin extends Plugin {
 	private locationTagOf(file: TFile): string | null {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
-		const prefix = `#${this.settings.namespace}/`;
+		const prefix = `#${primaryNamespace(this.settings.schema)}/`;
 		const tag = (getAllTags(cache) ?? []).find((t) => t.startsWith(prefix));
 		return tag ? tag.replace(/^#/, "") : null;
 	}
@@ -470,8 +533,8 @@ export default class TrellisPlugin extends Plugin {
 				alreadyTagged.push(file.basename);
 				continue;
 			}
-			const trekey = extractTrekey(file.basename, this.settings);
-			const tagPath = trekey ? trekeyToTagPath(trekey, this.settings) : null;
+			const trekey = extractTrekey(file.basename, this.settings.schema);
+			const tagPath = trekey ? trekeyToTagPath(trekey, this.settings.schema) : null;
 			if (tagPath) assign.push({ name: file.basename, path: file.path, tag: tagPath });
 			else noTrekey.push(file.basename);
 		}
@@ -814,14 +877,14 @@ class TrellisSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("trel")
-					.setValue(this.plugin.settings.namespace)
+					.setValue(primaryNamespace(this.plugin.settings.schema))
 					.onChange(async (value) => {
 						const v = value.trim().replace(/^#/, "").replace(/\/$/, "");
 						if (v === "") {
 							new Notice(t("notice.nsEmpty"));
 							return;
 						}
-						this.plugin.settings.namespace = v;
+						this.plugin.setPrimaryNamespace(v);
 						await this.plugin.saveSettings();
 					})
 			);
@@ -832,13 +895,13 @@ class TrellisSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("-")
-					.setValue(this.plugin.settings.separator)
+					.setValue(primarySeparator(this.plugin.settings.schema))
 					.onChange(async (value) => {
 						if (value.length !== 1) {
 							new Notice(t("notice.sepOneChar"));
 							return;
 						}
-						this.plugin.settings.separator = value;
+						this.plugin.setPrimarySeparator(value);
 						await this.plugin.saveSettings();
 					})
 			);
@@ -850,10 +913,9 @@ class TrellisSettingTab extends PluginSettingTab {
 				dd
 					.addOption("prefix", t("setting.posPrefix"))
 					.addOption("suffix", t("setting.posSuffix"))
-					.setValue(this.plugin.settings.keyPosition)
+					.setValue(tagPosition(this.plugin.settings.schema))
 					.onChange(async (value) => {
-						this.plugin.settings.keyPosition =
-							value === "suffix" ? "suffix" : "prefix";
+						this.plugin.setKeyPosition(value === "suffix" ? "suffix" : "prefix");
 						await this.plugin.saveSettings();
 					})
 			);

@@ -5,7 +5,30 @@ development milestones; `0.1.0` will be the first public release.
 
 > Note: `0.0.3` and `0.0.4` were developed in one working tree and landed in the
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
-> exist for `0.0.1`, `0.0.2`, and `0.0.4`.
+> exist for `0.0.1`, `0.0.2`, `0.0.4`, `0.0.5`, and `0.0.6`.
+
+## 0.0.6 — Multi-key data model (schema-based)
+
+- **The filename key config is now a positional slot array** — `TrellisSchema
+  { slots: KeySlot[]; separators: string[] }` — instead of three scalar fields.
+  The single-key default is a 2-slot `[tag, name]` schema; runtime behaviour is
+  unchanged.
+- **`keyPosition` (prefix/suffix) is absorbed into slot order** — prefix =
+  `[tag, name]`, suffix = `[name, tag]`. No separate field.
+- **Existing settings migrate automatically** (`schemaFromLegacy`): saved
+  `namespace` / `separator` / `keyPosition` data is converted to a schema on
+  load, losslessly.
+- Lays the general-form foundation for multi-key (multiple tag slots, multiple
+  separators). The multi-key UI and multi-separator parsing are deferred to an
+  advanced mode, so the core never needs rewriting again.
+- Fix: settings no longer share the module-level default-schema object (an edit
+  to the namespace/position could previously mutate the shared default).
+
+## 0.0.5 — Internationalization (i18n)
+
+- **Korean / English UI** via a small i18n layer (`i18n.ts`). Auto-detects
+  Obsidian's UI language; a language setting can force `ko`/`en`.
+- All commands, notices, modals, settings, and tree-view labels are translated.
 
 ## 0.0.4 — Bootstrap onboarding
 

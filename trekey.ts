@@ -4,16 +4,100 @@
  * The "trekey" is the filename prefix identifier. TRELLIS is *format-agnostic*:
  * it does not define what a trekey means (that is TUP's job). It only mirrors a
  * hierarchical location tag (the source of truth) into the filename prefix.
+ *
+ * DATA MODEL — a filename is a positional array of key SLOTS separated by
+ * delimiters (B09 "path B"). Each slot is a tag-key (TRELLIS-managed, tag →
+ * filename) or a name-key (user-free, untouched). The single-key default is
+ * just the 2-slot special case `[tag] sep [name]`. Multi-key parsing (>1 tag
+ * slot, multiple separators) is deferred to an advanced mode; the model is the
+ * general-form foundation so the core never needs rewriting again.
  */
 
-/** Plugin config knobs that affect conversion. */
-export interface TrellisConfig {
-	/** Tag namespace treated as the location source of truth, e.g. "trel". */
-	namespace: string;
-	/** Separator between the trekey and the title key, e.g. "-". */
-	separator: string;
-	/** Where the trekey sits in the filename: at the start or the end. */
-	keyPosition: "prefix" | "suffix";
+/** The role of a filename slot. */
+export type KeyRole = "tag" | "name";
+
+/**
+ * One slot in the filename schema. A tag-key carries the location-tag
+ * namespace it mirrors; a name-key is free user text TRELLIS never rewrites.
+ */
+export interface KeySlot {
+	role: KeyRole;
+	/** Location-tag namespace for a tag slot, e.g. "trel". Absent on name slots. */
+	namespace?: string;
+}
+
+/**
+ * The filename schema: slots in left-to-right order plus the separators
+ * between them (slots.length - 1 of them). The default is
+ *   slots = [{tag, "trel"}, {name}],  separators = ["-"]
+ * which reproduces the old single-key behaviour. Slot ORDER encodes position:
+ * a tag slot at index 0 is a prefix trekey, a tag slot after the name slot is a
+ * suffix trekey (the old `keyPosition` flag, now absorbed into the array).
+ */
+export interface TrellisSchema {
+	slots: KeySlot[];
+	separators: string[];
+}
+
+/**
+ * A FRESH default schema — single tag-key "trel" prefix, "-" separator, free
+ * name. Returns a new object every call; use this (not the DEFAULT_SCHEMA
+ * constant) whenever the result will be stored in mutable settings, so the
+ * shared constant is never mutated in place.
+ */
+export function defaultSchema(): TrellisSchema {
+	return {
+		slots: [{ role: "tag", namespace: "trel" }, { role: "name" }],
+		separators: ["-"],
+	};
+}
+
+/** Read-only default schema instance (for comparisons/tests). For anything
+ *  that may be edited, call defaultSchema() to get an own copy. */
+export const DEFAULT_SCHEMA: TrellisSchema = defaultSchema();
+
+/**
+ * Build a schema from the legacy scalar config (namespace / separator /
+ * keyPosition) so existing user settings migrate without breaking. prefix →
+ * [tag, name]; suffix → [name, tag].
+ */
+export function schemaFromLegacy(
+	namespace: string,
+	separator: string,
+	keyPosition: "prefix" | "suffix"
+): TrellisSchema {
+	const tag: KeySlot = { role: "tag", namespace };
+	const name: KeySlot = { role: "name" };
+	return {
+		slots: keyPosition === "suffix" ? [name, tag] : [tag, name],
+		separators: [separator],
+	};
+}
+
+// --- Derived accessors (single-key view over the general schema) -----------
+// The current engine operates on ONE tag slot + ONE name slot. These helpers
+// read that pair out of the schema so the conversion functions stay the same
+// shape; multi-tag-slot parsing is a later (advanced-mode) concern.
+
+/** Index of the first tag slot, or -1 if somehow none (schema requires ≥1). */
+function firstTagSlotIndex(schema: TrellisSchema): number {
+	return schema.slots.findIndex((s) => s.role === "tag");
+}
+
+/** The namespace of the primary (first) tag slot, e.g. "trel". */
+export function primaryNamespace(schema: TrellisSchema): string {
+	const i = firstTagSlotIndex(schema);
+	return (i >= 0 ? schema.slots[i].namespace : undefined) ?? "";
+}
+
+/** The primary (first) separator, e.g. "-". */
+export function primarySeparator(schema: TrellisSchema): string {
+	return schema.separators[0] ?? "";
+}
+
+/** Where the primary tag slot sits: at the start (prefix) or end (suffix). */
+export function tagPosition(schema: TrellisSchema): "prefix" | "suffix" {
+	return firstTagSlotIndex(schema) === 0 ? "prefix" : "suffix";
 }
 
 /**
@@ -24,8 +108,8 @@ export interface TrellisConfig {
  *
  * @param tag  Tag including the leading "#", as Obsidian's getAllTags() yields.
  */
-export function tagToTrekey(tag: string, cfg: TrellisConfig): string | null {
-	const prefix = `#${cfg.namespace}/`;
+export function tagToTrekey(tag: string, schema: TrellisSchema): string | null {
+	const prefix = `#${primaryNamespace(schema)}/`;
 	if (!tag.startsWith(prefix)) return null;
 	const path = tag.slice(prefix.length);
 	if (path.length === 0) return null;
@@ -59,7 +143,7 @@ export function parentTagPath(tagPath: string): string {
  * bootstrap dry-run shows every result (and every null) for human review
  * before anything is written.
  */
-export function trekeyToTagPath(trekey: string, cfg: TrellisConfig): string | null {
+export function trekeyToTagPath(trekey: string, schema: TrellisSchema): string | null {
 	const m = trekey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
 	if (!m) return null;
 	const [, tier, pkg, mod, atom] = m;
@@ -68,7 +152,7 @@ export function trekeyToTagPath(trekey: string, cfg: TrellisConfig): string | nu
 	const segs: string[] = [tier, pkg]; // tier + package as SEPARATE segments
 	if (mod !== undefined) segs.push(mod); // module letter (placeholder "0" kept)
 	if (atom !== undefined) segs.push(atom); // atom digits (placeholder "00" kept)
-	return `${cfg.namespace}/${segs.join("/")}`;
+	return `${primaryNamespace(schema)}/${segs.join("/")}`;
 }
 
 /**
@@ -76,9 +160,9 @@ export function trekeyToTagPath(trekey: string, cfg: TrellisConfig): string | nu
  * return its trekey, or null if none. TRELLIS treats one note as having one
  * location (note-to-tag 1:1) — first match wins.
  */
-export function pickTrekey(tags: string[], cfg: TrellisConfig): string | null {
+export function pickTrekey(tags: string[], schema: TrellisSchema): string | null {
 	for (const t of tags) {
-		const k = tagToTrekey(t, cfg);
+		const k = tagToTrekey(t, schema);
 		if (k !== null) return k;
 	}
 	return null;
@@ -91,12 +175,13 @@ export function pickTrekey(tags: string[], cfg: TrellisConfig): string | null {
  * If there is no separator, the whole basename is the trekey (e.g. an index
  * note that is trekey-only).
  */
-export function extractTrekey(basename: string, cfg: TrellisConfig): string {
-	if (cfg.keyPosition === "suffix") {
-		const i = basename.lastIndexOf(cfg.separator);
-		return i === -1 ? basename : basename.slice(i + cfg.separator.length);
+export function extractTrekey(basename: string, schema: TrellisSchema): string {
+	const sep = primarySeparator(schema);
+	if (tagPosition(schema) === "suffix") {
+		const i = basename.lastIndexOf(sep);
+		return i === -1 ? basename : basename.slice(i + sep.length);
 	}
-	const i = basename.indexOf(cfg.separator);
+	const i = basename.indexOf(sep);
 	return i === -1 ? basename : basename.slice(0, i);
 }
 
@@ -112,10 +197,10 @@ export function extractTrekey(basename: string, cfg: TrellisConfig): string {
 export function extractTitle(
 	basename: string,
 	trekey: string,
-	cfg: TrellisConfig
+	schema: TrellisSchema
 ): string {
-	const sep = cfg.separator;
-	if (cfg.keyPosition === "suffix") {
+	const sep = primarySeparator(schema);
+	if (tagPosition(schema) === "suffix") {
 		let head: string;
 		if (basename.endsWith(trekey)) {
 			head = basename.slice(0, basename.length - trekey.length);
@@ -145,16 +230,17 @@ export function extractTitle(
 export function syncedBasename(
 	basename: string,
 	trekey: string,
-	cfg: TrellisConfig
+	schema: TrellisSchema
 ): string | null {
-	const title = extractTitle(basename, trekey, cfg);
+	const title = extractTitle(basename, trekey, schema);
+	const sep = primarySeparator(schema);
 	let rebuilt: string;
 	if (title === "") {
 		rebuilt = trekey;
-	} else if (cfg.keyPosition === "suffix") {
-		rebuilt = title + cfg.separator + trekey;
+	} else if (tagPosition(schema) === "suffix") {
+		rebuilt = title + sep + trekey;
 	} else {
-		rebuilt = trekey + cfg.separator + title;
+		rebuilt = trekey + sep + title;
 	}
 	return rebuilt === basename ? null : rebuilt;
 }
