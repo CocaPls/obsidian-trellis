@@ -33,17 +33,17 @@ test("tagToTrekey ignores foreign namespaces and empties", () => {
 });
 
 test("trekeyToTagPath decomposes a trekey into a hierarchical tag", () => {
-	assert.equal(trekeyToTagPath("S88", cfg), "trel/S88"); // package
-	assert.equal(trekeyToTagPath("S88A", cfg), "trel/S88/A"); // module
-	assert.equal(trekeyToTagPath("S88A01", cfg), "trel/S88/A/01"); // atom
-	assert.equal(trekeyToTagPath("S88B07", cfg), "trel/S88/B/07");
+	assert.equal(trekeyToTagPath("S88", cfg), "trel/S/88"); // tier · package
+	assert.equal(trekeyToTagPath("S88A", cfg), "trel/S/88/A"); // + module
+	assert.equal(trekeyToTagPath("S88A01", cfg), "trel/S/88/A/01"); // + atom
+	assert.equal(trekeyToTagPath("S88B07", cfg), "trel/S/88/B/07");
 });
 
 test("trekeyToTagPath keeps placeholder (0/00) slots for round-trip safety", () => {
-	assert.equal(trekeyToTagPath("S04001", cfg), "trel/S04/0/01"); // module "0" kept
-	assert.equal(trekeyToTagPath("S00L", cfg), "trel/S00/L"); // package "00" kept
-	assert.equal(trekeyToTagPath("P00001", cfg), "trel/P00/0/01"); // both kept
-	assert.equal(trekeyToTagPath("S00M", cfg), "trel/S00/M"); // master-log style
+	assert.equal(trekeyToTagPath("S04001", cfg), "trel/S/04/0/01"); // module "0" kept
+	assert.equal(trekeyToTagPath("S00L", cfg), "trel/S/00/L"); // package "00" kept
+	assert.equal(trekeyToTagPath("P00001", cfg), "trel/P/00/0/01"); // both kept
+	assert.equal(trekeyToTagPath("S00M", cfg), "trel/S/00/M"); // master-log style
 });
 
 test("trekeyToTagPath round-trips with tagToTrekey (incl. placeholders)", () => {

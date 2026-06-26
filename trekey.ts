@@ -44,12 +44,12 @@ export function parentTagPath(tagPath: string): string {
 
 /**
  * Bootstrap helper — the INVERSE of tagToTrekey. Decompose a filename trekey
- * ("S88B07") into a hierarchical location-tag path ("trel/S88/B/07") so an
+ * ("S88B07") into a hierarchical location-tag path ("trel/S/88/B/07") so an
  * existing vault (trekey prefixes, no tags) can be onboarded.
  *
- * This is the ONE place that must know the trekey *scheme* (SPARK: a tier
- * letter + 2-digit package as the first segment, then alternating module
- * letter (1) + atom digits (2)). Placeholder slots ("0"/"00") are KEPT as
+ * This is the ONE place that must know the trekey *scheme* (SPARK: alternating
+ * tier letter (1) / package digits (2) / module letter (1) / atom digits (2),
+ * EACH its own tag segment). Placeholder slots ("0"/"00") are KEPT as
  * segments — dropping them would break the round-trip with tagToTrekey (the
  * tag is the source of truth, so the synced filename must rebuild the same
  * 6-char trekey). Empty/segment-only levels are made transparent by the tree
@@ -63,7 +63,9 @@ export function trekeyToTagPath(trekey: string, cfg: TrellisConfig): string | nu
 	const m = trekey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
 	if (!m) return null;
 	const [, tier, pkg, mod, atom] = m;
-	const segs: string[] = [tier + pkg]; // tier + package (placeholder "00" kept)
+	// Each SPARK level is its own segment: tier letter / package digits /
+	// module letter / atom digits alternate (S·88·B·07 → S/88/B/07).
+	const segs: string[] = [tier, pkg]; // tier + package as SEPARATE segments
 	if (mod !== undefined) segs.push(mod); // module letter (placeholder "0" kept)
 	if (atom !== undefined) segs.push(atom); // atom digits (placeholder "00" kept)
 	return `${cfg.namespace}/${segs.join("/")}`;
