@@ -55,6 +55,7 @@ const EN: Record<string, string> = {
 	"cmd.cascade": "Rename location tag (cascade)",
 	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
+	"cmd.sepUndo": "Undo last separator change",
 	// view / ribbon
 	"view.treeName": "TRELLIS tree",
 	// notices
@@ -68,13 +69,22 @@ const EN: Record<string, string> = {
 	"notice.noFilesTagged": "TRELLIS: no files tagged {from}",
 	"notice.bootstrapped":
 		'TRELLIS: bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
+	"notice.bootstrapProgress": "TRELLIS: bootstrapping… {done}/{total}",
+	"notice.bootstrappedWithErrors":
+		'TRELLIS: bootstrapped {n} file(s) · {failed} skipped (errors). Undo via "Undo last bootstrap".',
+	"notice.sepProgress": "TRELLIS: changing separator… {done}/{total}",
 	"notice.noBootstrap": "TRELLIS: no bootstrap to undo",
 	"notice.undid": "TRELLIS: undid bootstrap on {n} file(s)",
 	"notice.fillBoth": "TRELLIS: fill in both fields",
 	"notice.parentRequired": "TRELLIS: parent is required",
 	"notice.segmentRequired": "TRELLIS: segment is required",
 	"notice.nsEmpty": "TRELLIS: namespace cannot be empty",
-	"notice.sepOneChar": "TRELLIS: separator must be exactly one character",
+	"notice.sepEmpty": "TRELLIS: separator cannot be empty",
+	"notice.sepBadChar":
+		"TRELLIS: separator cannot contain letters, digits, or '/' (would collide with the trekey)",
+	"notice.sepChanged": "TRELLIS: separator {from} → {to} on {n} file(s)",
+	"notice.sepReverted": "TRELLIS: reverted separator change on {n} file(s)",
+	"notice.noSepChange": "TRELLIS: no separator change to undo",
 	// menu
 	"menu.newHere": "New note here",
 	// cascade modal
@@ -108,12 +118,26 @@ const EN: Record<string, string> = {
 	"modal.bootstrap.noTrekey": "No trekey — skipped, check manually ({n})",
 	"modal.bootstrap.apply": "Apply — tag {n} file(s)",
 	"modal.bootstrap.close": "Close",
+	// bootstrap errors modal
+	"modal.bootstrapErrors.title": "Bootstrap — skipped files",
+	"modal.bootstrapErrors.desc":
+		"{n} file(s) couldn't be tagged due to a frontmatter parse error (e.g. duplicate YAML keys). Fix these by hand, then re-run bootstrap:",
+	// separator-change modal
+	"modal.sep.title": "Change separator",
+	"modal.sep.desc":
+		"'{from}' → '{to}'. Only the trekey boundary separator is rewritten on location-tagged files; symbols inside the title are preserved.",
+	"modal.sep.count": "{n} file(s) will be renamed.",
+	"modal.sep.none": "No files need renaming — the change applies to the setting only.",
+	"modal.sep.showList": "Show affected files",
+	"modal.sep.apply": "Change — {n} file(s)",
+	"modal.sep.cancel": "Cancel",
 	// settings
 	"setting.nsName": "Location tag namespace",
 	"setting.nsDesc":
 		"Tags under this namespace are the source of truth. e.g. 'trel' → #trel/S88/B07",
 	"setting.sepName": "Separator",
-	"setting.sepDesc": "Single character between the trekey and the title. e.g. '-'",
+	"setting.sepDesc":
+		"Character(s) between the trekey and the title — e.g. '-'. No letters, digits, or '/'. One symbol is recommended. Changing it triggers a vault-wide batch rename (with confirmation).",
 	"setting.posName": "Key position",
 	"setting.posDesc": "Where the trekey sits in the filename.",
 	"setting.posPrefix": "Prefix — start of filename (S88B07-title)",
@@ -145,6 +169,7 @@ const KO: Record<string, string> = {
 	"cmd.cascade": "위치 태그 이름 변경 (하위 전체)",
 	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
+	"cmd.sepUndo": "마지막 구분자 변경 되돌리기",
 	// view / ribbon
 	"view.treeName": "TRELLIS 트리",
 	// notices
@@ -158,13 +183,22 @@ const KO: Record<string, string> = {
 	"notice.noFilesTagged": "TRELLIS: {from} 태그가 붙은 파일 없음",
 	"notice.bootstrapped":
 		'TRELLIS: {n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
+	"notice.bootstrapProgress": "TRELLIS: 부트스트랩 중… {done}/{total}",
+	"notice.bootstrappedWithErrors":
+		'TRELLIS: {n}개 완료 · {failed}개 건너뜀(오류). "마지막 부트스트랩 되돌리기"로 취소.',
+	"notice.sepProgress": "TRELLIS: 구분자 변경 중… {done}/{total}",
 	"notice.noBootstrap": "TRELLIS: 되돌릴 부트스트랩 없음",
 	"notice.undid": "TRELLIS: {n}개 파일 부트스트랩 되돌림",
 	"notice.fillBoth": "TRELLIS: 두 칸 모두 입력하세요",
 	"notice.parentRequired": "TRELLIS: 부모가 필요합니다",
 	"notice.segmentRequired": "TRELLIS: 세그먼트가 필요합니다",
 	"notice.nsEmpty": "TRELLIS: 네임스페이스는 비울 수 없습니다",
-	"notice.sepOneChar": "TRELLIS: 구분자는 한 글자여야 합니다",
+	"notice.sepEmpty": "TRELLIS: 구분자는 비울 수 없습니다",
+	"notice.sepBadChar":
+		"TRELLIS: 구분자에 영문·숫자·'/' 는 쓸 수 없습니다 (트리키와 충돌)",
+	"notice.sepChanged": "TRELLIS: 구분자 {from} → {to}, {n}개 파일 변경",
+	"notice.sepReverted": "TRELLIS: 구분자 변경 {n}개 파일 되돌림",
+	"notice.noSepChange": "TRELLIS: 되돌릴 구분자 변경 없음",
 	// menu
 	"menu.newHere": "여기에 새 노트",
 	// cascade modal
@@ -197,12 +231,26 @@ const KO: Record<string, string> = {
 	"modal.bootstrap.noTrekey": "트리키 없음 — 건너뜀, 수동 확인 ({n})",
 	"modal.bootstrap.apply": "적용 — {n}개 파일 태그",
 	"modal.bootstrap.close": "닫기",
+	// bootstrap errors modal
+	"modal.bootstrapErrors.title": "부트스트랩 — 건너뛴 파일",
+	"modal.bootstrapErrors.desc":
+		"{n}개 파일은 frontmatter 파싱 오류(예: 중복 YAML 키)로 태그를 못 붙였습니다. 직접 고친 뒤 부트스트랩을 다시 실행하세요:",
+	// separator-change modal
+	"modal.sep.title": "구분자 변경",
+	"modal.sep.desc":
+		"'{from}' → '{to}'. 위치 태그가 붙은 파일의 트리키 경계 구분자만 바뀝니다. 제목 속 기호는 그대로 보존됩니다.",
+	"modal.sep.count": "{n}개 파일의 이름이 바뀝니다.",
+	"modal.sep.none": "이름이 바뀔 파일은 없습니다 — 설정값만 변경됩니다.",
+	"modal.sep.showList": "바뀔 파일 보기",
+	"modal.sep.apply": "변경 — {n}개 파일",
+	"modal.sep.cancel": "취소",
 	// settings
 	"setting.nsName": "위치 태그 네임스페이스",
 	"setting.nsDesc":
 		"이 네임스페이스 아래 태그가 진실원입니다. 예: 'trel' → #trel/S88/B07",
 	"setting.sepName": "구분자",
-	"setting.sepDesc": "트리키와 제목 사이의 한 글자. 예: '-'",
+	"setting.sepDesc":
+		"트리키와 제목 사이 기호 — 예: '-'. 영문·숫자·'/' 불가. 한 글자 권장. 바꾸면 볼트 전체 일괄 변경(확인창)이 실행됩니다.",
 	"setting.posName": "키 위치",
 	"setting.posDesc": "파일명에서 트리키가 놓이는 위치.",
 	"setting.posPrefix": "접두 — 파일명 앞 (S88B07-제목)",

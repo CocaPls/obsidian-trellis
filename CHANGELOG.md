@@ -7,6 +7,29 @@ development milestones; `0.1.0` will be the first public release.
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4`, `0.0.5`, and `0.0.6`.
 
+## 0.0.7 — Separator batch-change + bulk-op robustness
+
+- **Change the filename separator across the whole vault.** Editing the
+  separator in settings now opens a confirm dialog and rewrites *only the
+  trekey-boundary separator* on every location-tagged file — symbols inside the
+  title are preserved — via the link-safe rename API. One-directional, like the
+  tag engine. Includes a dry-run count + collapsible file list and a one-step
+  undo command.
+- **Separator validation relaxed** — any non-empty value with no letters,
+  digits, or `/` (was "exactly one character"); multi-character separators are
+  allowed.
+- **Bulk operations are now robust and observable:**
+  - **Per-file error isolation** — one broken file (e.g. duplicate YAML keys)
+    no longer aborts a bootstrap or separator pass; failures are collected and
+    listed in a "skipped files" modal.
+  - **Live progress** — a progress notice (`N/total`) during bootstrap and
+    separator change.
+  - **Undo preserved on interruption** — the undo record is saved even if the
+    pass is cut short.
+- Internal: shared `assembleBasename` helper (slot order + separator) and
+  `separatorMigratedName` (decompose with the old separator, re-emit with the
+  new one).
+
 ## 0.0.6 — Multi-key data model (schema-based)
 
 - **The filename key config is now a positional slot array** — `TrellisSchema

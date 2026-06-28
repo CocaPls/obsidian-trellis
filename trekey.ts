@@ -221,11 +221,29 @@ export function extractTitle(
 }
 
 /**
- * Rebuild the basename from the authoritative trekey + preserved title-key:
- * `{trekey}{sep}{title}` (prefix) or `{title}{sep}{trekey}` (suffix); just
- * `{trekey}` when there is no title. This restores the trekey AND the separator
- * if the user damaged either, keeping only the title-key free. Returns null
- * when no change is needed (already in sync).
+ * Assemble a basename from an authoritative trekey + a title-key, per the
+ * schema's primary separator and tag position: `{trekey}{sep}{title}` (prefix)
+ * or `{title}{sep}{trekey}` (suffix); just `{trekey}` when the title is empty.
+ * The single place that decides slot order + separator, shared by sync,
+ * separator migration, and new-note creation.
+ */
+export function assembleBasename(
+	trekey: string,
+	title: string,
+	schema: TrellisSchema
+): string {
+	if (title === "") return trekey;
+	const sep = primarySeparator(schema);
+	return tagPosition(schema) === "suffix"
+		? title + sep + trekey
+		: trekey + sep + title;
+}
+
+/**
+ * Rebuild the basename from the authoritative trekey + preserved title-key.
+ * This restores the trekey AND the separator if the user damaged either,
+ * keeping only the title-key free. Returns null when no change is needed
+ * (already in sync).
  */
 export function syncedBasename(
 	basename: string,
@@ -233,15 +251,27 @@ export function syncedBasename(
 	schema: TrellisSchema
 ): string | null {
 	const title = extractTitle(basename, trekey, schema);
-	const sep = primarySeparator(schema);
-	let rebuilt: string;
-	if (title === "") {
-		rebuilt = trekey;
-	} else if (tagPosition(schema) === "suffix") {
-		rebuilt = title + sep + trekey;
-	} else {
-		rebuilt = trekey + sep + title;
-	}
+	const rebuilt = assembleBasename(trekey, title, schema);
+	return rebuilt === basename ? null : rebuilt;
+}
+
+/**
+ * Separator migration: re-emit a basename with a NEW separator, preserving the
+ * title verbatim (including any occurrences of the new OR old separator inside
+ * it). The trekey boundary is found with the OLD separator (oldSchema), then the
+ * name is reassembled with the NEW separator (newSchema) — both are needed,
+ * because once the setting flips, the old separator is the only way to locate
+ * the old boundary. The two schemas share everything but the primary separator.
+ * Returns null when nothing changes (no title, or old === new separator).
+ */
+export function separatorMigratedName(
+	basename: string,
+	trekey: string,
+	oldSchema: TrellisSchema,
+	newSchema: TrellisSchema
+): string | null {
+	const title = extractTitle(basename, trekey, oldSchema); // old-sep boundary
+	const rebuilt = assembleBasename(trekey, title, newSchema); // new-sep emit
 	return rebuilt === basename ? null : rebuilt;
 }
 

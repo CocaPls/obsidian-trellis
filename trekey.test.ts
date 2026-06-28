@@ -6,7 +6,9 @@ import {
 	schemaFromLegacy,
 	tagToTrekey,
 	pickTrekey,
+	assembleBasename,
 	syncedBasename,
+	separatorMigratedName,
 	extractTrekey,
 	extractTitle,
 	renameTagPath,
@@ -126,6 +128,53 @@ test("syncedBasename preserves trailing date/session segments", () => {
 		syncedBasename("S88L04-0611-S88-04-dashboard", "S88L99", cfg),
 		"S88L99-0611-S88-04-dashboard"
 	);
+});
+
+test("assembleBasename joins trekey + title by slot order and separator", () => {
+	assert.equal(assembleBasename("S88B07", "tree-idea", cfg), "S88B07-tree-idea");
+	assert.equal(assembleBasename("S88B07", "", cfg), "S88B07"); // no title → trekey only
+	assert.equal(assembleBasename("S88B07", "tree-idea", cfgSuffix), "tree-idea-S88B07");
+});
+
+// --- Separator migration (v0.0.7 batch separator change) -------------------
+
+test("separatorMigratedName swaps the boundary separator, preserves the title", () => {
+	const oldS = schemaFromLegacy("trel", "_", "prefix");
+	const newS = schemaFromLegacy("trel", "-", "prefix");
+	// boundary "_" → "-"; title has none, simple swap
+	assert.equal(separatorMigratedName("S88B07_tree", "S88B07", oldS, newS), "S88B07-tree");
+	// trekey-only file: nothing to change
+	assert.equal(separatorMigratedName("S88B07", "S88B07", oldS, newS), null);
+});
+
+test("separatorMigratedName preserves the NEW separator already inside the title", () => {
+	const oldS = schemaFromLegacy("trel", "_", "prefix");
+	const newS = schemaFromLegacy("trel", "-", "prefix");
+	// title "tree-idea" keeps its hyphens; only the trekey boundary "_" becomes "-"
+	assert.equal(
+		separatorMigratedName("S88B07_tree-idea", "S88B07", oldS, newS),
+		"S88B07-tree-idea"
+	);
+	// title "a_b" (old sep inside title) is preserved verbatim — only the FIRST
+	// boundary is the trekey delimiter; the rest belongs to the title.
+	assert.equal(
+		separatorMigratedName("S88B07_a_b", "S88B07", oldS, newS),
+		"S88B07-a_b"
+	);
+});
+
+test("separatorMigratedName handles suffix slot order", () => {
+	const oldS = schemaFromLegacy("trel", "_", "suffix");
+	const newS = schemaFromLegacy("trel", "-", "suffix");
+	assert.equal(
+		separatorMigratedName("tree-idea_S88B07", "S88B07", oldS, newS),
+		"tree-idea-S88B07"
+	);
+});
+
+test("separatorMigratedName returns null when old and new separators match", () => {
+	const same = schemaFromLegacy("trel", "-", "prefix");
+	assert.equal(separatorMigratedName("S88B07-tree", "S88B07", same, same), null);
 });
 
 test("renameTagPath rewrites the path and everything under it", () => {

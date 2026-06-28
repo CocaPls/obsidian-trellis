@@ -32,6 +32,8 @@ import {
 	parentTagPath,
 	extractTrekey,
 	trekeyToTagPath,
+	assembleBasename,
+	separatorMigratedName,
 } from "./trekey";
 import { TrellisTreeView, TRELLIS_TREE_VIEW } from "./tree-view";
 import { t, setLang, LangSetting } from "./i18n";
@@ -56,6 +58,21 @@ interface BootstrapRecord {
 	tag: string;
 }
 
+/** One file renamed by a separator change: its post-change path + the basename
+ *  it had before, so the change can be undone. */
+interface SeparatorRename {
+	path: string;
+	oldBasename: string;
+}
+
+/** The last separator-change pass: the renames plus the separators it moved
+ *  between, so undo restores both the filenames and the setting. */
+interface SeparatorChangeRecord {
+	oldSep: string;
+	newSep: string;
+	renames: SeparatorRename[];
+}
+
 interface TrellisSettings {
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
@@ -66,6 +83,8 @@ interface TrellisSettings {
 	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
 	lastBootstrap?: BootstrapRecord[];
+	/** The last separator change (for undo). */
+	lastSeparatorChange?: SeparatorChangeRecord;
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
@@ -190,6 +209,11 @@ export default class TrellisPlugin extends Plugin {
 			id: "bootstrap-undo",
 			name: t("cmd.bootstrapUndo"),
 			callback: () => void this.undoBootstrap(),
+		});
+		this.addCommand({
+			id: "separator-change-undo",
+			name: t("cmd.sepUndo"),
+			callback: () => void this.undoSeparatorChange(),
 		});
 
 		// Right-click a note → cascade-rename its location tag (From prefilled).
@@ -432,11 +456,7 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
-		const sep = primarySeparator(this.settings.schema);
-		let base: string;
-		if (!safeTitle) base = trekey;
-		else if (tagPosition(this.settings.schema) === "suffix") base = `${safeTitle}${sep}${trekey}`;
-		else base = `${trekey}${sep}${safeTitle}`;
+		const base = assembleBasename(trekey, safeTitle, this.settings.schema);
 
 		const path = `${base}.md`;
 		if (this.app.vault.getAbstractFileByPath(path)) {
@@ -545,21 +565,175 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Apply: write the proposed location tag into each file's frontmatter
 	 *  (existing content preserved), recording what was written so it can be
-	 *  undone. Filenames usually don't change — the trekey is already there. */
+	 *  undone. Filenames usually don't change — the trekey is already there.
+	 *
+	 *  Robust against a single bad file: a frontmatter parse error (e.g. a file
+	 *  with duplicate YAML keys) is caught per-file and collected, so it can
+	 *  never abort the whole pass. A live progress Notice tracks the run, and the
+	 *  undo record is saved in `finally` so even an interrupted pass stays
+	 *  undoable. */
 	private async applyBootstrap(assign: { path: string; tag: string }[]) {
 		const record: BootstrapRecord[] = [];
-		for (const r of assign) {
+		const failed: string[] = [];
+		const total = assign.length;
+		const progress = new Notice(t("notice.bootstrapProgress", { done: 0, total }), 0);
+		try {
+			for (let i = 0; i < assign.length; i++) {
+				const r = assign[i];
+				const file = this.app.vault.getAbstractFileByPath(r.path);
+				if (file instanceof TFile) {
+					try {
+						await this.app.fileManager.processFrontMatter(file, (fm) => {
+							const tags = normalizeTagList(fm.tags);
+							if (!tags.includes(r.tag)) fm.tags = [...tags, r.tag];
+						});
+						record.push({ path: r.path, tag: r.tag });
+					} catch (e) {
+						failed.push(r.path);
+						console.error("TRELLIS bootstrap skipped (frontmatter error)", r.path, e);
+					}
+				}
+				if ((i + 1) % 25 === 0 || i + 1 === total) {
+					progress.setMessage(t("notice.bootstrapProgress", { done: i + 1, total }));
+				}
+			}
+		} finally {
+			progress.hide();
+			// Save what we managed to write even if the loop threw — keeps undo intact.
+			this.settings.lastBootstrap = record;
+			await this.saveSettings();
+		}
+		new Notice(
+			failed.length
+				? t("notice.bootstrappedWithErrors", { n: record.length, failed: failed.length })
+				: t("notice.bootstrapped", { n: record.length })
+		);
+		if (failed.length) new BootstrapErrorsModal(this.app, failed).open();
+	}
+
+	// --- Separator batch change (v0.0.7) -----------------------------------
+	// One-directional, like the tag→filename engine: the SETTING is the source
+	// of truth. Changing the separator in settings rewrites every tagged file's
+	// boundary separator to match (title-internal symbols preserved), behind a
+	// confirm dialog with a dry-run preview and a one-step undo.
+
+	/** A clone of the current schema with a different primary separator, for
+	 *  computing the migrated names without mutating live settings. */
+	private schemaWithSeparator(sep: string): TrellisSchema {
+		const slots = this.settings.schema.slots.map((s) => ({ ...s }));
+		const separators = [...this.settings.schema.separators];
+		if (separators.length === 0) separators.push(sep);
+		else separators[0] = sep;
+		return { slots, separators };
+	}
+
+	/** Dry-run: which tagged files a switch to `newSep` would rename. The tag is
+	 *  the source of truth (trekey from the tag, separator-agnostic), so untagged
+	 *  files are never touched — bootstrap onboards those first. */
+	private previewSeparatorChange(
+		newSep: string
+	): { path: string; oldName: string; newName: string }[] {
+		const oldSchema = this.settings.schema;
+		const newSchema = this.schemaWithSeparator(newSep);
+		const out: { path: string; oldName: string; newName: string }[] = [];
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (!cache) continue;
+			const trekey = pickTrekey(getAllTags(cache) ?? [], oldSchema);
+			if (trekey === null) continue;
+			const newName = separatorMigratedName(file.basename, trekey, oldSchema, newSchema);
+			if (newName !== null) out.push({ path: file.path, oldName: file.basename, newName });
+		}
+		return out;
+	}
+
+	/** Open the confirm dialog for a separator change (called from settings). */
+	requestSeparatorChange(newSep: string, onDone: () => void) {
+		const oldSep = primarySeparator(this.settings.schema);
+		if (newSep === oldSep) {
+			onDone();
+			return;
+		}
+		const rows = this.previewSeparatorChange(newSep);
+		new SeparatorChangeModal(this.app, oldSep, newSep, rows, onDone, () =>
+			void this.applySeparatorChange(newSep, rows)
+		).open();
+	}
+
+	/** Apply: flip the setting, then rename every affected file (link-safe),
+	 *  recording the renames so the whole pass can be undone. */
+	private async applySeparatorChange(
+		newSep: string,
+		rows: { path: string; oldName: string; newName: string }[]
+	) {
+		const oldSep = primarySeparator(this.settings.schema);
+		// Flip the setting first so one-directional sync now targets the new sep.
+		this.setPrimarySeparator(newSep);
+		await this.saveSettings();
+		const renames: SeparatorRename[] = [];
+		const total = rows.length;
+		const progress = new Notice(t("notice.sepProgress", { done: 0, total }), 0);
+		try {
+			for (let i = 0; i < rows.length; i++) {
+				const r = rows[i];
+				const file = this.app.vault.getAbstractFileByPath(r.path);
+				if (file instanceof TFile) {
+					const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+					const newPath = `${dir}${r.newName}.${file.extension}`;
+					await this.renameGuarded(file, newPath); // own try/catch — bad file can't abort
+					renames.push({ path: newPath, oldBasename: r.oldName });
+				}
+				if ((i + 1) % 25 === 0 || i + 1 === total) {
+					progress.setMessage(t("notice.sepProgress", { done: i + 1, total }));
+				}
+			}
+		} finally {
+			progress.hide();
+			this.settings.lastSeparatorChange = { oldSep, newSep, renames };
+			await this.saveSettings();
+		}
+		this.rebuildTrees();
+		new Notice(t("notice.sepChanged", { n: renames.length, from: oldSep, to: newSep }));
+	}
+
+	/** Undo the last separator change: restore the setting AND each filename. */
+	private async undoSeparatorChange() {
+		const rec = this.settings.lastSeparatorChange;
+		if (!rec || rec.renames.length === 0) {
+			new Notice(t("notice.noSepChange"));
+			return;
+		}
+		this.setPrimarySeparator(rec.oldSep);
+		await this.saveSettings();
+		let undone = 0;
+		for (const r of rec.renames) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
-				const tags = normalizeTagList(fm.tags);
-				if (!tags.includes(r.tag)) fm.tags = [...tags, r.tag];
-			});
-			record.push({ path: r.path, tag: r.tag });
+			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+			const newPath = `${dir}${r.oldBasename}.${file.extension}`;
+			await this.renameGuarded(file, newPath);
+			undone++;
 		}
-		this.settings.lastBootstrap = record;
+		this.settings.lastSeparatorChange = undefined;
 		await this.saveSettings();
-		new Notice(t("notice.bootstrapped", { n: record.length }));
+		this.rebuildTrees();
+		new Notice(t("notice.sepReverted", { n: undone }));
+	}
+
+	/** Rename a file with the infinite-loop guard set, so our own rename's
+	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
+	private async renameGuarded(file: TFile, newPath: string) {
+		this.renaming.add(file.path);
+		this.renaming.add(newPath);
+		try {
+			await this.app.fileManager.renameFile(file, newPath);
+		} catch (e) {
+			console.error("TRELLIS rename failed", e);
+			new Notice(t("notice.renameFailed", { name: file.basename }));
+		} finally {
+			this.renaming.delete(file.path);
+			window.setTimeout(() => this.renaming.delete(newPath), 200);
+		}
 	}
 
 	/** Undo the last bootstrap: remove exactly the tags it added. */
@@ -798,6 +972,102 @@ class BootstrapPreviewModal extends Modal {
 	}
 }
 
+/** Lists files a bootstrap pass had to skip (frontmatter parse errors, e.g.
+ *  duplicate YAML keys). Shown after apply so the user can fix them by hand. */
+class BootstrapErrorsModal extends Modal {
+	constructor(app: App, private readonly failed: string[]) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: t("modal.bootstrapErrors.title") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t("modal.bootstrapErrors.desc", { n: this.failed.length }),
+		});
+		const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
+		for (const p of this.failed) {
+			list.createDiv({ cls: "trellis-bootstrap-skip", text: p });
+		}
+		new Setting(contentEl).addButton((b) =>
+			b.setButtonText(t("modal.bootstrap.close")).onClick(() => this.close())
+		);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+/** Confirm dialog for a separator change. Small by default — shows the count
+ *  and a collapsible list of exactly which files would be renamed — with a
+ *  warning-styled apply and a cancel. Closing it always calls onClose (the
+ *  settings tab re-renders so the input matches the final state). */
+class SeparatorChangeModal extends Modal {
+	constructor(
+		app: App,
+		private readonly oldSep: string,
+		private readonly newSep: string,
+		private readonly rows: { path: string; oldName: string; newName: string }[],
+		private readonly onClosed: () => void,
+		private readonly onApply: () => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: t("modal.sep.title") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t("modal.sep.desc", { from: this.oldSep, to: this.newSep }),
+		});
+
+		if (this.rows.length === 0) {
+			contentEl.createEl("p", { text: t("modal.sep.none") });
+			new Setting(contentEl).addButton((b) =>
+				b.setButtonText(t("modal.sep.cancel")).onClick(() => this.close())
+			);
+			return;
+		}
+
+		contentEl.createEl("p", {
+			text: t("modal.sep.count", { n: this.rows.length }),
+		});
+
+		// Collapsible exact list — open it to review every rename before applying.
+		const details = contentEl.createEl("details");
+		details.createEl("summary", { text: t("modal.sep.showList") });
+		const list = details.createDiv({ cls: "trellis-bootstrap-list" });
+		for (const r of this.rows) {
+			const row = list.createDiv({ cls: "trellis-bootstrap-row" });
+			row.createSpan({ cls: "trellis-bootstrap-name", text: r.oldName });
+			row.createSpan({ cls: "trellis-bootstrap-arrow", text: " → " });
+			row.createSpan({ cls: "trellis-bootstrap-tag", text: r.newName });
+		}
+
+		const buttons = new Setting(contentEl);
+		buttons.addButton((b) =>
+			b
+				.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
+				.setWarning()
+				.onClick(() => {
+					this.onApply();
+					this.close();
+				})
+		);
+		buttons.addButton((b) =>
+			b.setButtonText(t("modal.sep.cancel")).onClick(() => this.close())
+		);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+		this.onClosed();
+	}
+}
+
 /** Autocomplete for a tag-path text input, sourced from the vault's live tags
  *  (every nesting level). */
 class TagPathSuggest extends AbstractInputSuggest<string> {
@@ -889,22 +1159,42 @@ class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Separator: changing it triggers a confirm dialog + vault-wide batch
+		// rename (one-directional, like the tag engine). We commit on blur/Enter,
+		// not per keystroke, so the dialog appears once the edit is finished.
 		new Setting(containerEl)
 			.setName(t("setting.sepName"))
 			.setDesc(t("setting.sepDesc"))
-			.addText((text) =>
-				text
-					.setPlaceholder("-")
-					.setValue(primarySeparator(this.plugin.settings.schema))
-					.onChange(async (value) => {
-						if (value.length !== 1) {
-							new Notice(t("notice.sepOneChar"));
-							return;
-						}
-						this.plugin.setPrimarySeparator(value);
-						await this.plugin.saveSettings();
-					})
-			);
+			.addText((text) => {
+				const current = () => primarySeparator(this.plugin.settings.schema);
+				let pending = current();
+				text.setPlaceholder("-").setValue(pending).onChange((v) => (pending = v));
+				const reset = () => text.setValue(current());
+				const commit = () => {
+					const v = pending;
+					if (v === current()) return; // unchanged
+					if (v === "") {
+						new Notice(t("notice.sepEmpty"));
+						reset();
+						return;
+					}
+					if (/[A-Za-z0-9/]/.test(v)) {
+						new Notice(t("notice.sepBadChar"));
+						reset();
+						return;
+					}
+					// Confirm + batch apply; re-render the tab when the dialog closes
+					// so the input reflects the final (applied or cancelled) value.
+					this.plugin.requestSeparatorChange(v, () => this.display());
+				};
+				text.inputEl.addEventListener("blur", commit);
+				text.inputEl.addEventListener("keydown", (e) => {
+					if (e.key === "Enter") {
+						e.preventDefault();
+						text.inputEl.blur();
+					}
+				});
+			});
 
 		new Setting(containerEl)
 			.setName(t("setting.posName"))
