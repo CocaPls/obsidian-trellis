@@ -7,6 +7,25 @@ development milestones; `0.1.0` will be the first public release.
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4`, `0.0.5`, and `0.0.6`.
 
+## 0.0.8 — Scoped bootstrap, duplicate-tag cleanup, robustness
+
+- **Scoped bootstrap target picker** — onboard a folder/module subtree instead
+  of only the whole vault. Checkbox tree with drag-to-select, filename search, a
+  "notes without a tag only" toggle, a selection count, and already-tagged
+  badges. Sidebar header buttons (bootstrap / rename tag / undo) and a "new
+  note" command round out the entry points.
+- **Duplicate location-tag cleanup** — one note = one location per namespace.
+  Sync warns when a note carries duplicate location tags, and a new "check
+  duplicate location tags" command opens a modal to pick which tag to keep per
+  note; the rest are removed from frontmatter (undoable, with an "undo last
+  duplicate-tag cleanup" command). The modal shows the total count, scrolls
+  within the viewport, and batches at 50 notes for large runs.
+- **Location tags belong in frontmatter** — settings and README now state that
+  cascade and bootstrap read and rewrite frontmatter tags, one per note.
+- **Robustness / cleanup** — every assembled vault path goes through
+  `normalizePath()`; cascade rename now isolates per-file frontmatter errors
+  (try/catch + skipped-files modal), matching bootstrap and separator change.
+
 ## 0.0.7 — Separator batch-change + bulk-op robustness
 
 - **Change the filename separator across the whole vault.** Editing the
