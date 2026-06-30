@@ -12,6 +12,7 @@ import {
 	AbstractInputSuggest,
 	ButtonComponent,
 	debounce,
+	normalizePath,
 } from "obsidian";
 import {
 	TrellisSchema,
@@ -380,7 +381,7 @@ export default class TrellisPlugin extends Plugin {
 		if (newBasename === null) return; // already in sync
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-		const newPath = `${dir}${newBasename}.${file.extension}`;
+		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
 
 		this.renaming.add(file.path);
 		this.renaming.add(newPath);
@@ -523,7 +524,7 @@ export default class TrellisPlugin extends Plugin {
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
 		const base = assembleBasename(trekey, safeTitle, this.settings.schema);
 
-		const path = `${base}.md`;
+		const path = normalizePath(`${base}.md`);
 		if (this.app.vault.getAbstractFileByPath(path)) {
 			new Notice(t("notice.exists", { base }));
 			return;
@@ -586,17 +587,25 @@ export default class TrellisPlugin extends Plugin {
 		if (from === to) return;
 		const files = this.app.vault.getMarkdownFiles();
 		let retagged = 0;
+		const failed: string[] = [];
 		for (const file of files) {
 			let touched = false;
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
-				const tags = normalizeTagList(fm.tags);
-				if (tags.length === 0) return;
-				const next = tags.map((t) => renameTagPath(t, from, to) ?? t);
-				if (next.some((t, i) => t !== tags[i])) {
-					fm.tags = next;
-					touched = true;
-				}
-			});
+			try {
+				await this.app.fileManager.processFrontMatter(file, (fm) => {
+					const tags = normalizeTagList(fm.tags);
+					if (tags.length === 0) return;
+					const next = tags.map((t) => renameTagPath(t, from, to) ?? t);
+					if (next.some((t, i) => t !== tags[i])) {
+						fm.tags = next;
+						touched = true;
+					}
+				});
+			} catch (e) {
+				// A malformed YAML file must not abort the whole cascade.
+				console.error("TRELLIS cascade skipped (frontmatter error)", file.path, e);
+				failed.push(file.basename);
+				continue;
+			}
 			if (touched) retagged++;
 		}
 		new Notice(
@@ -604,6 +613,7 @@ export default class TrellisPlugin extends Plugin {
 				? t("notice.retagged", { n: retagged, from, to })
 				: t("notice.noFilesTagged", { from })
 		);
+		if (failed.length) new BootstrapErrorsModal(this.app, failed).open();
 	}
 
 	/** Bootstrap dry-run: scan the chosen markdown files (or the whole vault when
@@ -746,7 +756,7 @@ export default class TrellisPlugin extends Plugin {
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (file instanceof TFile) {
 					const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-					const newPath = `${dir}${r.newName}.${file.extension}`;
+					const newPath = normalizePath(`${dir}${r.newName}.${file.extension}`);
 					await this.renameGuarded(file, newPath); // own try/catch — bad file can't abort
 					renames.push({ path: newPath, oldBasename: r.oldName });
 				}
@@ -777,7 +787,7 @@ export default class TrellisPlugin extends Plugin {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
 			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-			const newPath = `${dir}${r.oldBasename}.${file.extension}`;
+			const newPath = normalizePath(`${dir}${r.oldBasename}.${file.extension}`);
 			await this.renameGuarded(file, newPath);
 			undone++;
 		}
