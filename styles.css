@@ -44,3 +44,73 @@
 	padding: 1px 0;
 	color: var(--text-muted);
 }
+
+/* Bootstrap target picker — checkbox tree of folders/notes. */
+.trellis-bootstrap-tree {
+	max-height: 45vh;
+	overflow-y: auto;
+	margin: 0.2em 0 0.8em;
+	padding: 0.4em 0.6em;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+}
+.trellis-bootstrap-treerow {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	padding: 1px 0;
+}
+.trellis-bootstrap-caret {
+	display: inline-block;
+	width: 1em;
+	text-align: center;
+	flex: 0 0 auto;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+.trellis-bootstrap-treerow input[type="checkbox"] {
+	flex: 0 0 auto;
+	margin: 0;
+}
+.trellis-bootstrap-foldername {
+	color: var(--text-normal);
+	font-weight: 600;
+	cursor: pointer;
+	user-select: none;
+}
+.trellis-bootstrap-filename {
+	color: var(--text-normal);
+	cursor: pointer;
+	user-select: none;
+	flex: 1 1 auto;
+}
+/* File checkboxes are display-only — the row click/drag drives selection. */
+.trellis-bootstrap-file input[type="checkbox"] {
+	pointer-events: none;
+}
+.trellis-bootstrap-file:hover,
+.trellis-bootstrap-folder:hover {
+	background: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+}
+.trellis-bootstrap-search {
+	width: 100%;
+	margin: 0.2em 0 0.6em;
+}
+/* Already-tagged notes (shown when the untagged-only toggle is off). */
+.trellis-bootstrap-tagged .trellis-bootstrap-filename {
+	color: var(--text-faint);
+}
+.trellis-bootstrap-badge {
+	flex: 0 0 auto;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-accent);
+	opacity: 0.85;
+}
+.trellis-bootstrap-empty {
+	padding: 1em;
+	text-align: center;
+	color: var(--text-muted);
+	font-style: italic;
+}

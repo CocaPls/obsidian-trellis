@@ -332,3 +332,21 @@ test("suffix slot order ([name, tag]) syncs the trailing trekey", () => {
 	assert.equal(extractTrekey("tree-idea-S88B07", schema), "S88B07");
 	assert.equal(syncedBasename("tree-idea-S88B07", "S88B99", schema), "tree-idea-S88B99");
 });
+
+test("trekey/title survive date + session codes after the trekey", () => {
+	// Session-log style filename: trekey, then a date and a session code, then the
+	// title — all joined by the same separator. The trekey is the FIRST segment;
+	// everything after the first boundary is the title and must be preserved.
+	const us: TrellisSchema = schemaFromLegacy("tree", "_", "prefix");
+	const name = "S88L11_0629_S88-11_세션대시보드";
+
+	assert.equal(extractTrekey(name, us), "S88L11");
+	assert.equal(extractTitle(name, "S88L11", us), "0629_S88-11_세션대시보드");
+	// Already in sync — no rename churn for a correct filename.
+	assert.equal(syncedBasename(name, "S88L11", us), null);
+	// Changing the trekey keeps the date/session code verbatim.
+	const title = extractTitle(name, "S88L11", us);
+	assert.equal(assembleBasename("S89L11", title, us), "S89L11_0629_S88-11_세션대시보드");
+	// The trekey still decomposes into its hierarchical tag.
+	assert.equal(trekeyToTagPath("S88L11", us), "tree/S/88/L/11");
+});

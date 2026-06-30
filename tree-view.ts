@@ -22,6 +22,10 @@ export class TrellisTreeView extends ItemView {
 	private readonly onToggleSort: () => void;
 	private readonly onNewChild: (parentTagPath: string) => void;
 	private readonly onNewNote: () => void;
+	private readonly onBootstrap: () => void;
+	private readonly onCascade: () => void;
+	private readonly onUndoBootstrap: () => void;
+	private readonly onUndoSeparator: () => void;
 	/** Tag paths whose children are hidden. Persists across refreshes. */
 	private readonly collapsed = new Set<string>();
 
@@ -31,7 +35,11 @@ export class TrellisTreeView extends ItemView {
 		getSortAsc: () => boolean,
 		onToggleSort: () => void,
 		onNewChild: (parentTagPath: string) => void,
-		onNewNote: () => void
+		onNewNote: () => void,
+		onBootstrap: () => void,
+		onCascade: () => void,
+		onUndoBootstrap: () => void,
+		onUndoSeparator: () => void
 	) {
 		super(leaf);
 		this.getRoots = getRoots;
@@ -39,6 +47,10 @@ export class TrellisTreeView extends ItemView {
 		this.onToggleSort = onToggleSort;
 		this.onNewChild = onNewChild;
 		this.onNewNote = onNewNote;
+		this.onBootstrap = onBootstrap;
+		this.onCascade = onCascade;
+		this.onUndoBootstrap = onUndoBootstrap;
+		this.onUndoSeparator = onUndoSeparator;
 	}
 
 	getViewType(): string {
@@ -94,6 +106,28 @@ export class TrellisTreeView extends ItemView {
 		this.addButton(buttons, "crosshair", t("tree.showCurrent"), () =>
 			this.revealActiveFile()
 		);
+		this.addButton(buttons, "wand-2", t("tree.bootstrap"), () =>
+			this.onBootstrap()
+		);
+		this.addButton(buttons, "pencil-line", t("tree.cascade"), () =>
+			this.onCascade()
+		);
+		this.addButton(buttons, "undo-2", t("tree.undo"), (e) => {
+			const menu = new Menu();
+			menu.addItem((i) =>
+				i
+					.setTitle(t("cmd.bootstrapUndo"))
+					.setIcon("wand-2")
+					.onClick(() => this.onUndoBootstrap())
+			);
+			menu.addItem((i) =>
+				i
+					.setTitle(t("cmd.sepUndo"))
+					.setIcon("scissors")
+					.onClick(() => this.onUndoSeparator())
+			);
+			menu.showAtMouseEvent(e);
+		});
 
 		const roots = this.getRoots();
 		const nav = container.createDiv({ cls: "nav-files-container" });
@@ -119,7 +153,7 @@ export class TrellisTreeView extends ItemView {
 		parent: HTMLElement,
 		icon: string,
 		label: string,
-		onClick: () => void
+		onClick: (e: MouseEvent) => void
 	) {
 		const btn = parent.createDiv({
 			cls: "clickable-icon nav-action-button",

@@ -52,6 +52,7 @@ export function t(key: string, vars?: Record<string, string | number>): string {
 const EN: Record<string, string> = {
 	// commands
 	"cmd.openTree": "Open tree view",
+	"cmd.newNote": "New note (under active note's location)",
 	"cmd.cascade": "Rename location tag (cascade)",
 	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
@@ -160,12 +161,28 @@ const EN: Record<string, string> = {
 	"tree.sortDesc": "Sort: descending (click for ascending)",
 	"tree.collapseAll": "Collapse / expand all",
 	"tree.showCurrent": "Show current file",
+	"tree.bootstrap": "Bootstrap tags…",
+	"tree.cascade": "Rename location tag",
+	"tree.undo": "Undo…",
 	"tree.empty": "No location-tagged notes found.",
+	// bootstrap select modal
+	"modal.bootstrapSelect.title": "Bootstrap — select targets",
+	"modal.bootstrapSelect.desc":
+		'Pick folders or notes to bootstrap. Checking a folder selects every note under it; notes can be toggled individually, and folders + notes can be mixed. Use "Select all" for the whole vault. The next step previews before anything is written.',
+	"modal.bootstrapSelect.selectAll": "Select all",
+	"modal.bootstrapSelect.clear": "Clear",
+	"modal.bootstrapSelect.next": "Next — preview ({n})",
+	"modal.bootstrapSelect.untaggedOnly": "Show only untagged notes",
+	"modal.bootstrapSelect.empty": "No notes to show.",
+	"modal.bootstrapSelect.tagged": "✓ tagged",
+	"ph.bootstrapSearch": "Search notes by name…",
+	"notice.bootstrapNoSelection": "TRELLIS: nothing selected",
 };
 
 const KO: Record<string, string> = {
 	// commands
 	"cmd.openTree": "트리 뷰 열기",
+	"cmd.newNote": "새 노트 (현재 노트 위치 아래)",
 	"cmd.cascade": "위치 태그 이름 변경 (하위 전체)",
 	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
@@ -272,7 +289,22 @@ const KO: Record<string, string> = {
 	"tree.sortDesc": "정렬: 내림차순 (클릭하면 오름차순)",
 	"tree.collapseAll": "전체 접기 / 펼치기",
 	"tree.showCurrent": "현재 파일 보기",
+	"tree.bootstrap": "부트스트랩…",
+	"tree.cascade": "위치 태그 이름 변경",
+	"tree.undo": "되돌리기…",
 	"tree.empty": "위치 태그가 붙은 노트가 없습니다.",
+	// bootstrap select modal
+	"modal.bootstrapSelect.title": "부트스트랩 — 대상 선택",
+	"modal.bootstrapSelect.desc":
+		'부트스트랩할 폴더나 노트를 고르세요. 폴더를 체크하면 그 안 모든 노트가 선택됩니다. 노트는 개별 토글할 수 있고, 폴더와 노트를 섞어 고를 수도 있습니다. 전체는 "전체 선택"을 쓰세요. 다음 단계에서 기록 전 미리보기합니다.',
+	"modal.bootstrapSelect.selectAll": "전체 선택",
+	"modal.bootstrapSelect.clear": "선택 해제",
+	"modal.bootstrapSelect.next": "다음 — 미리보기 ({n})",
+	"modal.bootstrapSelect.untaggedOnly": "태그 없는 노트만 보기",
+	"modal.bootstrapSelect.empty": "표시할 노트가 없습니다.",
+	"modal.bootstrapSelect.tagged": "✓ 태그됨",
+	"ph.bootstrapSearch": "이름으로 노트 검색…",
+	"notice.bootstrapNoSelection": "TRELLIS: 선택된 항목이 없습니다",
 };
 
 const STRINGS: Record<Lang, Record<string, string>> = { en: EN, ko: KO };

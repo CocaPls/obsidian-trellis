@@ -1,6 +1,8 @@
 import {
 	Plugin,
 	TFile,
+	TFolder,
+	TAbstractFile,
 	getAllTags,
 	Notice,
 	Modal,
@@ -8,6 +10,7 @@ import {
 	PluginSettingTab,
 	App,
 	AbstractInputSuggest,
+	ButtonComponent,
 	debounce,
 } from "obsidian";
 import {
@@ -28,7 +31,6 @@ import {
 	filterTagSuggestions,
 	buildNoteTree,
 	sortNoteTree,
-	nextChildSegment,
 	parentTagPath,
 	extractTrekey,
 	trekeyToTagPath,
@@ -142,7 +144,19 @@ export default class TrellisPlugin extends Plugin {
 					() => this.settings.sortAsc,
 					() => void this.toggleSortDir(),
 					(parentTagPath) => this.openNewNoteModal(parentTagPath),
-					() => this.newNoteFromActive()
+					() => this.newNoteFromActive(),
+					() =>
+						new BootstrapSelectModal(
+							this.app,
+							(paths) => this.bootstrapDryRun(paths),
+							(f) => this.locationTagOf(f) !== null
+						).open(),
+					() =>
+						new CascadeRenameModal(this.app, (from, to) =>
+							void this.cascadeRename(from, to)
+						).open(),
+					() => void this.undoBootstrap(),
+					() => void this.undoSeparatorChange()
 				)
 		);
 		this.ribbonEl = this.addRibbonIcon("list-tree", t("view.treeName"), () =>
@@ -155,6 +169,13 @@ export default class TrellisPlugin extends Plugin {
 				if (this.settings.treeViewEnabled) void this.activateTreeView();
 				else new Notice(t("notice.treeOff"));
 			},
+		});
+		// New note under the active note's location tag (same as the tree header's
+		// new-note button), available from the command palette too.
+		this.addCommand({
+			id: "new-note",
+			name: t("cmd.newNote"),
+			callback: () => this.newNoteFromActive(),
 		});
 		this.applyTreeViewState();
 
@@ -203,7 +224,12 @@ export default class TrellisPlugin extends Plugin {
 		this.addCommand({
 			id: "bootstrap-preview",
 			name: t("cmd.bootstrapPreview"),
-			callback: () => this.bootstrapDryRun(),
+			callback: () =>
+				new BootstrapSelectModal(
+					this.app,
+					(paths) => this.bootstrapDryRun(paths),
+					(f) => this.locationTagOf(f) !== null
+				).open(),
 		});
 		this.addCommand({
 			id: "bootstrap-undo",
@@ -236,12 +262,6 @@ export default class TrellisPlugin extends Plugin {
 				);
 			})
 		);
-
-		console.log("TRELLIS loaded (tag → filename trekey + cascade rename)");
-	}
-
-	onunload() {
-		console.log("TRELLIS unloaded");
 	}
 
 	async loadSettings() {
@@ -263,6 +283,11 @@ export default class TrellisPlugin extends Plugin {
 						legacy.keyPosition ?? "prefix"
 					)
 				: defaultSchema();
+			// Drop migrated legacy scalar keys so they don't linger in data.json.
+			const s = this.settings as Partial<LegacyConfig>;
+			delete s.namespace;
+			delete s.separator;
+			delete s.keyPosition;
 		}
 	}
 
@@ -541,14 +566,16 @@ export default class TrellisPlugin extends Plugin {
 		);
 	}
 
-	/** Bootstrap dry-run: scan every markdown file, propose a location tag from
-	 *  its filename trekey prefix, and show a preview. Writes nothing — the user
-	 *  reviews before any real onboarding (apply step comes later). */
-	private bootstrapDryRun() {
+	/** Bootstrap dry-run: scan the chosen markdown files (or the whole vault when
+	 *  scopePaths is omitted), propose a location tag from each filename's trekey
+	 *  prefix, and show a preview. Writes nothing — the user reviews before any
+	 *  real onboarding (apply step comes later). */
+	private bootstrapDryRun(scopePaths?: Set<string>) {
 		const assign: { name: string; path: string; tag: string }[] = [];
 		const alreadyTagged: string[] = [];
 		const noTrekey: string[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (scopePaths && !scopePaths.has(file.path)) continue;
 			if (this.locationTagOf(file)) {
 				alreadyTagged.push(file.basename);
 				continue;
@@ -898,6 +925,298 @@ class NewChildNoteModal extends Modal {
 	}
 
 	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+/** Bootstrap target picker: a checkbox tree of the vault's folders and notes.
+ *  Checking a folder selects every markdown note under it; notes can be toggled
+ *  individually, and folders + loose notes can be mixed. "Select all" grabs the
+ *  whole vault (the original whole-vault bootstrap). Confirm hands the chosen
+ *  paths to the dry-run, which previews only those before anything is written. */
+class BootstrapSelectModal extends Modal {
+	private readonly selected = new Set<string>();
+	private readonly expanded = new Set<string>();
+	private treeEl!: HTMLElement;
+	private filter = "";
+	/** When on, already-tagged notes are hidden — only bootstrap targets show. */
+	private untaggedOnly = true;
+	/** Visible note paths in render (top-to-bottom) order — drives Shift-range. */
+	private visibleFiles: string[] = [];
+	private lastClicked: string | null = null;
+	private nextBtn?: ButtonComponent;
+	/** Drag-to-select: while dragging we update checkboxes IN PLACE (no
+	 *  re-render) so mouseenter keeps firing; mouseup does a final render to sync
+	 *  folder tristates. The start row's state flips the mode (select/deselect). */
+	private dragging = false;
+	private dragMode: "select" | "deselect" = "select";
+	private readonly cbByPath = new Map<string, HTMLInputElement>();
+	private readonly onMouseUp = () => {
+		if (!this.dragging) return;
+		this.dragging = false;
+		this.renderTree();
+	};
+
+	constructor(
+		app: App,
+		private readonly onConfirm: (paths: Set<string>) => void,
+		private readonly isTagged: (file: TFile) => boolean
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: t("modal.bootstrapSelect.title") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t("modal.bootstrapSelect.desc"),
+		});
+
+		const search = contentEl.createEl("input", {
+			type: "text",
+			cls: "trellis-bootstrap-search",
+			attr: { placeholder: t("ph.bootstrapSearch") },
+		});
+		search.addEventListener("input", () => {
+			this.filter = search.value.trim();
+			this.renderTree();
+		});
+
+		new Setting(contentEl)
+			.setName(t("modal.bootstrapSelect.untaggedOnly"))
+			.addToggle((tg) =>
+				tg.setValue(this.untaggedOnly).onChange((v) => {
+					this.untaggedOnly = v;
+					this.renderTree();
+				})
+			);
+
+		new Setting(contentEl)
+			.addButton((b) =>
+				b.setButtonText(t("modal.bootstrapSelect.selectAll")).onClick(() => {
+					for (const f of this.app.vault.getMarkdownFiles())
+						if (this.fileVisible(f)) this.selected.add(f.path);
+					this.renderTree();
+				})
+			)
+			.addButton((b) =>
+				b.setButtonText(t("modal.bootstrapSelect.clear")).onClick(() => {
+					this.selected.clear();
+					this.renderTree();
+				})
+			);
+
+		this.treeEl = contentEl.createDiv({ cls: "trellis-bootstrap-tree" });
+		document.addEventListener("mouseup", this.onMouseUp);
+		this.renderTree();
+
+		new Setting(contentEl)
+			.addButton((b) => {
+				this.nextBtn = b;
+				b.setCta().onClick(() => {
+					if (this.selected.size === 0) {
+						new Notice(t("notice.bootstrapNoSelection"));
+						return;
+					}
+					const chosen = new Set(this.selected);
+					this.close();
+					this.onConfirm(chosen);
+				});
+			})
+			.addButton((b) =>
+				b.setButtonText(t("modal.bootstrap.close")).onClick(() => this.close())
+			);
+		this.updateNextLabel();
+
+		// Focus the search box so the user can type to filter immediately.
+		search.focus();
+	}
+
+	private updateNextLabel() {
+		this.nextBtn?.setButtonText(
+			t("modal.bootstrapSelect.next", { n: this.selected.size })
+		);
+	}
+
+	/** Direct children of a folder: subfolders first, then markdown notes. */
+	private childrenOf(folder: TFolder): TAbstractFile[] {
+		const folders = folder.children.filter(
+			(c): c is TFolder => c instanceof TFolder
+		);
+		const files = folder.children.filter(
+			(c): c is TFile => c instanceof TFile && c.extension === "md"
+		);
+		folders.sort((a, b) => a.name.localeCompare(b.name));
+		files.sort((a, b) => a.name.localeCompare(b.name));
+		return [...folders, ...files];
+	}
+
+	/** Every markdown file anywhere under a folder (recursive). */
+	private mdFilesUnder(folder: TFolder): TFile[] {
+		const out: TFile[] = [];
+		const walk = (f: TFolder) => {
+			for (const c of f.children) {
+				if (c instanceof TFolder) walk(c);
+				else if (c instanceof TFile && c.extension === "md") out.push(c);
+			}
+		};
+		walk(folder);
+		return out;
+	}
+
+	/** A note shows when it matches the search AND passes the tagged filter. */
+	private fileVisible(file: TFile): boolean {
+		if (
+			this.filter &&
+			!file.basename.toLowerCase().includes(this.filter.toLowerCase())
+		)
+			return false;
+		if (this.untaggedOnly && this.isTagged(file)) return false;
+		return true;
+	}
+
+	/** A folder shows only if some descendant note is currently visible. */
+	private folderHasVisible(folder: TFolder): boolean {
+		return this.mdFilesUnder(folder).some((f) => this.fileVisible(f));
+	}
+
+	private renderTree() {
+		this.treeEl.empty();
+		this.visibleFiles = [];
+		this.cbByPath.clear();
+		for (const child of this.childrenOf(this.app.vault.getRoot())) {
+			this.renderNode(this.treeEl, child, 0);
+		}
+		if (this.visibleFiles.length === 0) {
+			this.treeEl.createDiv({
+				cls: "trellis-bootstrap-empty",
+				text: t("modal.bootstrapSelect.empty"),
+			});
+		}
+		this.updateNextLabel();
+	}
+
+	/** Select every visible note between two paths (inclusive) — Shift-range. */
+	private selectRange(a: string, b: string) {
+		const i = this.visibleFiles.indexOf(a);
+		const j = this.visibleFiles.indexOf(b);
+		if (i < 0 || j < 0) {
+			this.selected.add(b);
+			return;
+		}
+		const [lo, hi] = i < j ? [i, j] : [j, i];
+		for (let k = lo; k <= hi; k++) this.selected.add(this.visibleFiles[k]);
+	}
+
+	private renderNode(parent: HTMLElement, node: TAbstractFile, depth: number) {
+		if (node instanceof TFolder) {
+			if (!this.folderHasVisible(node)) return;
+			const visible = this.mdFilesUnder(node).filter((f) => this.fileVisible(f));
+			const sel = visible.filter((f) => this.selected.has(f.path)).length;
+			// While searching, force every shown folder open so matches are visible.
+			const open = this.filter ? true : this.expanded.has(node.path);
+
+			const row = parent.createDiv({
+				cls: "trellis-bootstrap-treerow trellis-bootstrap-folder",
+			});
+			row.style.paddingLeft = `${depth * 1.3}em`;
+
+			const caret = row.createSpan({
+				cls: "trellis-bootstrap-caret",
+				text: open ? "▾" : "▸",
+			});
+			const toggleOpen = () => {
+				if (this.filter) return; // caret inert while searching
+				if (this.expanded.has(node.path)) this.expanded.delete(node.path);
+				else this.expanded.add(node.path);
+				this.renderTree();
+			};
+			caret.addEventListener("click", toggleOpen);
+
+			const cb = row.createEl("input", { type: "checkbox" });
+			cb.checked = visible.length > 0 && sel === visible.length;
+			cb.indeterminate = sel > 0 && sel < visible.length;
+			cb.addEventListener("change", () => {
+				if (cb.checked) visible.forEach((f) => this.selected.add(f.path));
+				else visible.forEach((f) => this.selected.delete(f.path));
+				this.renderTree();
+			});
+
+			const name = row.createSpan({
+				cls: "trellis-bootstrap-foldername",
+				text: `${node.name} (${visible.length})`,
+			});
+			name.addEventListener("click", toggleOpen);
+
+			if (open) {
+				for (const child of this.childrenOf(node)) {
+					this.renderNode(parent, child, depth + 1);
+				}
+			}
+		} else if (node instanceof TFile) {
+			if (!this.fileVisible(node)) return;
+			this.visibleFiles.push(node.path);
+			const tagged = this.isTagged(node);
+
+			const row = parent.createDiv({
+				cls: tagged
+					? "trellis-bootstrap-treerow trellis-bootstrap-file trellis-bootstrap-tagged"
+					: "trellis-bootstrap-treerow trellis-bootstrap-file",
+			});
+			row.style.paddingLeft = `${depth * 1.3}em`;
+
+			row.createSpan({ cls: "trellis-bootstrap-caret", text: "" });
+
+			const cb = row.createEl("input", { type: "checkbox" });
+			cb.checked = this.selected.has(node.path);
+			this.cbByPath.set(node.path, cb);
+
+			row.createSpan({
+				cls: "trellis-bootstrap-filename",
+				text: node.basename,
+			});
+			if (tagged) {
+				row.createSpan({
+					cls: "trellis-bootstrap-badge",
+					text: t("modal.bootstrapSelect.tagged"),
+				});
+			}
+
+			// Left-press starts a drag-select; dragging across rows paints them.
+			// The start row's current state flips the mode (select vs deselect),
+			// so one drag both selects and clears. A press without moving = toggle.
+			// Shift+press extends the visible range from the last click.
+			row.addEventListener("mousedown", (e) => {
+				if (e.button !== 0) return;
+				e.preventDefault();
+				if (e.shiftKey && this.lastClicked) {
+					this.selectRange(this.lastClicked, node.path);
+					this.renderTree();
+					return;
+				}
+				this.dragging = true;
+				this.dragMode = this.selected.has(node.path) ? "deselect" : "select";
+				this.applyDrag(node.path);
+				this.lastClicked = node.path;
+			});
+			row.addEventListener("mouseenter", () => {
+				if (this.dragging) this.applyDrag(node.path);
+			});
+		}
+	}
+
+	/** Apply the active drag mode to one note, updating its checkbox in place
+	 *  (no re-render — keeps the drag's mouseenter stream alive). */
+	private applyDrag(path: string) {
+		if (this.dragMode === "select") this.selected.add(path);
+		else this.selected.delete(path);
+		const cb = this.cbByPath.get(path);
+		if (cb) cb.checked = this.selected.has(path);
+	}
+
+	onClose() {
+		document.removeEventListener("mouseup", this.onMouseUp);
 		this.contentEl.empty();
 	}
 }
