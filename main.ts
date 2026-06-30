@@ -21,6 +21,8 @@ import {
 	primaryNamespace,
 	primarySeparator,
 	tagPosition,
+	duplicateLocationGroups,
+	DuplicateTagGroup,
 	NoteTreeNode,
 	tagToTrekey,
 	pickTrekey,
@@ -75,6 +77,12 @@ interface SeparatorChangeRecord {
 	renames: SeparatorRename[];
 }
 
+/** One file's location tags removed by a dedup pass, so it can be undone. */
+interface DedupRecord {
+	path: string;
+	removed: string[];
+}
+
 interface TrellisSettings {
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
@@ -87,6 +95,8 @@ interface TrellisSettings {
 	lastBootstrap?: BootstrapRecord[];
 	/** The last separator change (for undo). */
 	lastSeparatorChange?: SeparatorChangeRecord;
+	/** Location tags removed by the last duplicate-tag cleanup (for undo). */
+	lastDedup?: DedupRecord[];
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
@@ -113,6 +123,9 @@ export default class TrellisPlugin extends Plugin {
 	/** Infinite-loop guard: paths we are currently renaming, to ignore the
 	 *  metadata/vault events our own rename triggers. */
 	private renaming = new Set<string>();
+	/** Files already warned about carrying multiple location tags (one note =
+	 *  one location). Cleared when a file returns to a single location tag. */
+	private multiWarned = new Set<string>();
 
 	/** Cached note tree; null = stale, rebuilt on next sortedNoteTree(). */
 	private treeCache: NoteTreeNode[] | null = null;
@@ -241,6 +254,16 @@ export default class TrellisPlugin extends Plugin {
 			name: t("cmd.sepUndo"),
 			callback: () => void this.undoSeparatorChange(),
 		});
+		this.addCommand({
+			id: "check-duplicate-location-tags",
+			name: t("cmd.checkDuplicates"),
+			callback: () => this.openDuplicateTagsModal(),
+		});
+		this.addCommand({
+			id: "dedup-undo",
+			name: t("cmd.dedupUndo"),
+			callback: () => void this.undoDedup(),
+		});
 
 		// Right-click a note → cascade-rename its location tag (From prefilled).
 		this.registerEvent(
@@ -333,6 +356,23 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return;
 		const tags = getAllTags(cache) ?? [];
+
+		// One note = one location per namespace. Warn once (lightly) if a note
+		// carries duplicate location tags; the user resolves them in bulk via the
+		// "check duplicate location tags" command. We still sync from the first
+		// match (pickTrekey) so behavior stays deterministic.
+		const dupGroups = duplicateLocationGroups(tags, this.settings.schema);
+		if (dupGroups.length > 0) {
+			if (!this.multiWarned.has(file.path)) {
+				this.multiWarned.add(file.path);
+				const n = dupGroups.reduce((sum, g) => sum + g.tags.length, 0);
+				new Notice(t("notice.multiLocation", { name: file.basename, n }));
+				console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
+			}
+		} else {
+			this.multiWarned.delete(file.path);
+		}
+
 		const trekey = pickTrekey(tags, this.settings.schema);
 		if (trekey === null) return; // no location tag → never touch the file
 
@@ -747,6 +787,93 @@ export default class TrellisPlugin extends Plugin {
 		new Notice(t("notice.sepReverted", { n: undone }));
 	}
 
+	/** Scan every note for namespaces carrying 2+ location tags and open the
+	 *  cleanup modal. One note = one location per namespace; the user picks which
+	 *  tag to keep and the rest are removed from frontmatter (undoable). */
+	private openDuplicateTagsModal() {
+		const dups: DuplicateNote[] = [];
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (!cache) continue;
+			const groups = duplicateLocationGroups(
+				getAllTags(cache) ?? [],
+				this.settings.schema
+			);
+			if (groups.length) dups.push({ file, groups });
+		}
+		if (dups.length === 0) {
+			new Notice(t("notice.noDuplicates"));
+			return;
+		}
+		new DuplicateTagsModal(this.app, dups, (decisions) =>
+			void this.applyDedup(decisions)
+		).open();
+	}
+
+	/** Apply the modal's decisions: keep the chosen tag per namespace and remove
+	 *  the rest from each file's frontmatter, recording removals for undo. */
+	private async applyDedup(decisions: DedupDecision[]) {
+		const record: DedupRecord[] = [];
+		for (const d of decisions) {
+			const file = this.app.vault.getAbstractFileByPath(d.path);
+			if (!(file instanceof TFile)) continue;
+			const removed: string[] = [];
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				const tags = normalizeTagList(fm.tags);
+				const next = tags.filter((tg) => {
+					const hashed = "#" + tg;
+					let inAnyGroup = false;
+					for (const [ns, keep] of Object.entries(d.keep)) {
+						if (hashed === `#${ns}` || hashed.startsWith(`#${ns}/`)) {
+							inAnyGroup = true;
+							if (hashed === keep) return true; // the chosen tag stays
+						}
+					}
+					if (inAnyGroup) {
+						removed.push(tg);
+						return false;
+					}
+					return true; // unrelated tag — leave it
+				});
+				if (removed.length) fm.tags = next;
+			});
+			if (removed.length) {
+				record.push({ path: d.path, removed });
+				this.multiWarned.delete(d.path);
+			}
+		}
+		this.settings.lastDedup = record;
+		await this.saveSettings();
+		new Notice(
+			record.length > 0
+				? t("notice.deduped", { n: record.length })
+				: t("notice.noDuplicates")
+		);
+	}
+
+	/** Undo the last dedup: add the removed location tags back to each file. */
+	private async undoDedup() {
+		const record = this.settings.lastDedup ?? [];
+		if (record.length === 0) {
+			new Notice(t("notice.noDedup"));
+			return;
+		}
+		let restored = 0;
+		for (const r of record) {
+			const file = this.app.vault.getAbstractFileByPath(r.path);
+			if (!(file instanceof TFile)) continue;
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				const tags = normalizeTagList(fm.tags);
+				for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
+				fm.tags = tags;
+			});
+			restored++;
+		}
+		this.settings.lastDedup = undefined;
+		await this.saveSettings();
+		new Notice(t("notice.dedupUndone", { n: restored }));
+	}
+
 	/** Rename a file with the infinite-loop guard set, so our own rename's
 	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
 	private async renameGuarded(file: TFile, newPath: string) {
@@ -789,6 +916,104 @@ export default class TrellisPlugin extends Plugin {
 }
 
 /** Two-field modal: which tag path to rename, and to what. */
+interface DuplicateNote {
+	file: TFile;
+	groups: DuplicateTagGroup[];
+}
+
+interface DedupDecision {
+	path: string;
+	/** namespace → the tag to keep (with leading '#'). */
+	keep: Record<string, string>;
+}
+
+/** Max notes shown in one cleanup pass — large batches are split so the modal
+ *  stays usable. The user applies, then re-runs the check for the next batch. */
+const DEDUP_BATCH_LIMIT = 50;
+
+/** Resolve notes carrying duplicate location tags: the user picks which tag to
+ *  keep per namespace, then applies (removes the rest, undoable) or defers.
+ *  Shows the total count and, for large batches, only the first N at a time. */
+class DuplicateTagsModal extends Modal {
+	private keep = new Map<string, Record<string, string>>();
+	private readonly visible: DuplicateNote[];
+
+	constructor(
+		app: App,
+		private readonly dups: DuplicateNote[],
+		private readonly onApply: (decisions: DedupDecision[]) => void
+	) {
+		super(app);
+		this.visible = dups.slice(0, DEDUP_BATCH_LIMIT);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl("h3", { text: t("dedup.title") });
+		contentEl.createEl("p", { text: t("dedup.desc"), cls: "trellis-dedup-desc" });
+		contentEl.createEl("p", {
+			text: t("dedup.count", { n: this.dups.length }),
+			cls: "trellis-dedup-count",
+		});
+		const rest = this.dups.length - this.visible.length;
+		if (rest > 0) {
+			contentEl.createEl("p", {
+				text: t("dedup.more", { shown: this.visible.length, rest }),
+				cls: "trellis-dedup-more",
+			});
+		}
+
+		const list = contentEl.createDiv({ cls: "trellis-dedup-list" });
+		for (const d of this.visible) {
+			const keepMap: Record<string, string> = {};
+			this.keep.set(d.file.path, keepMap);
+
+			const section = list.createDiv({ cls: "trellis-dedup-note" });
+			section.createDiv({ cls: "trellis-dedup-file", text: d.file.basename });
+
+			for (const g of d.groups) {
+				keepMap[g.namespace] = g.tags[0]; // default: keep the first
+				const groupEl = section.createDiv({ cls: "trellis-dedup-group" });
+				const radioName = `${d.file.path}::${g.namespace}`;
+				for (const tag of g.tags) {
+					const label = groupEl.createEl("label", {
+						cls: "trellis-dedup-option",
+					});
+					const radio = label.createEl("input", {
+						attr: { type: "radio", name: radioName },
+					});
+					radio.checked = tag === g.tags[0];
+					radio.addEventListener("change", () => {
+						keepMap[g.namespace] = tag;
+					});
+					label.createSpan({ text: " " + tag });
+				}
+			}
+		}
+
+		const btns = contentEl.createDiv({ cls: "trellis-dedup-buttons" });
+		const apply = btns.createEl("button", {
+			text: t("dedup.apply"),
+			cls: "mod-cta",
+		});
+		apply.addEventListener("click", () => {
+			const decisions: DedupDecision[] = this.visible.map((d) => ({
+				path: d.file.path,
+				keep: this.keep.get(d.file.path) ?? {},
+			}));
+			this.close();
+			this.onApply(decisions);
+		});
+		const defer = btns.createEl("button", { text: t("dedup.defer") });
+		defer.addEventListener("click", () => this.close());
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 class CascadeRenameModal extends Modal {
 	private from = "";
 	private to = "";

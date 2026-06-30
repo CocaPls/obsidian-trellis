@@ -17,7 +17,9 @@ retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
 - **One-directional sync** — when a note's location tag changes, its filename
   prefix is rewritten to match, through Obsidian's link-safe rename API
   (wikilinks update automatically). Edit the filename or title by hand and it's
-  restored from the tag. The tag is always the source of truth.
+  restored from the tag. The tag is always the source of truth. Keep location
+  tags in frontmatter — that's what cascade and bootstrap read and rewrite.
+  One note = one location tag (extras are flagged with a notice).
 - **Cascade rename** — rename a tag and its whole subtree follows; inserting a
   new parent level works too. Filenames and wikilinks follow along.
 - **Sidebar tree view** — see your tag hierarchy as a collapsible, folder-like

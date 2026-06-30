@@ -90,6 +90,41 @@ export function primaryNamespace(schema: TrellisSchema): string {
 	return (i >= 0 ? schema.slots[i].namespace : undefined) ?? "";
 }
 
+/** Every distinct location-tag namespace in the schema (one per tag slot). */
+export function tagNamespaces(schema: TrellisSchema): string[] {
+	const out: string[] = [];
+	for (const s of schema.slots) {
+		if (s.role === "tag" && s.namespace && !out.includes(s.namespace)) {
+			out.push(s.namespace);
+		}
+	}
+	return out;
+}
+
+/** A namespace carrying more than one distinct location tag on a single note. */
+export interface DuplicateTagGroup {
+	namespace: string;
+	/** Distinct location tags in this namespace, each with a leading '#'. */
+	tags: string[];
+}
+
+/** Namespaces that appear with 2+ distinct location tags on one note.
+ *  One note = one location per namespace; extras are surfaced for the user to
+ *  resolve. `tags` is the input as returned by getAllTags (leading '#'). */
+export function duplicateLocationGroups(
+	tags: string[],
+	schema: TrellisSchema
+): DuplicateTagGroup[] {
+	const groups: DuplicateTagGroup[] = [];
+	for (const ns of tagNamespaces(schema)) {
+		const matched = [
+			...new Set(tags.filter((t) => t === `#${ns}` || t.startsWith(`#${ns}/`))),
+		];
+		if (matched.length > 1) groups.push({ namespace: ns, tags: matched });
+	}
+	return groups;
+}
+
 /** The primary (first) separator, e.g. "-". */
 export function primarySeparator(schema: TrellisSchema): string {
 	return schema.separators[0] ?? "";

@@ -6,6 +6,8 @@ import {
 	schemaFromLegacy,
 	tagToTrekey,
 	pickTrekey,
+	tagNamespaces,
+	duplicateLocationGroups,
 	assembleBasename,
 	syncedBasename,
 	separatorMigratedName,
@@ -67,6 +69,38 @@ test("pickTrekey returns the first location tag, ignoring others", () => {
 	assert.equal(pickTrekey(["#status/wip", "#trel/S88/B07"], cfg), "S88B07");
 	assert.equal(pickTrekey(["#status/wip", "#area/sys"], cfg), null);
 	assert.equal(pickTrekey([], cfg), null);
+});
+
+test("pickTrekey stays deterministic with multiple location tags (first wins)", () => {
+	// One note = one location; if a note carries two location tags the plugin
+	// warns (see syncFile) but still resolves to the first for a stable filename.
+	assert.equal(pickTrekey(["#trel/S88/B07", "#trel/P02/C03"], cfg), "S88B07");
+	assert.equal(pickTrekey(["#trel/P02/C03", "#trel/S88/B07"], cfg), "P02C03");
+});
+
+test("tagNamespaces lists distinct tag-slot namespaces in order", () => {
+	assert.deepEqual(tagNamespaces(cfg), ["trel"]);
+	const multi: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel" },
+			{ role: "name" },
+			{ role: "tag", namespace: "proj" },
+		],
+		separators: ["-"],
+	};
+	assert.deepEqual(tagNamespaces(multi), ["trel", "proj"]);
+});
+
+test("duplicateLocationGroups flags a namespace carrying 2+ location tags", () => {
+	// one location tag (plus unrelated) → clean
+	assert.deepEqual(duplicateLocationGroups(["#trel/S88/B07", "#status/wip"], cfg), []);
+	// the same tag repeated (frontmatter + inline) → not a duplicate
+	assert.deepEqual(duplicateLocationGroups(["#trel/S88/B07", "#trel/S88/B07"], cfg), []);
+	// two distinct location tags in one namespace → flagged
+	const groups = duplicateLocationGroups(["#trel/S88/B07", "#trel/P02/C03"], cfg);
+	assert.equal(groups.length, 1);
+	assert.equal(groups[0].namespace, "trel");
+	assert.deepEqual(groups[0].tags, ["#trel/S88/B07", "#trel/P02/C03"]);
 });
 
 test("extractTrekey (prefix) takes everything before the first separator", () => {

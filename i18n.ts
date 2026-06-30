@@ -57,6 +57,8 @@ const EN: Record<string, string> = {
 	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
 	"cmd.sepUndo": "Undo last separator change",
+	"cmd.checkDuplicates": "Check for duplicate location tags",
+	"cmd.dedupUndo": "Undo last duplicate-tag cleanup",
 	// view / ribbon
 	"view.treeName": "TRELLIS tree",
 	// notices
@@ -86,6 +88,20 @@ const EN: Record<string, string> = {
 	"notice.sepChanged": "TRELLIS: separator {from} → {to} on {n} file(s)",
 	"notice.sepReverted": "TRELLIS: reverted separator change on {n} file(s)",
 	"notice.noSepChange": "TRELLIS: no separator change to undo",
+	"notice.multiLocation":
+		"TRELLIS: {name} has {n} location tags — using the first (one note = one location)",
+	"notice.noDuplicates": "TRELLIS: no duplicate location tags found",
+	"notice.deduped": "TRELLIS: cleaned up duplicate tags on {n} file(s)",
+	"notice.noDedup": "TRELLIS: no duplicate-tag cleanup to undo",
+	"notice.dedupUndone": "TRELLIS: restored tags on {n} file(s)",
+	"dedup.title": "Resolve duplicate location tags",
+	"dedup.desc":
+		"These notes carry more than one location tag. Pick the one to keep — the rest are removed from frontmatter (undoable).",
+	"dedup.count": "{n} note(s) with duplicate location tags",
+	"dedup.more":
+		"Showing the first {shown}. {rest} more — apply, then run the check again.",
+	"dedup.apply": "Apply",
+	"dedup.defer": "Defer",
 	// menu
 	"menu.newHere": "New note here",
 	// cascade modal
@@ -135,7 +151,7 @@ const EN: Record<string, string> = {
 	// settings
 	"setting.nsName": "Location tag namespace",
 	"setting.nsDesc":
-		"Tags under this namespace are the source of truth. e.g. 'trel' → #trel/S88/B07",
+		"Tags under this namespace are the source of truth. Put them in frontmatter — cascade rewrites frontmatter tags. e.g. 'trel' → #trel/S88/B07",
 	"setting.sepName": "Separator",
 	"setting.sepDesc":
 		"Character(s) between the trekey and the title — e.g. '-'. No letters, digits, or '/'. One symbol is recommended. Changing it triggers a vault-wide batch rename (with confirmation).",
@@ -187,6 +203,8 @@ const KO: Record<string, string> = {
 	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
 	"cmd.sepUndo": "마지막 구분자 변경 되돌리기",
+	"cmd.checkDuplicates": "중복 위치 태그 점검",
+	"cmd.dedupUndo": "마지막 중복 태그 정리 되돌리기",
 	// view / ribbon
 	"view.treeName": "TRELLIS 트리",
 	// notices
@@ -216,6 +234,20 @@ const KO: Record<string, string> = {
 	"notice.sepChanged": "TRELLIS: 구분자 {from} → {to}, {n}개 파일 변경",
 	"notice.sepReverted": "TRELLIS: 구분자 변경 {n}개 파일 되돌림",
 	"notice.noSepChange": "TRELLIS: 되돌릴 구분자 변경 없음",
+	"notice.multiLocation":
+		"TRELLIS: {name} 위치 태그 {n}개 — 첫 번째 사용 (노트 하나 = 위치 하나)",
+	"notice.noDuplicates": "TRELLIS: 중복 위치 태그 없음",
+	"notice.deduped": "TRELLIS: {n}개 파일 중복 태그 정리됨",
+	"notice.noDedup": "TRELLIS: 되돌릴 중복 태그 정리 없음",
+	"notice.dedupUndone": "TRELLIS: {n}개 파일 태그 복원됨",
+	"dedup.title": "중복 위치 태그 정리",
+	"dedup.desc":
+		"아래 노트들은 위치 태그를 두 개 이상 갖고 있습니다. 남길 하나를 고르세요 — 나머지는 frontmatter에서 제거됩니다(되돌리기 가능).",
+	"dedup.count": "중복 위치 태그 노트 {n}개",
+	"dedup.more":
+		"처음 {shown}개 표시. 외 {rest}개 — 적용 후 다시 점검하세요.",
+	"dedup.apply": "적용",
+	"dedup.defer": "보류",
 	// menu
 	"menu.newHere": "여기에 새 노트",
 	// cascade modal
@@ -264,7 +296,7 @@ const KO: Record<string, string> = {
 	// settings
 	"setting.nsName": "위치 태그 네임스페이스",
 	"setting.nsDesc":
-		"이 네임스페이스 아래 태그가 진실원입니다. 예: 'trel' → #trel/S88/B07",
+		"이 네임스페이스 아래 태그가 진실원입니다. frontmatter에 두세요 — cascade는 frontmatter 태그를 갱신합니다. 예: 'trel' → #trel/S88/B07",
 	"setting.sepName": "구분자",
 	"setting.sepDesc":
 		"트리키와 제목 사이 기호 — 예: '-'. 영문·숫자·'/' 불가. 한 글자 권장. 바꾸면 볼트 전체 일괄 변경(확인창)이 실행됩니다.",
