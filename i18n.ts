@@ -84,7 +84,7 @@ const EN: Record<string, string> = {
 	"notice.nsEmpty": "TRELLIS: namespace cannot be empty",
 	"notice.sepEmpty": "TRELLIS: separator cannot be empty",
 	"notice.sepBadChar":
-		"TRELLIS: separator cannot contain letters, digits, or '/' (would collide with the trekey)",
+		"TRELLIS: separator cannot contain letters, digits, '/', or filename-illegal characters (\\ : * ? \" < > |)",
 	"notice.sepChanged": "TRELLIS: separator {from} → {to} on {n} file(s)",
 	"notice.sepReverted": "TRELLIS: reverted separator change on {n} file(s)",
 	"notice.noSepChange": "TRELLIS: no separator change to undo",
@@ -230,7 +230,7 @@ const KO: Record<string, string> = {
 	"notice.nsEmpty": "TRELLIS: 네임스페이스는 비울 수 없습니다",
 	"notice.sepEmpty": "TRELLIS: 구분자는 비울 수 없습니다",
 	"notice.sepBadChar":
-		"TRELLIS: 구분자에 영문·숫자·'/' 는 쓸 수 없습니다 (트리키와 충돌)",
+		"TRELLIS: 구분자에 영문·숫자·'/'·파일명 금지문자(\\ : * ? \" < > |)는 쓸 수 없습니다",
 	"notice.sepChanged": "TRELLIS: 구분자 {from} → {to}, {n}개 파일 변경",
 	"notice.sepReverted": "TRELLIS: 구분자 변경 {n}개 파일 되돌림",
 	"notice.noSepChange": "TRELLIS: 되돌릴 구분자 변경 없음",

@@ -209,7 +209,8 @@ export default class TrellisPlugin extends Plugin {
 		// with the tag, restore it; a title-only edit keeps the trekey and passes
 		// through untouched. The rename guard stops our own renames from looping.
 		this.registerEvent(
-			this.app.vault.on("rename", (file) => {
+			this.app.vault.on("rename", (file, oldPath) => {
+				this.multiWarned.delete(oldPath); // stale warning key at the old path
 				if (file instanceof TFile && file.extension === "md") {
 					void this.syncFile(file);
 				}
@@ -219,7 +220,12 @@ export default class TrellisPlugin extends Plugin {
 
 		// Keep the tree in sync when files appear/disappear.
 		this.registerEvent(this.app.vault.on("create", () => this.scheduleTreeRefresh()));
-		this.registerEvent(this.app.vault.on("delete", () => this.scheduleTreeRefresh()));
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				this.multiWarned.delete(file.path); // drop warning key for a gone file
+				this.scheduleTreeRefresh();
+			})
+		);
 
 		// Cascade: rename a location tag (and everything under it) across the
 		// vault. The tag edits then drive each file's rename through syncFile.
@@ -360,9 +366,12 @@ export default class TrellisPlugin extends Plugin {
 
 		// One note = one location per namespace. Warn once (lightly) if a note
 		// carries duplicate location tags; the user resolves them in bulk via the
-		// "check duplicate location tags" command. We still sync from the first
-		// match (pickTrekey) so behavior stays deterministic.
-		const dupGroups = duplicateLocationGroups(tags, this.settings.schema);
+		// "check duplicate location tags" command. Detection uses frontmatter tags
+		// only — that's what the cleanup can actually remove (inline body tags
+		// aren't touched). We still sync from the first match (pickTrekey) so
+		// behavior stays deterministic.
+		const fmTags = normalizeTagList(cache.frontmatter?.tags).map((tg) => "#" + tg);
+		const dupGroups = duplicateLocationGroups(fmTags, this.settings.schema);
 		if (dupGroups.length > 0) {
 			if (!this.multiWarned.has(file.path)) {
 				this.multiWarned.add(file.path);
@@ -383,7 +392,10 @@ export default class TrellisPlugin extends Plugin {
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
 
-		this.renaming.add(file.path);
+		// Capture the OLD path first — renameFile mutates file.path to newPath
+		// in place, so `file.path` in finally would otherwise be the new path.
+		const oldPath = file.path;
+		this.renaming.add(oldPath);
 		this.renaming.add(newPath);
 		try {
 			// renameFile = same path as a manual rename → wikilinks auto-update.
@@ -393,7 +405,7 @@ export default class TrellisPlugin extends Plugin {
 			console.error("TRELLIS rename failed", e);
 			new Notice(t("notice.renameFailed", { name: file.basename }));
 		} finally {
-			this.renaming.delete(file.path);
+			this.renaming.delete(oldPath);
 			// Release the new path after the follow-up events settle.
 			window.setTimeout(() => this.renaming.delete(newPath), 200);
 		}
@@ -805,10 +817,10 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const groups = duplicateLocationGroups(
-				getAllTags(cache) ?? [],
-				this.settings.schema
-			);
+			// Frontmatter tags only — those are what applyDedup can remove. An
+			// inline body tag would show up but couldn't be cleaned.
+			const fmTags = normalizeTagList(cache.frontmatter?.tags).map((tg) => "#" + tg);
+			const groups = duplicateLocationGroups(fmTags, this.settings.schema);
 			if (groups.length) dups.push({ file, groups });
 		}
 		if (dups.length === 0) {
@@ -824,36 +836,47 @@ export default class TrellisPlugin extends Plugin {
 	 *  the rest from each file's frontmatter, recording removals for undo. */
 	private async applyDedup(decisions: DedupDecision[]) {
 		const record: DedupRecord[] = [];
-		for (const d of decisions) {
-			const file = this.app.vault.getAbstractFileByPath(d.path);
-			if (!(file instanceof TFile)) continue;
-			const removed: string[] = [];
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
-				const tags = normalizeTagList(fm.tags);
-				const next = tags.filter((tg) => {
-					const hashed = "#" + tg;
-					let inAnyGroup = false;
-					for (const [ns, keep] of Object.entries(d.keep)) {
-						if (hashed === `#${ns}` || hashed.startsWith(`#${ns}/`)) {
-							inAnyGroup = true;
-							if (hashed === keep) return true; // the chosen tag stays
-						}
-					}
-					if (inAnyGroup) {
-						removed.push(tg);
-						return false;
-					}
-					return true; // unrelated tag — leave it
-				});
-				if (removed.length) fm.tags = next;
-			});
-			if (removed.length) {
-				record.push({ path: d.path, removed });
-				this.multiWarned.delete(d.path);
+		// Save the record in `finally` so an interrupted pass (e.g. a broken YAML
+		// file mid-loop) still leaves everything removed so far undoable, and
+		// isolate per-file errors so one bad file can't abort the whole cleanup.
+		try {
+			for (const d of decisions) {
+				const file = this.app.vault.getAbstractFileByPath(d.path);
+				if (!(file instanceof TFile)) continue;
+				const removed: string[] = [];
+				try {
+					await this.app.fileManager.processFrontMatter(file, (fm) => {
+						const tags = normalizeTagList(fm.tags);
+						const next = tags.filter((tg) => {
+							const hashed = "#" + tg;
+							let inAnyGroup = false;
+							for (const [ns, keep] of Object.entries(d.keep)) {
+								if (hashed === `#${ns}` || hashed.startsWith(`#${ns}/`)) {
+									inAnyGroup = true;
+									if (hashed === keep) return true; // the chosen tag stays
+								}
+							}
+							if (inAnyGroup) {
+								removed.push(tg);
+								return false;
+							}
+							return true; // unrelated tag — leave it
+						});
+						if (removed.length) fm.tags = next;
+					});
+				} catch (e) {
+					console.error("TRELLIS dedup skipped (frontmatter error)", d.path, e);
+					continue;
+				}
+				if (removed.length) {
+					record.push({ path: d.path, removed });
+					this.multiWarned.delete(d.path);
+				}
 			}
+		} finally {
+			this.settings.lastDedup = record;
+			await this.saveSettings();
 		}
-		this.settings.lastDedup = record;
-		await this.saveSettings();
 		new Notice(
 			record.length > 0
 				? t("notice.deduped", { n: record.length })
@@ -887,7 +910,9 @@ export default class TrellisPlugin extends Plugin {
 	/** Rename a file with the infinite-loop guard set, so our own rename's
 	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
 	private async renameGuarded(file: TFile, newPath: string) {
-		this.renaming.add(file.path);
+		// Capture the OLD path — renameFile mutates file.path to newPath in place.
+		const oldPath = file.path;
+		this.renaming.add(oldPath);
 		this.renaming.add(newPath);
 		try {
 			await this.app.fileManager.renameFile(file, newPath);
@@ -895,7 +920,7 @@ export default class TrellisPlugin extends Plugin {
 			console.error("TRELLIS rename failed", e);
 			new Notice(t("notice.renameFailed", { name: file.basename }));
 		} finally {
-			this.renaming.delete(file.path);
+			this.renaming.delete(oldPath);
 			window.setTimeout(() => this.renaming.delete(newPath), 200);
 		}
 	}
@@ -1732,7 +1757,10 @@ class TrellisSettingTab extends PluginSettingTab {
 						reset();
 						return;
 					}
-					if (/[A-Za-z0-9/]/.test(v)) {
+					// Reject letters, digits, `/` (trekey collision) and characters
+					// that are illegal in filenames (\ : * ? " < > |) — otherwise the
+					// assembled basename can't be written.
+					if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
 						new Notice(t("notice.sepBadChar"));
 						reset();
 						return;
