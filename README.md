@@ -138,7 +138,11 @@ real notes.
 
 ## 💡 Why
 
-Managing a large flat vault, I wanted folder-like hierarchy *without* folders —
-with tags as the single source of truth and filenames kept in sync automatically.
-Moving a note in the hierarchy shouldn't mean manual renaming or broken links; the
-tag should drive everything else.
+I run my vault as a knowledge base *without* folders — the hierarchy lives in
+tags, and each note carries a short ID prefix in its filename that encodes where
+it sits. Those stable, predictable filenames earn their keep twice: the vault
+stays navigable without folders, and when I drive it with a CLI AI tool I can
+point the assistant at exactly the right files and folders by their IDs.
+
+I used to keep those prefixes in sync by hand. TRELLIS automates it — the tag is
+the single source of truth, and filenames (and wikilinks) follow on their own.
