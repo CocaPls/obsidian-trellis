@@ -168,29 +168,25 @@ export function parentTagPath(tagPath: string): string {
  * ("S88B07") into a hierarchical location-tag path ("trel/S/88/B/07") so an
  * existing vault (tagkey prefixes, no tags) can be onboarded.
  *
- * This is the ONE place that must know the tagkey *scheme*, because reversing a
- * flat prefix back into path segments requires knowing where the boundaries
- * are. The default pattern alternates a letter, two digits, an optional letter,
- * and two optional digits — each its own tag segment (`S88B07` → `S/88/B/07`).
- * Placeholder slots ("0"/"00") are KEPT as segments — dropping them would break
- * the round-trip with tagToTagkey (the tag is the source of truth, so the
- * synced filename must rebuild the same 6-char tagkey). Empty/segment-only
- * levels are made transparent by the tree view, so kept placeholders don't
- * clutter the UI.
+ * Reversing a flat prefix is scheme-independent here: split it into maximal runs
+ * of one character class — a run of letters or a run of digits is each its own
+ * tag segment (S88B07 → S/88/B/07, PROJ123 → PROJ/123, A1B2 → A/1/B/2). This
+ * is a general default; consecutive same-class characters stay together
+ * (S04001 → S/04001), so a fixed-width scheme's inner boundaries are not
+ * recovered — the dry-run shows every result for review, and undo is one step.
  *
- * Best-effort: returns null when the tagkey doesn't fit the pattern; the
- * bootstrap dry-run shows every result (and every null) for human review
- * before anything is written.
+ * Two guards keep it safe:
+ *  - At least two segments (one class transition) — a single run (a plain word
+ *    or number) has no hierarchy to recover, so it is skipped.
+ *  - Round-trip exact — the segments, rejoined, must equal the original tagkey.
+ *    This rejects prefixes carrying characters a tag can't hold (e.g. "12.03",
+ *    "my-note"), which sync could not reproduce, so bootstrap never proposes a
+ *    tag that would silently rename the file later.
  */
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
-	const m = tagkey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
-	if (!m) return null;
-	const [, tier, pkg, mod, atom] = m;
-	// Each level is its own tag segment: letter / digits / letter / digits
-	// alternate (S·88·B·07 → S/88/B/07).
-	const segs: string[] = [tier, pkg]; // tier + package as SEPARATE segments
-	if (mod !== undefined) segs.push(mod); // module letter (placeholder "0" kept)
-	if (atom !== undefined) segs.push(atom); // atom digits (placeholder "00" kept)
+	const segs = tagkey.match(/[A-Za-z]+|[0-9]+/g);
+	if (!segs || segs.length < 2) return null; // need a class transition
+	if (segs.join("") !== tagkey) return null; // must round-trip exactly
 	return `${primaryNamespace(schema)}/${segs.join("/")}`;
 }
 

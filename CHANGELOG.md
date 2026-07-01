@@ -18,8 +18,11 @@ English i18n).
   cleanup) and a Korean translation (`README.ko.md`).
 - Pinned the `obsidian` dev dependency to a fixed version and added a CI
   workflow (build + tests on every push / PR).
+- Bootstrap decomposition is now scheme-general — it splits a filename prefix
+  at letter/digit boundaries (`S88B07` → `S/88/B/07`, `PROJ123` → `PROJ/123`)
+  instead of assuming one fixed pattern, and skips prefixes it can't round-trip.
 - Dropped the demo `test-vault/` from the repo (local scratch only).
-- No functional code changes since 0.0.8.
+- No other functional changes since 0.0.8.
 
 ## 0.0.8 — Scoped bootstrap, duplicate-tag cleanup, robustness
 

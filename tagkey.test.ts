@@ -38,31 +38,36 @@ test("tagToTagkey ignores foreign namespaces and empties", () => {
 	assert.equal(tagToTagkey("#trel/", cfg), null); // empty path
 });
 
-test("tagkeyToTagPath decomposes a tagkey into a hierarchical tag", () => {
-	assert.equal(tagkeyToTagPath("S88", cfg), "trel/S/88"); // tier · package
-	assert.equal(tagkeyToTagPath("S88A", cfg), "trel/S/88/A"); // + module
-	assert.equal(tagkeyToTagPath("S88A01", cfg), "trel/S/88/A/01"); // + atom
+test("tagkeyToTagPath decomposes a tagkey at character-class boundaries", () => {
+	assert.equal(tagkeyToTagPath("S88", cfg), "trel/S/88"); // letter · digits
+	assert.equal(tagkeyToTagPath("S88A", cfg), "trel/S/88/A");
 	assert.equal(tagkeyToTagPath("S88B07", cfg), "trel/S/88/B/07");
+	assert.equal(tagkeyToTagPath("PROJ123", cfg), "trel/PROJ/123"); // scheme-agnostic
+	assert.equal(tagkeyToTagPath("A1B2", cfg), "trel/A/1/B/2");
+	assert.equal(tagkeyToTagPath("88B07", cfg), "trel/88/B/07"); // no leading letter needed
 });
 
-test("tagkeyToTagPath keeps placeholder (0/00) slots for round-trip safety", () => {
-	assert.equal(tagkeyToTagPath("S04001", cfg), "trel/S/04/0/01"); // module "0" kept
-	assert.equal(tagkeyToTagPath("S00L", cfg), "trel/S/00/L"); // package "00" kept
-	assert.equal(tagkeyToTagPath("P00001", cfg), "trel/P/00/0/01"); // both kept
-	assert.equal(tagkeyToTagPath("S00M", cfg), "trel/S/00/M"); // master-log style
+test("tagkeyToTagPath keeps consecutive same-class characters in one segment", () => {
+	// A general split does not recover fixed-width inner boundaries; the run stays whole.
+	assert.equal(tagkeyToTagPath("S04001", cfg), "trel/S/04001");
+	assert.equal(tagkeyToTagPath("P00001", cfg), "trel/P/00001");
+	assert.equal(tagkeyToTagPath("S00M", cfg), "trel/S/00/M");
+	assert.equal(tagkeyToTagPath("S00L", cfg), "trel/S/00/L");
 });
 
-test("tagkeyToTagPath round-trips with tagToTagkey (incl. placeholders)", () => {
-	for (const tk of ["S88", "S88A", "S88B07", "S04001", "S00M", "P00001"]) {
+test("tagkeyToTagPath round-trips with tagToTagkey", () => {
+	for (const tk of ["S88", "S88A", "S88B07", "PROJ123", "A1B2", "S04001", "88B07"]) {
 		const tag = tagkeyToTagPath(tk, cfg);
 		assert.equal(tagToTagkey("#" + tag, cfg), tk, `round-trip failed for ${tk}`);
 	}
 });
 
-test("tagkeyToTagPath rejects tagkeys that don't fit the scheme", () => {
-	assert.equal(tagkeyToTagPath("S", cfg), null); // tier only, no package digits
-	assert.equal(tagkeyToTagPath("hello", cfg), null);
-	assert.equal(tagkeyToTagPath("88B07", cfg), null); // no leading tier letter
+test("tagkeyToTagPath rejects tagkeys with no recoverable hierarchy", () => {
+	assert.equal(tagkeyToTagPath("S", cfg), null); // single run, no transition
+	assert.equal(tagkeyToTagPath("hello", cfg), null); // plain word
+	assert.equal(tagkeyToTagPath("12345", cfg), null); // plain number
+	assert.equal(tagkeyToTagPath("my-note", cfg), null); // not round-trip-safe (drops "-")
+	assert.equal(tagkeyToTagPath("12.03", cfg), null); // not round-trip-safe (drops ".")
 });
 
 test("pickTagkey returns the first location tag, ignoring others", () => {
