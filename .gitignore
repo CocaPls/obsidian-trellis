@@ -6,8 +6,5 @@ main.js
 # os
 .DS_Store
 
-# test vault runtime
-test-vault/.obsidian/workspace.json
-test-vault/.obsidian/workspace-mobile.json
-test-vault/.obsidian/plugins/
-test-vault/.obsidian/appearance.json
+# local scratch vault for manual testing (not shipped)
+test-vault/

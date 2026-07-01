@@ -1,5 +1,7 @@
 # TRELLIS
 
+**English** | [한국어](README.ko.md)
+
 Tag-driven filename sync for [Obsidian](https://obsidian.md). Keep a hierarchical
 **location tag** as the single source of truth, and TRELLIS mirrors it into the
 **filename prefix** (the *trekey*) automatically — link-safe.
@@ -65,6 +67,23 @@ retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
 6. **Change the separator** — change it in settings; after a confirmation, it's
    applied vault-wide.
 
+## 📸 Screenshots
+
+**Bootstrap — pick what to onboard.** Already-tagged notes are shown as done;
+untagged notes are selectable (whole vault, folders, or individual notes).
+
+![Bootstrap target picker](screenshots/bootstrap.png)
+
+**Cascade rename — move a whole subtree.** Rename one tag and every note under it
+follows, filenames and wikilinks included.
+
+![Cascade rename](screenshots/cascade-rename.png)
+
+**Duplicate cleanup — one location per note.** When a note has more than one
+location tag, pick the one to keep; the rest are removed (undoable).
+
+![Duplicate location-tag cleanup](screenshots/dedup.png)
+
 ## ⚙️ Settings
 
 ![Settings tab](screenshots/settings.png)
@@ -97,7 +116,8 @@ npm run build    # typecheck + production build → main.js
 npm test         # unit tests for the conversion logic
 ```
 
-A throwaway `test-vault/` is included so you can exercise the engine safely.
+Create a throwaway vault to exercise the engine safely before pointing it at
+real notes.
 
 ## 📄 License
 
