@@ -38,8 +38,8 @@ match; edit the tagkey by hand and it's restored from the tag.
   One note = one location tag (extras are flagged with a notice).
 - **Cascade rename** — rename a tag and its whole subtree follows; inserting a
   new parent level works too. Filenames and wikilinks follow along.
-- **Sidebar tree view** — see your tag hierarchy as a collapsible, folder-like
-  tree, with no real folders.
+- **Sidebar tree view** — see your location-tag hierarchy as a collapsible,
+  folder-like tree, built from tags rather than the folder structure.
 - **Bootstrap** — onboard an existing vault that already has filename prefixes
   but no tags yet. Pick the scope with a checkbox tree (whole vault, folders, or
   individual notes; drag to sweep-select, search, or show only untagged notes),
@@ -144,11 +144,12 @@ real notes.
 
 ## 💡 Why
 
-I run my vault as a knowledge base *without* folders — the hierarchy lives in
-tags, and each note carries a short ID prefix in its filename that encodes where
-it sits. Those stable, predictable filenames earn their keep twice: the vault
-stays navigable without folders, and when I drive it with a CLI AI tool I can
-point the assistant at exactly the right files and folders by their IDs.
+My vault leans on short ID prefixes in filenames — each note carries a code that
+says where it sits in my system. Keeping those prefixes right by hand was
+tedious and easy to get wrong, so TRELLIS drives them from a location tag: tag a
+note and its filename prefix follows, link-safe. Stable, predictable prefixes
+make the vault easy to scan and let me point a CLI AI tool at exactly the right
+files and folders by their IDs.
 
-I used to keep those prefixes in sync by hand. TRELLIS automates it — the tag is
-the single source of truth, and filenames (and wikilinks) follow on their own.
+The tag is the single source of truth; filenames (and wikilinks) follow on their
+own.
