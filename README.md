@@ -44,7 +44,10 @@ match; edit the tagkey by hand and it's restored from the tag.
   but no tags yet. Pick the scope with a checkbox tree (whole vault, folders, or
   individual notes; drag to sweep-select, search, or show only untagged notes),
   preview as a dry-run, watch live progress, and undo in one step. Per-file
-  errors are isolated so one bad note never stops the run.
+  errors are isolated so one bad note never stops the run. Bootstrap recognizes
+  prefixes shaped like `S88B07` (a letter, two digits, an optional letter and
+  two digits); other schemes aren't auto-decomposed yet, and the dry-run lists
+  anything it skips.
 - **Duplicate location-tag cleanup** — when a note carries more than one location
   tag in the same namespace, TRELLIS flags it and offers a cleanup command: pick
   which tag to keep and the rest are removed. Batched for large vaults, with undo.
@@ -117,8 +120,9 @@ Under the hood, a filename is a positional array of **slots** joined by
 **separators** — the default is a 2-slot `[tag slot, name slot]` layout, so
 multi-key schemes can grow without rewriting the core. The conversion logic
 lives in `tagkey.ts` (pure, unit-tested); `main.ts` is the Obsidian glue.
-TRELLIS is format-agnostic: it does not define what a tagkey *means*, only how
-to keep it in sync.
+The live sync is format-agnostic — it mirrors whatever the tag path is, so any
+scheme works. (Bootstrap, the reverse direction, assumes the default prefix
+pattern above; generalizing it to arbitrary schemes is a later addition.)
 
 ## 🛠 Develop
 

@@ -1,12 +1,14 @@
 /**
  * TRELLIS — pure conversion logic (no Obsidian dependency, unit-testable).
  *
- * The "tagkey" is the filename prefix identifier. TRELLIS is *format-agnostic*:
- * it does not define what a tagkey means (that is TUP's job). It only mirrors a
- * hierarchical location tag (the source of truth) into the filename prefix.
+ * The "tagkey" is the filename prefix identifier. The live sync is
+ * *format-agnostic*: it does not define what a tagkey means — it only mirrors a
+ * hierarchical location tag (the source of truth) into the filename prefix by
+ * concatenating the tag's path segments, so any tag path works. (Bootstrap, the
+ * reverse direction, must assume a prefix pattern — see tagkeyToTagPath.)
  *
  * DATA MODEL — a filename is a positional array of key SLOTS separated by
- * delimiters (B09 "path B"). Each slot is a tag-key (TRELLIS-managed, tag →
+ * delimiters. Each slot is a tag-key (TRELLIS-managed, tag →
  * filename) or a name-key (user-free, untouched). The single-key default is
  * just the 2-slot special case `[tag] sep [name]`. Multi-key parsing (>1 tag
  * slot, multiple separators) is deferred to an advanced mode; the model is the
@@ -166,15 +168,17 @@ export function parentTagPath(tagPath: string): string {
  * ("S88B07") into a hierarchical location-tag path ("trel/S/88/B/07") so an
  * existing vault (tagkey prefixes, no tags) can be onboarded.
  *
- * This is the ONE place that must know the tagkey *scheme* (SPARK: alternating
- * tier letter (1) / package digits (2) / module letter (1) / atom digits (2),
- * EACH its own tag segment). Placeholder slots ("0"/"00") are KEPT as
- * segments — dropping them would break the round-trip with tagToTagkey (the
- * tag is the source of truth, so the synced filename must rebuild the same
- * 6-char tagkey). Empty/segment-only levels are made transparent by the tree
- * view, so kept placeholders don't clutter the UI.
+ * This is the ONE place that must know the tagkey *scheme*, because reversing a
+ * flat prefix back into path segments requires knowing where the boundaries
+ * are. The default pattern alternates a letter, two digits, an optional letter,
+ * and two optional digits — each its own tag segment (`S88B07` → `S/88/B/07`).
+ * Placeholder slots ("0"/"00") are KEPT as segments — dropping them would break
+ * the round-trip with tagToTagkey (the tag is the source of truth, so the
+ * synced filename must rebuild the same 6-char tagkey). Empty/segment-only
+ * levels are made transparent by the tree view, so kept placeholders don't
+ * clutter the UI.
  *
- * Best-effort: returns null when the tagkey doesn't fit the scheme; the
+ * Best-effort: returns null when the tagkey doesn't fit the pattern; the
  * bootstrap dry-run shows every result (and every null) for human review
  * before anything is written.
  */
@@ -182,8 +186,8 @@ export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string |
 	const m = tagkey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
 	if (!m) return null;
 	const [, tier, pkg, mod, atom] = m;
-	// Each SPARK level is its own segment: tier letter / package digits /
-	// module letter / atom digits alternate (S·88·B·07 → S/88/B/07).
+	// Each level is its own tag segment: letter / digits / letter / digits
+	// alternate (S·88·B·07 → S/88/B/07).
 	const segs: string[] = [tier, pkg]; // tier + package as SEPARATE segments
 	if (mod !== undefined) segs.push(mod); // module letter (placeholder "0" kept)
 	if (atom !== undefined) segs.push(atom); // atom digits (placeholder "00" kept)
