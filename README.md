@@ -16,6 +16,18 @@ retag it     #trel/S88/B99     →  filename  S88B99-meeting-notes.md   (automat
 
 ![Sidebar tree view](screenshots/tree-view.png)
 
+## 🧩 How it works
+
+TRELLIS reads a filename as three parts — for example `S88B07-meeting-notes.md`:
+
+- **`S88B07`** — the **tagkey**: the identifier built from the note's location
+  tag (`#trel/S88/B07` → `S88B07`). This is the only part TRELLIS controls.
+- **`-`** — the **separator** between the tagkey and the name (default `-`).
+- **`meeting-notes`** — the **namekey**: your title. TRELLIS never touches it.
+
+The tag is the source of truth: change the tag and the tagkey is rewritten to
+match; edit the tagkey by hand and it's restored from the tag.
+
 ## ✨ Features
 
 - **One-directional sync** — when a note's location tag changes, its filename
@@ -99,13 +111,14 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 Requires Obsidian **1.4.0** or newer.
 
-## 🧱 Design
+## 🧱 Design (internals)
 
-TRELLIS is **format-agnostic** — it does not define what a tagkey means, only how
-to keep it in sync. The conversion logic lives in `tagkey.ts` (pure, unit-tested);
-`main.ts` is the Obsidian glue. The filename key model is a positional array of
-slots + separators, so the single-key default is just a 2-slot `[tag, name]`
-special case and multi-key support can grow without rewriting the core.
+Under the hood, a filename is a positional array of **slots** joined by
+**separators** — the default is a 2-slot `[tag slot, name slot]` layout, so
+multi-key schemes can grow without rewriting the core. The conversion logic
+lives in `tagkey.ts` (pure, unit-tested); `main.ts` is the Obsidian glue.
+TRELLIS is format-agnostic: it does not define what a tagkey *means*, only how
+to keep it in sync.
 
 ## 🛠 Develop
 
