@@ -1,17 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TrellisSchema } from "./trekey.ts";
+import type { TrellisSchema } from "./tagkey.ts";
 import {
 	DEFAULT_SCHEMA,
 	schemaFromLegacy,
-	tagToTrekey,
-	pickTrekey,
+	tagToTagkey,
+	pickTagkey,
 	tagNamespaces,
 	duplicateLocationGroups,
 	assembleBasename,
 	syncedBasename,
 	separatorMigratedName,
-	extractTrekey,
+	extractTagkey,
 	extractTitle,
 	renameTagPath,
 	normalizeTagList,
@@ -21,61 +21,61 @@ import {
 	buildNoteTree,
 	sortNoteTree,
 	nextChildSegment,
-	trekeyToTagPath,
-} from "./trekey.ts";
+	tagkeyToTagPath,
+} from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
 const cfgSuffix: TrellisSchema = schemaFromLegacy("trel", "-", "suffix");
 
-test("tagToTrekey strips namespace and slashes", () => {
-	assert.equal(tagToTrekey("#trel/S88/B07", cfg), "S88B07");
-	assert.equal(tagToTrekey("#trel/P/07/M/01", cfg), "P07M01");
+test("tagToTagkey strips namespace and slashes", () => {
+	assert.equal(tagToTagkey("#trel/S88/B07", cfg), "S88B07");
+	assert.equal(tagToTagkey("#trel/P/07/M/01", cfg), "P07M01");
 });
 
-test("tagToTrekey ignores foreign namespaces and empties", () => {
-	assert.equal(tagToTrekey("#project/work", cfg), null);
-	assert.equal(tagToTrekey("#trel", cfg), null); // no trailing path
-	assert.equal(tagToTrekey("#trel/", cfg), null); // empty path
+test("tagToTagkey ignores foreign namespaces and empties", () => {
+	assert.equal(tagToTagkey("#project/work", cfg), null);
+	assert.equal(tagToTagkey("#trel", cfg), null); // no trailing path
+	assert.equal(tagToTagkey("#trel/", cfg), null); // empty path
 });
 
-test("trekeyToTagPath decomposes a trekey into a hierarchical tag", () => {
-	assert.equal(trekeyToTagPath("S88", cfg), "trel/S/88"); // tier · package
-	assert.equal(trekeyToTagPath("S88A", cfg), "trel/S/88/A"); // + module
-	assert.equal(trekeyToTagPath("S88A01", cfg), "trel/S/88/A/01"); // + atom
-	assert.equal(trekeyToTagPath("S88B07", cfg), "trel/S/88/B/07");
+test("tagkeyToTagPath decomposes a tagkey into a hierarchical tag", () => {
+	assert.equal(tagkeyToTagPath("S88", cfg), "trel/S/88"); // tier · package
+	assert.equal(tagkeyToTagPath("S88A", cfg), "trel/S/88/A"); // + module
+	assert.equal(tagkeyToTagPath("S88A01", cfg), "trel/S/88/A/01"); // + atom
+	assert.equal(tagkeyToTagPath("S88B07", cfg), "trel/S/88/B/07");
 });
 
-test("trekeyToTagPath keeps placeholder (0/00) slots for round-trip safety", () => {
-	assert.equal(trekeyToTagPath("S04001", cfg), "trel/S/04/0/01"); // module "0" kept
-	assert.equal(trekeyToTagPath("S00L", cfg), "trel/S/00/L"); // package "00" kept
-	assert.equal(trekeyToTagPath("P00001", cfg), "trel/P/00/0/01"); // both kept
-	assert.equal(trekeyToTagPath("S00M", cfg), "trel/S/00/M"); // master-log style
+test("tagkeyToTagPath keeps placeholder (0/00) slots for round-trip safety", () => {
+	assert.equal(tagkeyToTagPath("S04001", cfg), "trel/S/04/0/01"); // module "0" kept
+	assert.equal(tagkeyToTagPath("S00L", cfg), "trel/S/00/L"); // package "00" kept
+	assert.equal(tagkeyToTagPath("P00001", cfg), "trel/P/00/0/01"); // both kept
+	assert.equal(tagkeyToTagPath("S00M", cfg), "trel/S/00/M"); // master-log style
 });
 
-test("trekeyToTagPath round-trips with tagToTrekey (incl. placeholders)", () => {
+test("tagkeyToTagPath round-trips with tagToTagkey (incl. placeholders)", () => {
 	for (const tk of ["S88", "S88A", "S88B07", "S04001", "S00M", "P00001"]) {
-		const tag = trekeyToTagPath(tk, cfg);
-		assert.equal(tagToTrekey("#" + tag, cfg), tk, `round-trip failed for ${tk}`);
+		const tag = tagkeyToTagPath(tk, cfg);
+		assert.equal(tagToTagkey("#" + tag, cfg), tk, `round-trip failed for ${tk}`);
 	}
 });
 
-test("trekeyToTagPath rejects trekeys that don't fit the scheme", () => {
-	assert.equal(trekeyToTagPath("S", cfg), null); // tier only, no package digits
-	assert.equal(trekeyToTagPath("hello", cfg), null);
-	assert.equal(trekeyToTagPath("88B07", cfg), null); // no leading tier letter
+test("tagkeyToTagPath rejects tagkeys that don't fit the scheme", () => {
+	assert.equal(tagkeyToTagPath("S", cfg), null); // tier only, no package digits
+	assert.equal(tagkeyToTagPath("hello", cfg), null);
+	assert.equal(tagkeyToTagPath("88B07", cfg), null); // no leading tier letter
 });
 
-test("pickTrekey returns the first location tag, ignoring others", () => {
-	assert.equal(pickTrekey(["#status/wip", "#trel/S88/B07"], cfg), "S88B07");
-	assert.equal(pickTrekey(["#status/wip", "#area/sys"], cfg), null);
-	assert.equal(pickTrekey([], cfg), null);
+test("pickTagkey returns the first location tag, ignoring others", () => {
+	assert.equal(pickTagkey(["#status/wip", "#trel/S88/B07"], cfg), "S88B07");
+	assert.equal(pickTagkey(["#status/wip", "#area/sys"], cfg), null);
+	assert.equal(pickTagkey([], cfg), null);
 });
 
-test("pickTrekey stays deterministic with multiple location tags (first wins)", () => {
+test("pickTagkey stays deterministic with multiple location tags (first wins)", () => {
 	// One note = one location; if a note carries two location tags the plugin
 	// warns (see syncFile) but still resolves to the first for a stable filename.
-	assert.equal(pickTrekey(["#trel/S88/B07", "#trel/P02/C03"], cfg), "S88B07");
-	assert.equal(pickTrekey(["#trel/P02/C03", "#trel/S88/B07"], cfg), "P02C03");
+	assert.equal(pickTagkey(["#trel/S88/B07", "#trel/P02/C03"], cfg), "S88B07");
+	assert.equal(pickTagkey(["#trel/P02/C03", "#trel/S88/B07"], cfg), "P02C03");
 });
 
 test("tagNamespaces lists distinct tag-slot namespaces in order", () => {
@@ -103,45 +103,45 @@ test("duplicateLocationGroups flags a namespace carrying 2+ location tags", () =
 	assert.deepEqual(groups[0].tags, ["#trel/S88/B07", "#trel/P02/C03"]);
 });
 
-test("extractTrekey (prefix) takes everything before the first separator", () => {
-	assert.equal(extractTrekey("S88B07-tree-idea", cfg), "S88B07");
-	assert.equal(extractTrekey("S88B07", cfg), "S88B07"); // trekey-only
-	assert.equal(extractTrekey("S88B07-a-b-c", cfg), "S88B07"); // first only
+test("extractTagkey (prefix) takes everything before the first separator", () => {
+	assert.equal(extractTagkey("S88B07-tree-idea", cfg), "S88B07");
+	assert.equal(extractTagkey("S88B07", cfg), "S88B07"); // tagkey-only
+	assert.equal(extractTagkey("S88B07-a-b-c", cfg), "S88B07"); // first only
 });
 
-test("extractTrekey (suffix) takes everything after the last separator", () => {
-	assert.equal(extractTrekey("tree-idea-S88B07", cfgSuffix), "S88B07");
-	assert.equal(extractTrekey("S88B07", cfgSuffix), "S88B07"); // trekey-only
-	assert.equal(extractTrekey("a-b-S88B07", cfgSuffix), "S88B07"); // last only
+test("extractTagkey (suffix) takes everything after the last separator", () => {
+	assert.equal(extractTagkey("tree-idea-S88B07", cfgSuffix), "S88B07");
+	assert.equal(extractTagkey("S88B07", cfgSuffix), "S88B07"); // tagkey-only
+	assert.equal(extractTagkey("a-b-S88B07", cfgSuffix), "S88B07"); // last only
 });
 
 test("syncedBasename (prefix) replaces prefix, preserves the rest", () => {
 	assert.equal(syncedBasename("S88B07-tree-idea", "S88B99", cfg), "S88B99-tree-idea");
-	assert.equal(syncedBasename("S88B07", "S88B99", cfg), "S88B99"); // trekey-only
+	assert.equal(syncedBasename("S88B07", "S88B99", cfg), "S88B99"); // tagkey-only
 });
 
 test("syncedBasename (suffix) replaces suffix, preserves the head", () => {
 	assert.equal(syncedBasename("tree-idea-S88B07", "S88B99", cfgSuffix), "tree-idea-S88B99");
-	assert.equal(syncedBasename("S88B07", "S88B99", cfgSuffix), "S88B99"); // trekey-only
+	assert.equal(syncedBasename("S88B07", "S88B99", cfgSuffix), "S88B99"); // tagkey-only
 });
 
 test("extractTitle (prefix) recovers the title even if separator was deleted", () => {
 	assert.equal(extractTitle("S99B07-tree-idea", "S99B07", cfg), "tree-idea");
 	assert.equal(extractTitle("S99B07tree-idea", "S99B07", cfg), "tree-idea"); // sep deleted
-	assert.equal(extractTitle("S99B07", "S99B07", cfg), ""); // trekey-only
-	assert.equal(extractTitle("XXXX-tree-idea", "S99B07", cfg), "tree-idea"); // trekey altered
+	assert.equal(extractTitle("S99B07", "S99B07", cfg), ""); // tagkey-only
+	assert.equal(extractTitle("XXXX-tree-idea", "S99B07", cfg), "tree-idea"); // tagkey altered
 });
 
 test("extractTitle (suffix) recovers the title from the head", () => {
 	assert.equal(extractTitle("tree-idea-S99B07", "S99B07", cfgSuffix), "tree-idea");
 	assert.equal(extractTitle("tree-ideaS99B07", "S99B07", cfgSuffix), "tree-idea"); // sep deleted
-	assert.equal(extractTitle("S99B07", "S99B07", cfgSuffix), ""); // trekey-only
+	assert.equal(extractTitle("S99B07", "S99B07", cfgSuffix), ""); // tagkey-only
 });
 
-test("syncedBasename restores trekey AND separator, keeps only the title free", () => {
+test("syncedBasename restores tagkey AND separator, keeps only the title free", () => {
 	// separator deleted → title preserved, separator restored
 	assert.equal(syncedBasename("S99B07tree-idea", "S99B07", cfg), "S99B07-tree-idea");
-	// trekey damaged with no separator → title gone, trekey-only restore
+	// tagkey damaged with no separator → title gone, tagkey-only restore
 	assert.equal(syncedBasename("ZZZZ", "S99B07", cfg), "S99B07");
 	// already correct → no change
 	assert.equal(syncedBasename("S99B07-tree-idea", "S99B07", cfg), null);
@@ -157,16 +157,16 @@ test("syncedBasename returns null when already in sync", () => {
 });
 
 test("syncedBasename preserves trailing date/session segments", () => {
-	// session-log style: trekey + date + session code after the title
+	// session-log style: tagkey + date + session code after the title
 	assert.equal(
 		syncedBasename("S88L04-0611-S88-04-dashboard", "S88L99", cfg),
 		"S88L99-0611-S88-04-dashboard"
 	);
 });
 
-test("assembleBasename joins trekey + title by slot order and separator", () => {
+test("assembleBasename joins tagkey + title by slot order and separator", () => {
 	assert.equal(assembleBasename("S88B07", "tree-idea", cfg), "S88B07-tree-idea");
-	assert.equal(assembleBasename("S88B07", "", cfg), "S88B07"); // no title → trekey only
+	assert.equal(assembleBasename("S88B07", "", cfg), "S88B07"); // no title → tagkey only
 	assert.equal(assembleBasename("S88B07", "tree-idea", cfgSuffix), "tree-idea-S88B07");
 });
 
@@ -177,20 +177,20 @@ test("separatorMigratedName swaps the boundary separator, preserves the title", 
 	const newS = schemaFromLegacy("trel", "-", "prefix");
 	// boundary "_" → "-"; title has none, simple swap
 	assert.equal(separatorMigratedName("S88B07_tree", "S88B07", oldS, newS), "S88B07-tree");
-	// trekey-only file: nothing to change
+	// tagkey-only file: nothing to change
 	assert.equal(separatorMigratedName("S88B07", "S88B07", oldS, newS), null);
 });
 
 test("separatorMigratedName preserves the NEW separator already inside the title", () => {
 	const oldS = schemaFromLegacy("trel", "_", "prefix");
 	const newS = schemaFromLegacy("trel", "-", "prefix");
-	// title "tree-idea" keeps its hyphens; only the trekey boundary "_" becomes "-"
+	// title "tree-idea" keeps its hyphens; only the tagkey boundary "_" becomes "-"
 	assert.equal(
 		separatorMigratedName("S88B07_tree-idea", "S88B07", oldS, newS),
 		"S88B07-tree-idea"
 	);
 	// title "a_b" (old sep inside title) is preserved verbatim — only the FIRST
-	// boundary is the trekey delimiter; the rest belongs to the title.
+	// boundary is the tagkey delimiter; the rest belongs to the title.
 	assert.equal(
 		separatorMigratedName("S88B07_a_b", "S88B07", oldS, newS),
 		"S88B07-a_b"
@@ -335,8 +335,8 @@ test("nextChildSegment suggests max+1 padded, or 01 when no numbers", () => {
 // --- Multi-key data model (B09 "path B": filename = positional slot array) ---
 
 test("DEFAULT_SCHEMA reproduces the single-key prefix behaviour", () => {
-	assert.equal(tagToTrekey("#trel/S88/B07", DEFAULT_SCHEMA), "S88B07");
-	assert.equal(extractTrekey("S88B07-tree-idea", DEFAULT_SCHEMA), "S88B07");
+	assert.equal(tagToTagkey("#trel/S88/B07", DEFAULT_SCHEMA), "S88B07");
+	assert.equal(extractTagkey("S88B07-tree-idea", DEFAULT_SCHEMA), "S88B07");
 	assert.equal(syncedBasename("S88B07-old", "S88B99", DEFAULT_SCHEMA), "S88B99-old");
 });
 
@@ -352,35 +352,35 @@ test("namespace/separator/position are read from the slot array (custom schema)"
 		slots: [{ role: "tag", namespace: "tree" }, { role: "name" }],
 		separators: ["_"],
 	};
-	assert.equal(tagToTrekey("#tree/S88/B07", schema), "S88B07");
-	assert.equal(tagToTrekey("#trel/S88/B07", schema), null); // wrong namespace
-	assert.equal(extractTrekey("S88B07_my_note", schema), "S88B07");
+	assert.equal(tagToTagkey("#tree/S88/B07", schema), "S88B07");
+	assert.equal(tagToTagkey("#trel/S88/B07", schema), null); // wrong namespace
+	assert.equal(extractTagkey("S88B07_my_note", schema), "S88B07");
 	assert.equal(syncedBasename("S88B07_old", "S88B99", schema), "S88B99_old");
 });
 
-test("suffix slot order ([name, tag]) syncs the trailing trekey", () => {
+test("suffix slot order ([name, tag]) syncs the trailing tagkey", () => {
 	const schema: TrellisSchema = {
 		slots: [{ role: "name" }, { role: "tag", namespace: "trel" }],
 		separators: ["-"],
 	};
-	assert.equal(extractTrekey("tree-idea-S88B07", schema), "S88B07");
+	assert.equal(extractTagkey("tree-idea-S88B07", schema), "S88B07");
 	assert.equal(syncedBasename("tree-idea-S88B07", "S88B99", schema), "tree-idea-S88B99");
 });
 
-test("trekey/title survive date + session codes after the trekey", () => {
-	// Session-log style filename: trekey, then a date and a session code, then the
-	// title — all joined by the same separator. The trekey is the FIRST segment;
+test("tagkey/title survive date + session codes after the tagkey", () => {
+	// Session-log style filename: tagkey, then a date and a session code, then the
+	// title — all joined by the same separator. The tagkey is the FIRST segment;
 	// everything after the first boundary is the title and must be preserved.
 	const us: TrellisSchema = schemaFromLegacy("tree", "_", "prefix");
 	const name = "S88L11_0629_S88-11_세션대시보드";
 
-	assert.equal(extractTrekey(name, us), "S88L11");
+	assert.equal(extractTagkey(name, us), "S88L11");
 	assert.equal(extractTitle(name, "S88L11", us), "0629_S88-11_세션대시보드");
 	// Already in sync — no rename churn for a correct filename.
 	assert.equal(syncedBasename(name, "S88L11", us), null);
-	// Changing the trekey keeps the date/session code verbatim.
+	// Changing the tagkey keeps the date/session code verbatim.
 	const title = extractTitle(name, "S88L11", us);
 	assert.equal(assembleBasename("S89L11", title, us), "S89L11_0629_S88-11_세션대시보드");
-	// The trekey still decomposes into its hierarchical tag.
-	assert.equal(trekeyToTagPath("S88L11", us), "tree/S/88/L/11");
+	// The tagkey still decomposes into its hierarchical tag.
+	assert.equal(tagkeyToTagPath("S88L11", us), "tree/S/88/L/11");
 });

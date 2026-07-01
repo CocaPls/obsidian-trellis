@@ -4,14 +4,14 @@
 
 Tag-driven filename sync for [Obsidian](https://obsidian.md). Keep a hierarchical
 **location tag** as the single source of truth, and TRELLIS mirrors it into the
-**filename prefix** (the *trekey*) automatically — link-safe.
+**filename prefix** (the *tagkey*) automatically — link-safe.
 
 Move a note in the tag tree, and its filename prefix follows. No manual
 batch-renaming, no broken wikilinks.
 
 ```
-note tagged  #trel/S88/B07     →  filename  S88B07-tree-idea.md
-retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
+note tagged  #trel/S88/B07     →  filename  S88B07-meeting-notes.md
+retag it     #trel/S88/B99     →  filename  S88B99-meeting-notes.md   (automatic)
 ```
 
 ![Sidebar tree view](screenshots/tree-view.png)
@@ -37,7 +37,7 @@ retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
   tag in the same namespace, TRELLIS flags it and offers a cleanup command: pick
   which tag to keep and the rest are removed. Batched for large vaults, with undo.
 - **Separator batch-change** — change the separator in settings and only the
-  trekey-boundary separator is swapped across the whole vault (symbols inside
+  tagkey-boundary separator is swapped across the whole vault (symbols inside
   titles are preserved). Undo supported.
 - **Internationalization** — Korean / English UI, auto-detected from Obsidian's
   language.
@@ -89,10 +89,10 @@ location tag, pick the one to keep; the rest are removed (undoable).
 ![Settings tab](screenshots/settings.png)
 
 - **Location tag namespace** — which tags are the source of truth (e.g. `trel`)
-- **Separator** — the character(s) between the trekey and the title (e.g. `-`)
+- **Separator** — the character(s) between the tagkey and the title (e.g. `-`)
 - **Key position** — prefix (start) or suffix (end) of the filename
 - **Sidebar tree view** — on / off
-- **Tree sort** — trekey / modified time / created time
+- **Tree sort** — tagkey / modified time / created time
 - **Language** — auto / Korean / English
 
 ## 🔧 Compatibility
@@ -101,8 +101,8 @@ Requires Obsidian **1.4.0** or newer.
 
 ## 🧱 Design
 
-TRELLIS is **format-agnostic** — it does not define what a trekey means, only how
-to keep it in sync. The conversion logic lives in `trekey.ts` (pure, unit-tested);
+TRELLIS is **format-agnostic** — it does not define what a tagkey means, only how
+to keep it in sync. The conversion logic lives in `tagkey.ts` (pure, unit-tested);
 `main.ts` is the Obsidian glue. The filename key model is a positional array of
 slots + separators, so the single-key default is just a 2-slot `[tag, name]`
 special case and multi-key support can grow without rewriting the core.

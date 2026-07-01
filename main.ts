@@ -19,19 +19,19 @@ import {
 	tagPosition,
 	duplicateLocationGroups,
 	NoteTreeNode,
-	tagToTrekey,
-	pickTrekey,
+	tagToTagkey,
+	pickTagkey,
 	syncedBasename,
 	renameTagPath,
 	normalizeTagList,
 	buildNoteTree,
 	sortNoteTree,
 	parentTagPath,
-	extractTrekey,
-	trekeyToTagPath,
+	extractTagkey,
+	tagkeyToTagPath,
 	assembleBasename,
 	separatorMigratedName,
-} from "./trekey";
+} from "./tagkey";
 import { TrellisTreeView, TRELLIS_TREE_VIEW } from "./tree-view";
 import { t, setLang, LangSetting } from "./i18n";
 import {
@@ -46,13 +46,13 @@ import {
 	SeparatorChangeModal,
 } from "./modals";
 
-type SortKey = "trekey" | "mtime" | "ctime";
+type SortKey = "tagkey" | "mtime" | "ctime";
 
 /**
- * TRELLIS — tag-driven trekey sync.
+ * TRELLIS — tag-driven tagkey sync.
  *
  * When a note's location tag (e.g. #trel/…) changes, rewrite the filename
- * trekey slot to match, via the link-safe rename API. One direction only: the
+ * tagkey slot to match, via the link-safe rename API. One direction only: the
  * tag is the source of truth. A cascade command renames a whole tag subtree.
  * The filename key schema (slots + separators, B09) is configurable; the
  * single-key default is a 2-slot [tag, name].
@@ -106,7 +106,7 @@ interface TrellisSettings {
 const DEFAULT_SETTINGS: TrellisSettings = {
 	schema: defaultSchema(),
 	treeViewEnabled: true,
-	sortKey: "trekey",
+	sortKey: "tagkey",
 	sortAsc: true,
 	language: "auto",
 };
@@ -208,8 +208,8 @@ export default class TrellisPlugin extends Plugin {
 		);
 
 		// A manual filename change ('rename') is NOT a tag change — the tag stays
-		// the source of truth. If the user edited the trekey slot so it disagrees
-		// with the tag, restore it; a title-only edit keeps the trekey and passes
+		// the source of truth. If the user edited the tagkey slot so it disagrees
+		// with the tag, restore it; a title-only edit keeps the tagkey and passes
 		// through untouched. The rename guard stops our own renames from looping.
 		this.registerEvent(
 			this.app.vault.on("rename", (file, oldPath) => {
@@ -242,7 +242,7 @@ export default class TrellisPlugin extends Plugin {
 			},
 		});
 
-		// Bootstrap an existing vault: read filename trekey prefixes and propose
+		// Bootstrap an existing vault: read filename tagkey prefixes and propose
 		// location tags. Dry-run only — shows a preview, writes nothing.
 		this.addCommand({
 			id: "bootstrap-preview",
@@ -359,7 +359,7 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	/** Sync one file's location tag into its filename trekey (one direction). */
+	/** Sync one file's location tag into its filename tagkey (one direction). */
 	private async syncFile(file: TFile) {
 		if (this.renaming.has(file.path)) return; // guard: our own rename echo
 
@@ -371,7 +371,7 @@ export default class TrellisPlugin extends Plugin {
 		// carries duplicate location tags; the user resolves them in bulk via the
 		// "check duplicate location tags" command. Detection uses frontmatter tags
 		// only — that's what the cleanup can actually remove (inline body tags
-		// aren't touched). We still sync from the first match (pickTrekey) so
+		// aren't touched). We still sync from the first match (pickTagkey) so
 		// behavior stays deterministic.
 		const fmTags = normalizeTagList(cache.frontmatter?.tags).map((tg) => "#" + tg);
 		const dupGroups = duplicateLocationGroups(fmTags, this.settings.schema);
@@ -386,10 +386,10 @@ export default class TrellisPlugin extends Plugin {
 			this.multiWarned.delete(file.path);
 		}
 
-		const trekey = pickTrekey(tags, this.settings.schema);
-		if (trekey === null) return; // no location tag → never touch the file
+		const tagkey = pickTagkey(tags, this.settings.schema);
+		if (tagkey === null) return; // no location tag → never touch the file
 
-		const newBasename = syncedBasename(file.basename, trekey, this.settings.schema);
+		const newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
 		if (newBasename === null) return; // already in sync
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
@@ -441,14 +441,14 @@ export default class TrellisPlugin extends Plugin {
 		this.refreshTreeViews();
 	}
 
-	/** Comparator from the current sort key + direction. trekey = name order;
+	/** Comparator from the current sort key + direction. tagkey = name order;
 	 *  mtime/ctime read file stats. */
 	private noteComparator(): (a: NoteTreeNode, b: NoteTreeNode) => number {
 		const { sortKey, sortAsc } = this.settings;
 		const dir = sortAsc ? 1 : -1;
 		return (a, b) => {
 			let r: number;
-			if (sortKey === "trekey") {
+			if (sortKey === "tagkey") {
 				r = this.treeBasename(a.notePath).localeCompare(
 					this.treeBasename(b.notePath)
 				);
@@ -531,20 +531,20 @@ export default class TrellisPlugin extends Plugin {
 		title: string
 	) {
 		const tagPath = `${parentTagPath}/${segment}`;
-		const trekey = tagToTrekey(`#${tagPath}`, this.settings.schema);
-		if (!trekey) {
-			new Notice(t("notice.noTrekey"));
+		const tagkey = tagToTagkey(`#${tagPath}`, this.settings.schema);
+		if (!tagkey) {
+			new Notice(t("notice.noTagkey"));
 			return;
 		}
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
-		const base = assembleBasename(trekey, safeTitle, this.settings.schema);
+		const base = assembleBasename(tagkey, safeTitle, this.settings.schema);
 
 		const path = normalizePath(`${base}.md`);
 		if (this.app.vault.getAbstractFileByPath(path)) {
 			new Notice(t("notice.exists", { base }));
 			return;
 		}
-		const content = `---\ntags: [${tagPath}]\n---\n\n# ${safeTitle || trekey}\n`;
+		const content = `---\ntags: [${tagPath}]\n---\n\n# ${safeTitle || tagkey}\n`;
 		try {
 			const file = await this.app.vault.create(path, content);
 			await this.app.workspace.getLeaf(false).openFile(file);
@@ -632,32 +632,32 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	/** Bootstrap dry-run: scan the chosen markdown files (or the whole vault when
-	 *  scopePaths is omitted), propose a location tag from each filename's trekey
+	 *  scopePaths is omitted), propose a location tag from each filename's tagkey
 	 *  prefix, and show a preview. Writes nothing — the user reviews before any
 	 *  real onboarding (apply step comes later). */
 	private bootstrapDryRun(scopePaths?: Set<string>) {
 		const assign: { name: string; path: string; tag: string }[] = [];
 		const alreadyTagged: string[] = [];
-		const noTrekey: string[] = [];
+		const noTagkey: string[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (scopePaths && !scopePaths.has(file.path)) continue;
 			if (this.locationTagOf(file)) {
 				alreadyTagged.push(file.basename);
 				continue;
 			}
-			const trekey = extractTrekey(file.basename, this.settings.schema);
-			const tagPath = trekey ? trekeyToTagPath(trekey, this.settings.schema) : null;
+			const tagkey = extractTagkey(file.basename, this.settings.schema);
+			const tagPath = tagkey ? tagkeyToTagPath(tagkey, this.settings.schema) : null;
 			if (tagPath) assign.push({ name: file.basename, path: file.path, tag: tagPath });
-			else noTrekey.push(file.basename);
+			else noTagkey.push(file.basename);
 		}
-		new BootstrapPreviewModal(this.app, assign, alreadyTagged, noTrekey, (rows) =>
+		new BootstrapPreviewModal(this.app, assign, alreadyTagged, noTagkey, (rows) =>
 			void this.applyBootstrap(rows)
 		).open();
 	}
 
 	/** Apply: write the proposed location tag into each file's frontmatter
 	 *  (existing content preserved), recording what was written so it can be
-	 *  undone. Filenames usually don't change — the trekey is already there.
+	 *  undone. Filenames usually don't change — the tagkey is already there.
 	 *
 	 *  Robust against a single bad file: a frontmatter parse error (e.g. a file
 	 *  with duplicate YAML keys) is caught per-file and collected, so it can
@@ -720,7 +720,7 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	/** Dry-run: which tagged files a switch to `newSep` would rename. The tag is
-	 *  the source of truth (trekey from the tag, separator-agnostic), so untagged
+	 *  the source of truth (tagkey from the tag, separator-agnostic), so untagged
 	 *  files are never touched — bootstrap onboards those first. */
 	private previewSeparatorChange(
 		newSep: string
@@ -731,9 +731,9 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const trekey = pickTrekey(getAllTags(cache) ?? [], oldSchema);
-			if (trekey === null) continue;
-			const newName = separatorMigratedName(file.basename, trekey, oldSchema, newSchema);
+			const tagkey = pickTagkey(getAllTags(cache) ?? [], oldSchema);
+			if (tagkey === null) continue;
+			const newName = separatorMigratedName(file.basename, tagkey, oldSchema, newSchema);
 			if (newName !== null) out.push({ path: file.path, oldName: file.basename, newName });
 		}
 		return out;
@@ -1022,7 +1022,7 @@ class TrellisSettingTab extends PluginSettingTab {
 						reset();
 						return;
 					}
-					// Reject letters, digits, `/` (trekey collision) and characters
+					// Reject letters, digits, `/` (tagkey collision) and characters
 					// that are illegal in filenames (\ : * ? " < > |) — otherwise the
 					// assembled basename can't be written.
 					if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
@@ -1075,13 +1075,13 @@ class TrellisSettingTab extends PluginSettingTab {
 			.setDesc(t("setting.sortDesc"))
 			.addDropdown((dd) =>
 				dd
-					.addOption("trekey", t("setting.sortTrekey"))
+					.addOption("tagkey", t("setting.sortTagkey"))
 					.addOption("mtime", t("setting.sortMtime"))
 					.addOption("ctime", t("setting.sortCtime"))
 					.setValue(this.plugin.settings.sortKey)
 					.onChange(async (value) => {
 						this.plugin.settings.sortKey =
-							value === "mtime" || value === "ctime" ? value : "trekey";
+							value === "mtime" || value === "ctime" ? value : "tagkey";
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
 					})

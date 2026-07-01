@@ -1,7 +1,7 @@
 {
 	"name": "trellis-plugin",
 	"version": "0.1.0",
-	"description": "Tag-driven identifier sync for Obsidian — location tag → filename prefix (trekey).",
+	"description": "Tag-driven identifier sync for Obsidian — location tag → filename prefix (tagkey).",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, TFile, Menu, setIcon } from "obsidian";
-import { NoteTreeNode } from "./trekey";
+import { NoteTreeNode } from "./tagkey";
 import { t } from "./i18n";
 
 export const TRELLIS_TREE_VIEW = "trellis-tree-view";
@@ -13,7 +13,7 @@ export const TRELLIS_TREE_VIEW = "trellis-tree-view";
  *
  * The DOM mirrors Obsidian's core file explorer (nav-header / tree-item /
  * nav-folder / nav-file / collapse-icon) so the theme styles it like the native
- * explorer. Tree-build logic lives in trekey.ts (unit-tested); this view paints
+ * explorer. Tree-build logic lives in tagkey.ts (unit-tested); this view paints
  * it and handles collapse/active-file UI.
  */
 export class TrellisTreeView extends ItemView {
@@ -203,7 +203,7 @@ export class TrellisTreeView extends ItemView {
 		inner.setText(this.basename(node.notePath));
 		self.addEventListener("click", () => this.openNote(node.notePath));
 
-		// Right-click → create a child note under this node's trekey.
+		// Right-click → create a child note under this node's tagkey.
 		self.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
 			const menu = new Menu();

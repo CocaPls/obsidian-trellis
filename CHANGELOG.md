@@ -44,7 +44,7 @@ English i18n).
 
 - **Change the filename separator across the whole vault.** Editing the
   separator in settings now opens a confirm dialog and rewrites *only the
-  trekey-boundary separator* on every location-tagged file — symbols inside the
+  tagkey-boundary separator* on every location-tagged file — symbols inside the
   title are preserved — via the link-safe rename API. One-directional, like the
   tag engine. Includes a dry-run count + collapsible file list and a one-step
   undo command.
@@ -88,12 +88,12 @@ English i18n).
 
 ## 0.0.4 — Bootstrap onboarding
 
-- **Bootstrap an existing vault** (filename trekey prefixes, no tags yet):
-  decompose a filename trekey into a hierarchical location tag
+- **Bootstrap an existing vault** (filename tagkey prefixes, no tags yet):
+  decompose a filename tagkey into a hierarchical location tag
   (`S88B07` → `#trel/S88/B/07`). Placeholder slots (`0`/`00`) are kept as tag
-  segments so the tag ↔ trekey round-trip stays exact.
+  segments so the tag ↔ tagkey round-trip stays exact.
 - **Dry-run preview** command — lists every file's proposed tag (and files
-  skipped because they're already tagged or have no recognizable trekey).
+  skipped because they're already tagged or have no recognizable tagkey).
   Writes nothing.
 - **Apply** writes the tag into each file's frontmatter (existing content
   preserved) and records what it wrote.
@@ -108,7 +108,7 @@ English i18n).
   (an index note → child, a leaf note → sibling), with the parent editable via
   tag autocomplete.
 - The new-note **segment is entered by hand** (no auto-guess) — TRELLIS stays
-  format-agnostic about the trekey scheme rather than forcing a guessed value.
+  format-agnostic about the tagkey scheme rather than forcing a guessed value.
 
 ## 0.0.2 — Sidebar tree view
 
@@ -119,7 +119,7 @@ English i18n).
 
 ## 0.0.1 — MVP
 
-- Rename engine: a location tag drives the filename trekey prefix (link-safe via
+- Rename engine: a location tag drives the filename tagkey prefix (link-safe via
   Obsidian's rename API), with an infinite-loop guard.
 - Cascade rename of a parent tag (and everything under it) across the vault.
 - Settings: namespace, separator, key position.

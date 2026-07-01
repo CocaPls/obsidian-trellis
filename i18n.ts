@@ -65,7 +65,7 @@ const EN: Record<string, string> = {
 	"notice.treeOff": "TRELLIS: tree view is off (enable it in settings)",
 	"notice.renamed": "TRELLIS: {from} → {to}",
 	"notice.renameFailed": "TRELLIS: rename failed for {name}",
-	"notice.noTrekey": "TRELLIS: could not derive trekey (check namespace)",
+	"notice.noTagkey": "TRELLIS: could not derive tagkey (check namespace)",
 	"notice.exists": 'TRELLIS: "{base}" already exists',
 	"notice.createFailed": 'TRELLIS: failed to create "{base}"',
 	"notice.retagged": "TRELLIS: retagged {n} file(s) {from} → {to}",
@@ -116,7 +116,7 @@ const EN: Record<string, string> = {
 	// new-note modal
 	"modal.newNote.title": "New note",
 	"modal.newNote.desc":
-		"Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself — TRELLIS does not guess the trekey scheme.",
+		"Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself — TRELLIS does not guess the tagkey scheme.",
 	"modal.newNote.parentName": "Parent",
 	"modal.newNote.parentDesc":
 		"Existing location tag to create under — type to search, ↑↓ + Enter",
@@ -130,9 +130,9 @@ const EN: Record<string, string> = {
 	// bootstrap modal
 	"modal.bootstrap.title": "Bootstrap — dry-run preview",
 	"modal.bootstrap.summary":
-		"{assign} file(s) would get a tag · {already} already tagged (skipped) · {none} have no recognizable trekey (skipped). Nothing is written.",
+		"{assign} file(s) would get a tag · {already} already tagged (skipped) · {none} have no recognizable tagkey (skipped). Nothing is written.",
 	"modal.bootstrap.willAssign": "Will assign ({n})",
-	"modal.bootstrap.noTrekey": "No trekey — skipped, check manually ({n})",
+	"modal.bootstrap.noTagkey": "No tagkey — skipped, check manually ({n})",
 	"modal.bootstrap.apply": "Apply — tag {n} file(s)",
 	"modal.bootstrap.close": "Close",
 	// bootstrap errors modal
@@ -142,7 +142,7 @@ const EN: Record<string, string> = {
 	// separator-change modal
 	"modal.sep.title": "Change separator",
 	"modal.sep.desc":
-		"'{from}' → '{to}'. Only the trekey boundary separator is rewritten on location-tagged files; symbols inside the title are preserved.",
+		"'{from}' → '{to}'. Only the tagkey boundary separator is rewritten on location-tagged files; symbols inside the title are preserved.",
 	"modal.sep.count": "{n} file(s) will be renamed.",
 	"modal.sep.none": "No files need renaming — the change applies to the setting only.",
 	"modal.sep.showList": "Show affected files",
@@ -154,9 +154,9 @@ const EN: Record<string, string> = {
 		"Tags under this namespace are the source of truth. Put them in frontmatter — cascade rewrites frontmatter tags. e.g. 'trel' → #trel/S88/B07",
 	"setting.sepName": "Separator",
 	"setting.sepDesc":
-		"Character(s) between the trekey and the title — e.g. '-'. No letters, digits, or '/'. One symbol is recommended. Changing it triggers a vault-wide batch rename (with confirmation).",
+		"Character(s) between the tagkey and the title — e.g. '-'. No letters, digits, or '/'. One symbol is recommended. Changing it triggers a vault-wide batch rename (with confirmation).",
 	"setting.posName": "Key position",
-	"setting.posDesc": "Where the trekey sits in the filename.",
+	"setting.posDesc": "Where the tagkey sits in the filename.",
 	"setting.posPrefix": "Prefix — start of filename (S88B07-title)",
 	"setting.posSuffix": "Suffix — end of filename (title-S88B07)",
 	"setting.treeName": "Sidebar tree view",
@@ -165,7 +165,7 @@ const EN: Record<string, string> = {
 	"setting.sortName": "Tree sort by",
 	"setting.sortDesc":
 		"Sort order in the tree (ascending/descending is toggled in the panel header).",
-	"setting.sortTrekey": "Trekey (name)",
+	"setting.sortTagkey": "Tagkey (name)",
 	"setting.sortMtime": "Modified time",
 	"setting.sortCtime": "Created time",
 	"setting.langName": "Language",
@@ -211,7 +211,7 @@ const KO: Record<string, string> = {
 	"notice.treeOff": "TRELLIS: 트리 뷰가 꺼져 있습니다 (설정에서 켜세요)",
 	"notice.renamed": "TRELLIS: {from} → {to}",
 	"notice.renameFailed": "TRELLIS: {name} 이름 변경 실패",
-	"notice.noTrekey": "TRELLIS: 트리키를 도출할 수 없습니다 (네임스페이스 확인)",
+	"notice.noTagkey": "TRELLIS: 태그키를 도출할 수 없습니다 (네임스페이스 확인)",
 	"notice.exists": 'TRELLIS: "{base}" 이(가) 이미 있습니다',
 	"notice.createFailed": 'TRELLIS: "{base}" 생성 실패',
 	"notice.retagged": "TRELLIS: {n}개 파일 재태그 {from} → {to}",
@@ -262,7 +262,7 @@ const KO: Record<string, string> = {
 	// new-note modal
 	"modal.newNote.title": "새 노트",
 	"modal.newNote.desc":
-		"위치 태그 아래에 노트를 만듭니다. 부모는 현재 노트 기준으로 미리 채워집니다 (수정·자동완성 가능). 세그먼트는 직접 지정하세요 — TRELLIS는 트리키 스킴을 추측하지 않습니다.",
+		"위치 태그 아래에 노트를 만듭니다. 부모는 현재 노트 기준으로 미리 채워집니다 (수정·자동완성 가능). 세그먼트는 직접 지정하세요 — TRELLIS는 태그키 스킴을 추측하지 않습니다.",
 	"modal.newNote.parentName": "부모",
 	"modal.newNote.parentDesc": "아래에 만들 기존 위치 태그 — 입력해 검색, ↑↓ + Enter",
 	"modal.newNote.segmentName": "세그먼트",
@@ -275,9 +275,9 @@ const KO: Record<string, string> = {
 	// bootstrap modal
 	"modal.bootstrap.title": "부트스트랩 — 드라이런 미리보기",
 	"modal.bootstrap.summary":
-		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 트리키 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
+		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 태그키 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
 	"modal.bootstrap.willAssign": "부여 예정 ({n})",
-	"modal.bootstrap.noTrekey": "트리키 없음 — 건너뜀, 수동 확인 ({n})",
+	"modal.bootstrap.noTagkey": "태그키 없음 — 건너뜀, 수동 확인 ({n})",
 	"modal.bootstrap.apply": "적용 — {n}개 파일 태그",
 	"modal.bootstrap.close": "닫기",
 	// bootstrap errors modal
@@ -287,7 +287,7 @@ const KO: Record<string, string> = {
 	// separator-change modal
 	"modal.sep.title": "구분자 변경",
 	"modal.sep.desc":
-		"'{from}' → '{to}'. 위치 태그가 붙은 파일의 트리키 경계 구분자만 바뀝니다. 제목 속 기호는 그대로 보존됩니다.",
+		"'{from}' → '{to}'. 위치 태그가 붙은 파일의 태그키 경계 구분자만 바뀝니다. 제목 속 기호는 그대로 보존됩니다.",
 	"modal.sep.count": "{n}개 파일의 이름이 바뀝니다.",
 	"modal.sep.none": "이름이 바뀔 파일은 없습니다 — 설정값만 변경됩니다.",
 	"modal.sep.showList": "바뀔 파일 보기",
@@ -299,9 +299,9 @@ const KO: Record<string, string> = {
 		"이 네임스페이스 아래 태그가 진실원입니다. frontmatter에 두세요 — cascade는 frontmatter 태그를 갱신합니다. 예: 'trel' → #trel/S88/B07",
 	"setting.sepName": "구분자",
 	"setting.sepDesc":
-		"트리키와 제목 사이 기호 — 예: '-'. 영문·숫자·'/' 불가. 한 글자 권장. 바꾸면 볼트 전체 일괄 변경(확인창)이 실행됩니다.",
+		"태그키와 제목 사이 기호 — 예: '-'. 영문·숫자·'/' 불가. 한 글자 권장. 바꾸면 볼트 전체 일괄 변경(확인창)이 실행됩니다.",
 	"setting.posName": "키 위치",
-	"setting.posDesc": "파일명에서 트리키가 놓이는 위치.",
+	"setting.posDesc": "파일명에서 태그키가 놓이는 위치.",
 	"setting.posPrefix": "접두 — 파일명 앞 (S88B07-제목)",
 	"setting.posSuffix": "접미 — 파일명 뒤 (제목-S88B07)",
 	"setting.treeName": "사이드바 트리 뷰",
@@ -309,7 +309,7 @@ const KO: Record<string, string> = {
 		"위치 태그 계층을 사이드바에 접을 수 있는 트리로 표시합니다 (리본 아이콘 + 명령).",
 	"setting.sortName": "트리 정렬 기준",
 	"setting.sortDesc": "트리 정렬 순서 (오름/내림차순은 패널 헤더에서 전환).",
-	"setting.sortTrekey": "트리키 (이름)",
+	"setting.sortTagkey": "태그키 (이름)",
 	"setting.sortMtime": "수정 시간",
 	"setting.sortCtime": "생성 시간",
 	"setting.langName": "언어",

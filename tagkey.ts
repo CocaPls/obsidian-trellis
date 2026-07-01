@@ -1,8 +1,8 @@
 /**
  * TRELLIS — pure conversion logic (no Obsidian dependency, unit-testable).
  *
- * The "trekey" is the filename prefix identifier. TRELLIS is *format-agnostic*:
- * it does not define what a trekey means (that is TUP's job). It only mirrors a
+ * The "tagkey" is the filename prefix identifier. TRELLIS is *format-agnostic*:
+ * it does not define what a tagkey means (that is TUP's job). It only mirrors a
  * hierarchical location tag (the source of truth) into the filename prefix.
  *
  * DATA MODEL — a filename is a positional array of key SLOTS separated by
@@ -31,8 +31,8 @@ export interface KeySlot {
  * between them (slots.length - 1 of them). The default is
  *   slots = [{tag, "trel"}, {name}],  separators = ["-"]
  * which reproduces the old single-key behaviour. Slot ORDER encodes position:
- * a tag slot at index 0 is a prefix trekey, a tag slot after the name slot is a
- * suffix trekey (the old `keyPosition` flag, now absorbed into the array).
+ * a tag slot at index 0 is a prefix tagkey, a tag slot after the name slot is a
+ * suffix tagkey (the old `keyPosition` flag, now absorbed into the array).
  */
 export interface TrellisSchema {
 	slots: KeySlot[];
@@ -136,14 +136,14 @@ export function tagPosition(schema: TrellisSchema): "prefix" | "suffix" {
 }
 
 /**
- * Convert a location tag into a trekey.
+ * Convert a location tag into a tagkey.
  *   "#trel/S88/B07"  (namespace "trel")  ->  "S88B07"
  * The namespace segment and all "/" hierarchy separators are stripped.
  * Returns null when the tag does not belong to the configured namespace.
  *
  * @param tag  Tag including the leading "#", as Obsidian's getAllTags() yields.
  */
-export function tagToTrekey(tag: string, schema: TrellisSchema): string | null {
+export function tagToTagkey(tag: string, schema: TrellisSchema): string | null {
 	const prefix = `#${primaryNamespace(schema)}/`;
 	if (!tag.startsWith(prefix)) return null;
 	const path = tag.slice(prefix.length);
@@ -162,24 +162,24 @@ export function parentTagPath(tagPath: string): string {
 }
 
 /**
- * Bootstrap helper — the INVERSE of tagToTrekey. Decompose a filename trekey
+ * Bootstrap helper — the INVERSE of tagToTagkey. Decompose a filename tagkey
  * ("S88B07") into a hierarchical location-tag path ("trel/S/88/B/07") so an
- * existing vault (trekey prefixes, no tags) can be onboarded.
+ * existing vault (tagkey prefixes, no tags) can be onboarded.
  *
- * This is the ONE place that must know the trekey *scheme* (SPARK: alternating
+ * This is the ONE place that must know the tagkey *scheme* (SPARK: alternating
  * tier letter (1) / package digits (2) / module letter (1) / atom digits (2),
  * EACH its own tag segment). Placeholder slots ("0"/"00") are KEPT as
- * segments — dropping them would break the round-trip with tagToTrekey (the
+ * segments — dropping them would break the round-trip with tagToTagkey (the
  * tag is the source of truth, so the synced filename must rebuild the same
- * 6-char trekey). Empty/segment-only levels are made transparent by the tree
+ * 6-char tagkey). Empty/segment-only levels are made transparent by the tree
  * view, so kept placeholders don't clutter the UI.
  *
- * Best-effort: returns null when the trekey doesn't fit the scheme; the
+ * Best-effort: returns null when the tagkey doesn't fit the scheme; the
  * bootstrap dry-run shows every result (and every null) for human review
  * before anything is written.
  */
-export function trekeyToTagPath(trekey: string, schema: TrellisSchema): string | null {
-	const m = trekey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
+export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
+	const m = tagkey.match(/^([A-Z])(\d{2})([A-Z0])?(\d{2})?$/);
 	if (!m) return null;
 	const [, tier, pkg, mod, atom] = m;
 	// Each SPARK level is its own segment: tier letter / package digits /
@@ -192,25 +192,25 @@ export function trekeyToTagPath(trekey: string, schema: TrellisSchema): string |
 
 /**
  * Pick the first location tag (by config namespace) from a list of tags and
- * return its trekey, or null if none. TRELLIS treats one note as having one
+ * return its tagkey, or null if none. TRELLIS treats one note as having one
  * location (note-to-tag 1:1) — first match wins.
  */
-export function pickTrekey(tags: string[], schema: TrellisSchema): string | null {
+export function pickTagkey(tags: string[], schema: TrellisSchema): string | null {
 	for (const t of tags) {
-		const k = tagToTrekey(t, schema);
+		const k = tagToTagkey(t, schema);
 		if (k !== null) return k;
 	}
 	return null;
 }
 
 /**
- * Extract the current trekey slot from a filename's basename.
+ * Extract the current tagkey slot from a filename's basename.
  * - prefix mode: everything before the first separator.
  * - suffix mode: everything after the last separator.
- * If there is no separator, the whole basename is the trekey (e.g. an index
- * note that is trekey-only).
+ * If there is no separator, the whole basename is the tagkey (e.g. an index
+ * note that is tagkey-only).
  */
-export function extractTrekey(basename: string, schema: TrellisSchema): string {
+export function extractTagkey(basename: string, schema: TrellisSchema): string {
 	const sep = primarySeparator(schema);
 	if (tagPosition(schema) === "suffix") {
 		const i = basename.lastIndexOf(sep);
@@ -221,24 +221,24 @@ export function extractTrekey(basename: string, schema: TrellisSchema): string {
 }
 
 /**
- * Extract the title-key from a basename, given the authoritative trekey.
- * The title-key is whatever remains once the trekey slot is removed. We trust
- * the *known* trekey: if the basename starts (prefix) / ends (suffix) with the
- * trekey, the remainder is the title — even when the user deleted the separator
- * (e.g. "S99B07tree-idea" → title "tree-idea"). Otherwise the trekey slot was
+ * Extract the title-key from a basename, given the authoritative tagkey.
+ * The title-key is whatever remains once the tagkey slot is removed. We trust
+ * the *known* tagkey: if the basename starts (prefix) / ends (suffix) with the
+ * tagkey, the remainder is the title — even when the user deleted the separator
+ * (e.g. "S99B07tree-idea" → title "tree-idea"). Otherwise the tagkey slot was
  * itself altered, so fall back to the separator-delimited slot. One boundary
  * separator is stripped.
  */
 export function extractTitle(
 	basename: string,
-	trekey: string,
+	tagkey: string,
 	schema: TrellisSchema
 ): string {
 	const sep = primarySeparator(schema);
 	if (tagPosition(schema) === "suffix") {
 		let head: string;
-		if (basename.endsWith(trekey)) {
-			head = basename.slice(0, basename.length - trekey.length);
+		if (basename.endsWith(tagkey)) {
+			head = basename.slice(0, basename.length - tagkey.length);
 		} else {
 			const i = basename.lastIndexOf(sep);
 			head = i === -1 ? "" : basename.slice(0, i + sep.length);
@@ -246,8 +246,8 @@ export function extractTitle(
 		return head.endsWith(sep) ? head.slice(0, head.length - sep.length) : head;
 	}
 	let rest: string;
-	if (basename.startsWith(trekey)) {
-		rest = basename.slice(trekey.length);
+	if (basename.startsWith(tagkey)) {
+		rest = basename.slice(tagkey.length);
 	} else {
 		const i = basename.indexOf(sep);
 		rest = i === -1 ? "" : basename.slice(i);
@@ -256,44 +256,44 @@ export function extractTitle(
 }
 
 /**
- * Assemble a basename from an authoritative trekey + a title-key, per the
- * schema's primary separator and tag position: `{trekey}{sep}{title}` (prefix)
- * or `{title}{sep}{trekey}` (suffix); just `{trekey}` when the title is empty.
+ * Assemble a basename from an authoritative tagkey + a title-key, per the
+ * schema's primary separator and tag position: `{tagkey}{sep}{title}` (prefix)
+ * or `{title}{sep}{tagkey}` (suffix); just `{tagkey}` when the title is empty.
  * The single place that decides slot order + separator, shared by sync,
  * separator migration, and new-note creation.
  */
 export function assembleBasename(
-	trekey: string,
+	tagkey: string,
 	title: string,
 	schema: TrellisSchema
 ): string {
-	if (title === "") return trekey;
+	if (title === "") return tagkey;
 	const sep = primarySeparator(schema);
 	return tagPosition(schema) === "suffix"
-		? title + sep + trekey
-		: trekey + sep + title;
+		? title + sep + tagkey
+		: tagkey + sep + title;
 }
 
 /**
- * Rebuild the basename from the authoritative trekey + preserved title-key.
- * This restores the trekey AND the separator if the user damaged either,
+ * Rebuild the basename from the authoritative tagkey + preserved title-key.
+ * This restores the tagkey AND the separator if the user damaged either,
  * keeping only the title-key free. Returns null when no change is needed
  * (already in sync).
  */
 export function syncedBasename(
 	basename: string,
-	trekey: string,
+	tagkey: string,
 	schema: TrellisSchema
 ): string | null {
-	const title = extractTitle(basename, trekey, schema);
-	const rebuilt = assembleBasename(trekey, title, schema);
+	const title = extractTitle(basename, tagkey, schema);
+	const rebuilt = assembleBasename(tagkey, title, schema);
 	return rebuilt === basename ? null : rebuilt;
 }
 
 /**
  * Separator migration: re-emit a basename with a NEW separator, preserving the
  * title verbatim (including any occurrences of the new OR old separator inside
- * it). The trekey boundary is found with the OLD separator (oldSchema), then the
+ * it). The tagkey boundary is found with the OLD separator (oldSchema), then the
  * name is reassembled with the NEW separator (newSchema) — both are needed,
  * because once the setting flips, the old separator is the only way to locate
  * the old boundary. The two schemas share everything but the primary separator.
@@ -301,12 +301,12 @@ export function syncedBasename(
  */
 export function separatorMigratedName(
 	basename: string,
-	trekey: string,
+	tagkey: string,
 	oldSchema: TrellisSchema,
 	newSchema: TrellisSchema
 ): string | null {
-	const title = extractTitle(basename, trekey, oldSchema); // old-sep boundary
-	const rebuilt = assembleBasename(trekey, title, newSchema); // new-sep emit
+	const title = extractTitle(basename, tagkey, oldSchema); // old-sep boundary
+	const rebuilt = assembleBasename(tagkey, title, newSchema); // new-sep emit
 	return rebuilt === basename ? null : rebuilt;
 }
 

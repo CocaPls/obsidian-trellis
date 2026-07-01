@@ -15,7 +15,7 @@ import {
 	DuplicateTagGroup,
 	expandTagPrefixes,
 	filterTagSuggestions,
-} from "./trekey";
+} from "./tagkey";
 
 /** Two-field modal: which tag path to rename, and to what. */
 export interface DuplicateNote {
@@ -180,7 +180,7 @@ export class CascadeRenameModal extends Modal {
 /** New-note modal. Parent: prefilled by the caller (clicked node, or the active
  *  note's location for the header button) and editable WITH tag autocomplete —
  *  it picks an existing location, so completing it is safe. Segment: the user
- *  assigns it by hand — TRELLIS is format-agnostic and must not guess the trekey
+ *  assigns it by hand — TRELLIS is format-agnostic and must not guess the tagkey
  *  scheme (a wrong "01" in an alphabetic slot would just have to be retyped). */
 export class NewChildNoteModal extends Modal {
 	private parent: string;
@@ -555,7 +555,7 @@ export class BootstrapPreviewModal extends Modal {
 		app: App,
 		private readonly assign: { name: string; path: string; tag: string }[],
 		private readonly alreadyTagged: string[],
-		private readonly noTrekey: string[],
+		private readonly noTagkey: string[],
 		private readonly onApply: (rows: { path: string; tag: string }[]) => void
 	) {
 		super(app);
@@ -569,7 +569,7 @@ export class BootstrapPreviewModal extends Modal {
 			text: t("modal.bootstrap.summary", {
 				assign: this.assign.length,
 				already: this.alreadyTagged.length,
-				none: this.noTrekey.length,
+				none: this.noTagkey.length,
 			}),
 		});
 
@@ -586,12 +586,12 @@ export class BootstrapPreviewModal extends Modal {
 			}
 		}
 
-		if (this.noTrekey.length) {
+		if (this.noTagkey.length) {
 			contentEl.createEl("h4", {
-				text: t("modal.bootstrap.noTrekey", { n: this.noTrekey.length }),
+				text: t("modal.bootstrap.noTagkey", { n: this.noTagkey.length }),
 			});
 			const list = contentEl.createDiv({ cls: "trellis-bootstrap-list" });
-			for (const n of this.noTrekey) {
+			for (const n of this.noTagkey) {
 				list.createDiv({ cls: "trellis-bootstrap-skip", text: n });
 			}
 		}
