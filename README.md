@@ -12,6 +12,8 @@ note tagged  #trel/S88/B07     →  filename  S88B07-tree-idea.md
 retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
 ```
 
+![Sidebar tree view](screenshots/tree-view.png)
+
 ## ✨ Features
 
 - **One-directional sync** — when a note's location tag changes, its filename
@@ -25,8 +27,13 @@ retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
 - **Sidebar tree view** — see your tag hierarchy as a collapsible, folder-like
   tree, with no real folders.
 - **Bootstrap** — onboard an existing vault that already has filename prefixes
-  but no tags yet. Dry-run preview, live progress, per-file error isolation, and
-  one-step undo.
+  but no tags yet. Pick the scope with a checkbox tree (whole vault, folders, or
+  individual notes; drag to sweep-select, search, or show only untagged notes),
+  preview as a dry-run, watch live progress, and undo in one step. Per-file
+  errors are isolated so one bad note never stops the run.
+- **Duplicate location-tag cleanup** — when a note carries more than one location
+  tag in the same namespace, TRELLIS flags it and offers a cleanup command: pick
+  which tag to keep and the rest are removed. Batched for large vaults, with undo.
 - **Separator batch-change** — change the separator in settings and only the
   trekey-boundary separator is swapped across the whole vault (symbols inside
   titles are preserved). Undo supported.
@@ -52,11 +59,15 @@ retag it     #trel/S88/B99     →  filename  S88B99-tree-idea.md   (automatic)
    palette or a note's right-click menu; filenames and wikilinks follow.
 3. **Tree view** — open the sidebar tree from the ribbon icon.
 4. **Onboard an existing vault** — run **"Bootstrap"** to derive tags from
-   filename prefixes (dry-run first, then apply).
-5. **Change the separator** — change it in settings; after a confirmation, it's
+   filename prefixes (choose a scope, dry-run first, then apply).
+5. **Clean up duplicates** — run **"Check duplicate location tags"** to find notes
+   with more than one location tag and pick which to keep.
+6. **Change the separator** — change it in settings; after a confirmation, it's
    applied vault-wide.
 
 ## ⚙️ Settings
+
+![Settings tab](screenshots/settings.png)
 
 - **Location tag namespace** — which tags are the source of truth (e.g. `trel`)
 - **Separator** — the character(s) between the trekey and the title (e.g. `-`)

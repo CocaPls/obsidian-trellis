@@ -7,6 +7,18 @@ development milestones; `0.1.0` will be the first public release.
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4`, `0.0.5`, and `0.0.6`.
 
+## 0.1.0 — First public release
+
+First public release. The feature set is frozen at the 0.0.8 milestone
+(one-directional tag → filename sync, cascade rename, sidebar tree view, scoped
+bootstrap, duplicate location-tag cleanup, separator batch-change, and Korean /
+English i18n).
+
+- README screenshots (sidebar tree view, settings tab).
+- Pinned the `obsidian` dev dependency to a fixed version and added a CI
+  workflow (build + tests on every push / PR).
+- No functional code changes since 0.0.8.
+
 ## 0.0.8 — Scoped bootstrap, duplicate-tag cleanup, robustness
 
 - **Scoped bootstrap target picker** — onboard a folder/module subtree instead
