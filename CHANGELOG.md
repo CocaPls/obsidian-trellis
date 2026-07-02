@@ -22,6 +22,9 @@ i18n) plus two tree-view customization options.
   cleanup) and a Korean translation (`README.ko.md`).
 - Pinned the `obsidian` dev dependency to a fixed version and added a CI
   workflow (build + tests on every push / PR).
+- Guard against a duplicate tree-view registration — a stale registration from
+  a not-fully-unloaded prior instance (e.g. plugin files replaced without an
+  Obsidian restart) no longer aborts the whole plugin load.
 - Bootstrap decomposition is now scheme-general — it splits a filename prefix
   at letter/digit boundaries (`S88B07` → `S/88/B/07`, `PROJ123` → `PROJ/123`)
   instead of assuming one fixed pattern, and skips prefixes it can't round-trip.

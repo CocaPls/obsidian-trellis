@@ -171,31 +171,41 @@ export default class TrellisPlugin extends Plugin {
 
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
 		// collapsible tree (the read-side counterpart to the rename engine).
-		this.registerView(
-			TRELLIS_TREE_VIEW,
-			(leaf) =>
-				new TrellisTreeView(leaf, {
-					getRoots: () => this.sortedNoteTree(),
-					getSortAsc: () => this.settings.sortAsc,
-					getDisplayName: () => this.treeDisplayName(),
-					getButtons: () => this.settings.headerButtons,
-					onToggleSort: () => void this.toggleSortDir(),
-					onNewChild: (parentTagPath) => this.openNewNoteModal(parentTagPath),
-					onNewNote: () => this.newNoteFromActive(),
-					onBootstrap: () =>
-						new BootstrapSelectModal(
-							this.app,
-							(paths) => this.bootstrapDryRun(paths),
-							(f) => this.locationTagOf(f) !== null
-						).open(),
-					onCascade: () =>
-						new CascadeRenameModal(this.app, (from, to) =>
-							void this.cascadeRename(from, to)
-						).open(),
-					onUndoBootstrap: () => void this.undoBootstrap(),
-					onUndoSeparator: () => void this.undoSeparatorChange(),
-				})
-		);
+		// Registering a view type that is already registered throws. A prior
+		// instance that didn't fully unload — e.g. the plugin's files were
+		// replaced without restarting Obsidian — can leave this type registered,
+		// and an unguarded re-register would abort the entire plugin load. Guard
+		// it so a stale registration is a no-op instead of a hard failure; a full
+		// restart clears the stale one.
+		try {
+			this.registerView(
+				TRELLIS_TREE_VIEW,
+				(leaf) =>
+					new TrellisTreeView(leaf, {
+						getRoots: () => this.sortedNoteTree(),
+						getSortAsc: () => this.settings.sortAsc,
+						getDisplayName: () => this.treeDisplayName(),
+						getButtons: () => this.settings.headerButtons,
+						onToggleSort: () => void this.toggleSortDir(),
+						onNewChild: (parentTagPath) => this.openNewNoteModal(parentTagPath),
+						onNewNote: () => this.newNoteFromActive(),
+						onBootstrap: () =>
+							new BootstrapSelectModal(
+								this.app,
+								(paths) => this.bootstrapDryRun(paths),
+								(f) => this.locationTagOf(f) !== null
+							).open(),
+						onCascade: () =>
+							new CascadeRenameModal(this.app, (from, to) =>
+								void this.cascadeRename(from, to)
+							).open(),
+						onUndoBootstrap: () => void this.undoBootstrap(),
+						onUndoSeparator: () => void this.undoSeparatorChange(),
+					})
+			);
+		} catch (e) {
+			console.warn("TRELLIS: tree view type already registered (stale instance?)", e);
+		}
 		this.ribbonEl = this.addRibbonIcon("list-tree", this.treeDisplayName(), () =>
 			void this.activateTreeView()
 		);
