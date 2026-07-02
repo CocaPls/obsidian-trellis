@@ -60,6 +60,8 @@
 	align-items: center;
 	gap: 0.4em;
 	padding: 1px 0;
+	/* Indent depth is set per row via the --trellis-depth custom property. */
+	padding-left: calc(var(--trellis-depth, 0) * 1.3em);
 }
 .trellis-bootstrap-caret {
 	display: inline-block;

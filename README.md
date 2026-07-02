@@ -67,7 +67,7 @@ match; edit the tagkey by hand and it's restored from the tag.
 2. Put them in your vault's `.obsidian/plugins/trellis/` folder.
 3. Enable the plugin in **Settings → Community plugins**.
 
-*(A community-plugin marketplace listing is planned for 0.1.0.)*
+*(A community-plugin marketplace listing is planned.)*
 
 ## 🚀 Usage
 

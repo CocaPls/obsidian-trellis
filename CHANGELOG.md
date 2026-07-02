@@ -1,11 +1,11 @@
 # Changelog
 
 All notable changes to TRELLIS. Versions in the `0.0.x` range are pre-release
-development milestones; `0.1.0` will be the first public release.
+development milestones; `0.1.0` is the first public release.
 
 > Note: `0.0.3` and `0.0.4` were developed in one working tree and landed in the
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
-> exist for `0.0.1`, `0.0.2`, `0.0.4`, `0.0.5`, and `0.0.6`.
+> exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`.
 
 ## 0.1.0 — First public release
 

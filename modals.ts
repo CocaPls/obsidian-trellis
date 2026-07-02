@@ -447,7 +447,7 @@ export class BootstrapSelectModal extends Modal {
 			const row = parent.createDiv({
 				cls: "trellis-bootstrap-treerow trellis-bootstrap-folder",
 			});
-			row.style.paddingLeft = `${depth * 1.3}em`;
+			row.style.setProperty("--trellis-depth", String(depth));
 
 			const caret = row.createSpan({
 				cls: "trellis-bootstrap-caret",
@@ -491,7 +491,7 @@ export class BootstrapSelectModal extends Modal {
 					? "trellis-bootstrap-treerow trellis-bootstrap-file trellis-bootstrap-tagged"
 					: "trellis-bootstrap-treerow trellis-bootstrap-file",
 			});
-			row.style.paddingLeft = `${depth * 1.3}em`;
+			row.style.setProperty("--trellis-depth", String(depth));
 
 			row.createSpan({ cls: "trellis-bootstrap-caret", text: "" });
 

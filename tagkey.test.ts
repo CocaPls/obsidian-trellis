@@ -20,7 +20,6 @@ import {
 	buildTagTree,
 	buildNoteTree,
 	sortNoteTree,
-	nextChildSegment,
 	tagkeyToTagPath,
 } from "./tagkey.ts";
 
@@ -327,14 +326,6 @@ test("sortNoteTree sorts siblings recursively by the comparator", () => {
 	// reverse comparator → descending
 	const desc = sortNoteTree(roots, (a, b) => b.notePath.localeCompare(a.notePath));
 	assert.deepEqual(desc.map((n) => n.notePath), ["S88.md", "S77.md"]);
-});
-
-test("nextChildSegment suggests max+1 padded, or 01 when no numbers", () => {
-	assert.equal(nextChildSegment(["01", "02", "04"]), "05");
-	assert.equal(nextChildSegment(["09"]), "10");
-	assert.equal(nextChildSegment([]), "01");
-	assert.equal(nextChildSegment(["A", "B"]), "01"); // non-numeric → 01
-	assert.equal(nextChildSegment(["01", "A"]), "02"); // ignores non-numeric
 });
 
 // --- Multi-key data model (B09 "path B": filename = positional slot array) ---

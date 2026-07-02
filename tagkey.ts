@@ -409,20 +409,6 @@ function sortTagTree(node: TagTreeNode): void {
 	node.children.forEach(sortTagTree);
 }
 
-/**
- * Suggest the next child segment under a parent. If the existing direct-child
- * segments are numeric, return max+1 zero-padded to width 2 ("01","02",…,"10").
- * Otherwise (no numeric children) suggest "01". The user can overwrite it (e.g.
- * a letter key for a new index level).
- */
-export function nextChildSegment(childSegments: string[]): string {
-	const nums = childSegments
-		.filter((s) => /^\d+$/.test(s))
-		.map((s) => parseInt(s, 10));
-	if (nums.length === 0) return "01";
-	return String(Math.max(...nums) + 1).padStart(2, "0");
-}
-
 /** A node in the note-only tree: every node is a real note. Children are notes
  *  whose nearest tagged ancestor is this note. */
 export interface NoteTreeNode {
