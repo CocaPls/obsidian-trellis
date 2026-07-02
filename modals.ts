@@ -335,7 +335,7 @@ export class BootstrapSelectModal extends Modal {
 			);
 
 		this.treeEl = contentEl.createDiv({ cls: "trellis-bootstrap-tree" });
-		document.addEventListener("mouseup", this.onMouseUp);
+		activeDocument.addEventListener("mouseup", this.onMouseUp);
 		this.renderTree();
 
 		new Setting(contentEl)
@@ -543,7 +543,7 @@ export class BootstrapSelectModal extends Modal {
 	}
 
 	onClose() {
-		document.removeEventListener("mouseup", this.onMouseUp);
+		activeDocument.removeEventListener("mouseup", this.onMouseUp);
 		this.contentEl.empty();
 	}
 }

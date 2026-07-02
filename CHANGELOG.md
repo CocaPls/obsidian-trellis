@@ -7,6 +7,14 @@ development milestones; `0.1.0` is the first public release.
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`.
 
+## 0.1.1 — Marketplace review fixes
+
+- Raise `minAppVersion` to `1.4.10` to match the APIs actually used
+  (`processFrontMatter`, added in 1.4.4; `AbstractInputSuggest`, in 1.4.10) —
+  clears the community review's unsupported-API check.
+- Use `activeDocument` instead of `document` for the bootstrap picker's
+  drag-select listeners, for pop-out window compatibility.
+
 ## 0.1.0 — First public release
 
 First public release, built on the 0.0.8 feature set (one-directional
