@@ -5,7 +5,22 @@ development milestones; `0.1.0` is the first public release.
 
 > Note: `0.0.3` and `0.0.4` were developed in one working tree and landed in the
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
-> exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`.
+> exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
+> through `0.1.1`.
+
+## 0.1.2 — Marketplace review cleanup
+
+- Replace `workspace.revealLeaf()` (Obsidian 1.7.2) with the older public
+  `setActiveLeaf(..., { focus: true })` path, keeping `minAppVersion` at
+  `1.4.10` while clearing the unsupported-API review error.
+- Tighten saved-settings and frontmatter handling types to avoid unsafe
+  `any`-style access around `loadData()` and `processFrontMatter()`.
+- Remove the `builtin-modules` dev dependency and use Node's built-in
+  `node:module` `builtinModules` list in the build config.
+
+Review notes intentionally deferred: `getLanguage()` would require Obsidian
+1.8.7, and replacing imperative settings `display()` / `setWarning()` would
+require 1.13.0 APIs, so those remain warnings for 0.1.x compatibility.
 
 ## 0.1.1 — Marketplace review fixes
 

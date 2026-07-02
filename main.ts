@@ -8,6 +8,7 @@ import {
 	App,
 	debounce,
 	normalizePath,
+	type WorkspaceLeaf,
 } from "obsidian";
 import {
 	TrellisSchema,
@@ -52,6 +53,16 @@ import {
 } from "./modals";
 
 type SortKey = "tagkey" | "mtime" | "ctime";
+
+type PlainObject = Record<string, unknown>;
+
+interface TrellisFrontmatter extends PlainObject {
+	tags?: unknown;
+}
+
+function isPlainObject(value: unknown): value is PlainObject {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /**
  * TRELLIS — tag-driven tagkey sync.
@@ -328,13 +339,15 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const data = (await this.loadData()) ?? {};
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		const rawData: unknown = await this.loadData();
+		const data = isPlainObject(rawData) ? rawData : {};
+		const loaded = data as Partial<TrellisSettings> & Partial<LegacyConfig>;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
 		// Give settings its OWN schema so edits never mutate the shared default.
 		// Three cases: (a) saved schema → use it (loadData yields fresh objects);
 		// (b) legacy scalar config → migrate; (c) fresh install → own default.
-		if (!data.schema) {
-			const legacy = data as LegacyConfig;
+		if (!loaded.schema) {
+			const legacy = loaded as LegacyConfig;
 			const hasLegacy =
 				legacy.namespace !== undefined ||
 				legacy.separator !== undefined ||
@@ -356,7 +369,9 @@ export default class TrellisPlugin extends Plugin {
 		// missing keys (older saved data) fall back to visible.
 		this.settings.headerButtons = {
 			...DEFAULT_SETTINGS.headerButtons,
-			...(data.headerButtons as Partial<HeaderButtonVisibility> | undefined),
+			...(isPlainObject(data.headerButtons)
+				? (data.headerButtons as Partial<HeaderButtonVisibility>)
+				: {}),
 		};
 	}
 
@@ -600,7 +615,14 @@ export default class TrellisPlugin extends Plugin {
 			leaf = left;
 			await leaf.setViewState({ type: TRELLIS_TREE_VIEW, active: true });
 		}
-		void workspace.revealLeaf(leaf);
+		this.revealTreeLeaf(leaf);
+	}
+
+	private revealTreeLeaf(leaf: WorkspaceLeaf) {
+		// `workspace.revealLeaf()` would be ideal, but it requires Obsidian 1.7.2.
+		// Keep 0.1.x compatible with minAppVersion 1.4.10 by using the older
+		// public API. This focuses/activates the sidebar leaf after opening it.
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 	}
 
 	refreshTreeViews() {
@@ -659,7 +681,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of files) {
 			let touched = false;
 			try {
-				await this.app.fileManager.processFrontMatter(file, (fm) => {
+				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
 					const tags = normalizeTagList(fm.tags);
 					if (tags.length === 0) return;
 					const next = tags.map((t) => renameTagPath(t, from, to) ?? t);
@@ -728,7 +750,7 @@ export default class TrellisPlugin extends Plugin {
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (file instanceof TFile) {
 					try {
-						await this.app.fileManager.processFrontMatter(file, (fm) => {
+						await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
 							const tags = normalizeTagList(fm.tags);
 							if (!tags.includes(r.tag)) fm.tags = [...tags, r.tag];
 						});
@@ -901,7 +923,7 @@ export default class TrellisPlugin extends Plugin {
 				if (!(file instanceof TFile)) continue;
 				const removed: string[] = [];
 				try {
-					await this.app.fileManager.processFrontMatter(file, (fm) => {
+					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
 						const tags = normalizeTagList(fm.tags);
 						const next = tags.filter((tg) => {
 							const hashed = "#" + tg;
@@ -951,7 +973,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const r of record) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
 				const tags = normalizeTagList(fm.tags);
 				for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
 				fm.tags = tags;
@@ -992,7 +1014,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const r of record) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
 				const tags = normalizeTagList(fm.tags);
 				const next = tags.filter((t) => t !== r.tag);
 				if (next.length) fm.tags = next;
