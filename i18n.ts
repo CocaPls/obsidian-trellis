@@ -162,6 +162,19 @@ const EN: Record<string, string> = {
 	"setting.treeName": "Sidebar tree view",
 	"setting.treeDesc":
 		"Show a collapsible tree of the location-tag hierarchy in the sidebar (ribbon icon + command).",
+	"setting.treeLabelName": "Sidebar view name",
+	"setting.treeLabelDesc":
+		"Custom title for the tree view's tab. Leave blank for the default. Avoid reusing the core File explorer's name.",
+	"setting.headerButtonsName": "Sidebar header buttons",
+	"setting.headerButtonsDesc":
+		"Show or hide each action button in the tree view header.",
+	"setting.hb.newNote": "New note",
+	"setting.hb.sort": "Sort direction",
+	"setting.hb.collapseAll": "Collapse / expand all",
+	"setting.hb.showCurrent": "Show current file",
+	"setting.hb.bootstrap": "Bootstrap",
+	"setting.hb.cascade": "Rename location tag",
+	"setting.hb.undo": "Undo",
 	"setting.sortName": "Tree sort by",
 	"setting.sortDesc":
 		"Sort order in the tree (ascending/descending is toggled in the panel header).",
@@ -307,6 +320,19 @@ const KO: Record<string, string> = {
 	"setting.treeName": "사이드바 트리 뷰",
 	"setting.treeDesc":
 		"위치 태그 계층을 사이드바에 접을 수 있는 트리로 표시합니다 (리본 아이콘 + 명령).",
+	"setting.treeLabelName": "사이드바 뷰 이름",
+	"setting.treeLabelDesc":
+		"트리 뷰 탭의 표시 이름. 비우면 기본값을 씁니다. 코어 '탐색기'와 같은 이름은 피하세요.",
+	"setting.headerButtonsName": "사이드바 헤더 버튼",
+	"setting.headerButtonsDesc":
+		"트리 뷰 헤더의 각 동작 버튼을 켜거나 끕니다.",
+	"setting.hb.newNote": "새 노트",
+	"setting.hb.sort": "정렬 방향",
+	"setting.hb.collapseAll": "전체 접기 / 펼치기",
+	"setting.hb.showCurrent": "현재 파일 보기",
+	"setting.hb.bootstrap": "부트스트랩",
+	"setting.hb.cascade": "위치 태그 이름 변경",
+	"setting.hb.undo": "되돌리기",
 	"setting.sortName": "트리 정렬 기준",
 	"setting.sortDesc": "트리 정렬 순서 (오름/내림차순은 패널 헤더에서 전환).",
 	"setting.sortTagkey": "태그키 (이름)",

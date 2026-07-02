@@ -9,11 +9,15 @@ development milestones; `0.1.0` will be the first public release.
 
 ## 0.1.0 — First public release
 
-First public release. The feature set is frozen at the 0.0.8 milestone
-(one-directional tag → filename sync, cascade rename, sidebar tree view, scoped
-bootstrap, duplicate location-tag cleanup, separator batch-change, and Korean /
-English i18n).
+First public release, built on the 0.0.8 feature set (one-directional
+tag → filename sync, cascade rename, sidebar tree view, scoped bootstrap,
+duplicate location-tag cleanup, separator batch-change, and Korean / English
+i18n) plus two tree-view customization options.
 
+- **Sidebar view name** — set a custom title for the tree view's tab in
+  settings (blank keeps the default).
+- **Per-button header visibility** — show or hide each of the tree view
+  header's action buttons individually in settings.
 - README screenshots (tree view, settings, bootstrap, cascade rename, duplicate
   cleanup) and a Korean translation (`README.ko.md`).
 - Pinned the `obsidian` dev dependency to a fixed version and added a CI
@@ -22,7 +26,6 @@ English i18n).
   at letter/digit boundaries (`S88B07` → `S/88/B/07`, `PROJ123` → `PROJ/123`)
   instead of assuming one fixed pattern, and skips prefixes it can't round-trip.
 - Dropped the demo `test-vault/` from the repo (local scratch only).
-- No other functional changes since 0.0.8.
 
 ## 0.0.8 — Scoped bootstrap, duplicate-tag cleanup, robustness
 

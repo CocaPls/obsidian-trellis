@@ -4,6 +4,47 @@ import { t } from "./i18n";
 
 export const TRELLIS_TREE_VIEW = "trellis-tree-view";
 
+/** Visibility of each action button in the tree-view header. */
+export interface HeaderButtonVisibility {
+	newNote: boolean;
+	sort: boolean;
+	collapseAll: boolean;
+	showCurrent: boolean;
+	bootstrap: boolean;
+	cascade: boolean;
+	undo: boolean;
+}
+
+/** Header-button ids in render (left-to-right) order — the single source shared
+ *  by the view (which buttons to draw) and settings (which toggles to list). */
+export const HEADER_BUTTON_IDS: (keyof HeaderButtonVisibility)[] = [
+	"newNote",
+	"sort",
+	"collapseAll",
+	"showCurrent",
+	"bootstrap",
+	"cascade",
+	"undo",
+];
+
+/** Everything the view reads or calls back into the plugin for. Grouped into
+ *  one object so the constructor stays readable as the view grows. */
+export interface TrellisTreeCallbacks {
+	getRoots: () => NoteTreeNode[];
+	getSortAsc: () => boolean;
+	/** The tab title, already resolved (custom name or localized default). */
+	getDisplayName: () => string;
+	/** Which header buttons are enabled in settings. */
+	getButtons: () => HeaderButtonVisibility;
+	onToggleSort: () => void;
+	onNewChild: (parentTagPath: string) => void;
+	onNewNote: () => void;
+	onBootstrap: () => void;
+	onCascade: () => void;
+	onUndoBootstrap: () => void;
+	onUndoSeparator: () => void;
+}
+
 /**
  * Sidebar panel that renders the note hierarchy implied by location tags.
  * Every row is a real NOTE: an index note tagged "trel/S88" becomes a
@@ -17,40 +58,13 @@ export const TRELLIS_TREE_VIEW = "trellis-tree-view";
  * it and handles collapse/active-file UI.
  */
 export class TrellisTreeView extends ItemView {
-	private readonly getRoots: () => NoteTreeNode[];
-	private readonly getSortAsc: () => boolean;
-	private readonly onToggleSort: () => void;
-	private readonly onNewChild: (parentTagPath: string) => void;
-	private readonly onNewNote: () => void;
-	private readonly onBootstrap: () => void;
-	private readonly onCascade: () => void;
-	private readonly onUndoBootstrap: () => void;
-	private readonly onUndoSeparator: () => void;
+	private readonly cb: TrellisTreeCallbacks;
 	/** Tag paths whose children are hidden. Persists across refreshes. */
 	private readonly collapsed = new Set<string>();
 
-	constructor(
-		leaf: WorkspaceLeaf,
-		getRoots: () => NoteTreeNode[],
-		getSortAsc: () => boolean,
-		onToggleSort: () => void,
-		onNewChild: (parentTagPath: string) => void,
-		onNewNote: () => void,
-		onBootstrap: () => void,
-		onCascade: () => void,
-		onUndoBootstrap: () => void,
-		onUndoSeparator: () => void
-	) {
+	constructor(leaf: WorkspaceLeaf, cb: TrellisTreeCallbacks) {
 		super(leaf);
-		this.getRoots = getRoots;
-		this.getSortAsc = getSortAsc;
-		this.onToggleSort = onToggleSort;
-		this.onNewChild = onNewChild;
-		this.onNewNote = onNewNote;
-		this.onBootstrap = onBootstrap;
-		this.onCascade = onCascade;
-		this.onUndoBootstrap = onUndoBootstrap;
-		this.onUndoSeparator = onUndoSeparator;
+		this.cb = cb;
 	}
 
 	getViewType(): string {
@@ -58,7 +72,7 @@ export class TrellisTreeView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return t("view.treeName");
+		return this.cb.getDisplayName();
 	}
 
 	getIcon(): string {
@@ -87,49 +101,68 @@ export class TrellisTreeView extends ItemView {
 		container.empty();
 		container.addClass("trellis-tree");
 
-		// Header with action buttons (native explorer look).
+		// Header with action buttons (native explorer look). Each button is
+		// individually toggleable in settings; the header still renders (empty) so
+		// the panel keeps its native spacing even with every button hidden.
+		const vis = this.cb.getButtons();
 		const header = container.createDiv({ cls: "nav-header" });
 		const buttons = header.createDiv({ cls: "nav-buttons-container" });
 		// New note — like the file explorer's new-note button, it creates at the
 		// current context (the active note's parent is prefilled in the modal).
-		this.addButton(buttons, "file-plus", t("tree.newNote"), () => this.onNewNote());
-		const asc = this.getSortAsc();
-		this.addButton(
-			buttons,
-			asc ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow",
-			asc ? t("tree.sortAsc") : t("tree.sortDesc"),
-			() => this.onToggleSort()
-		);
-		this.addButton(buttons, "chevrons-down-up", t("tree.collapseAll"), () =>
-			this.toggleCollapseAll()
-		);
-		this.addButton(buttons, "crosshair", t("tree.showCurrent"), () =>
-			this.revealActiveFile()
-		);
-		this.addButton(buttons, "wand-2", t("tree.bootstrap"), () =>
-			this.onBootstrap()
-		);
-		this.addButton(buttons, "pencil-line", t("tree.cascade"), () =>
-			this.onCascade()
-		);
-		this.addButton(buttons, "undo-2", t("tree.undo"), (e) => {
-			const menu = new Menu();
-			menu.addItem((i) =>
-				i
-					.setTitle(t("cmd.bootstrapUndo"))
-					.setIcon("wand-2")
-					.onClick(() => this.onUndoBootstrap())
+		if (vis.newNote) {
+			this.addButton(buttons, "file-plus", t("tree.newNote"), () =>
+				this.cb.onNewNote()
 			);
-			menu.addItem((i) =>
-				i
-					.setTitle(t("cmd.sepUndo"))
-					.setIcon("scissors")
-					.onClick(() => this.onUndoSeparator())
+		}
+		if (vis.sort) {
+			const asc = this.cb.getSortAsc();
+			this.addButton(
+				buttons,
+				asc ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow",
+				asc ? t("tree.sortAsc") : t("tree.sortDesc"),
+				() => this.cb.onToggleSort()
 			);
-			menu.showAtMouseEvent(e);
-		});
+		}
+		if (vis.collapseAll) {
+			this.addButton(buttons, "chevrons-down-up", t("tree.collapseAll"), () =>
+				this.toggleCollapseAll()
+			);
+		}
+		if (vis.showCurrent) {
+			this.addButton(buttons, "crosshair", t("tree.showCurrent"), () =>
+				this.revealActiveFile()
+			);
+		}
+		if (vis.bootstrap) {
+			this.addButton(buttons, "wand-2", t("tree.bootstrap"), () =>
+				this.cb.onBootstrap()
+			);
+		}
+		if (vis.cascade) {
+			this.addButton(buttons, "pencil-line", t("tree.cascade"), () =>
+				this.cb.onCascade()
+			);
+		}
+		if (vis.undo) {
+			this.addButton(buttons, "undo-2", t("tree.undo"), (e) => {
+				const menu = new Menu();
+				menu.addItem((i) =>
+					i
+						.setTitle(t("cmd.bootstrapUndo"))
+						.setIcon("wand-2")
+						.onClick(() => this.cb.onUndoBootstrap())
+				);
+				menu.addItem((i) =>
+					i
+						.setTitle(t("cmd.sepUndo"))
+						.setIcon("scissors")
+						.onClick(() => this.cb.onUndoSeparator())
+				);
+				menu.showAtMouseEvent(e);
+			});
+		}
 
-		const roots = this.getRoots();
+		const roots = this.cb.getRoots();
 		const nav = container.createDiv({ cls: "nav-files-container" });
 		if (roots.length === 0) {
 			nav.createDiv({
@@ -211,7 +244,7 @@ export class TrellisTreeView extends ItemView {
 				i
 					.setTitle(t("menu.newHere"))
 					.setIcon("file-plus")
-					.onClick(() => this.onNewChild(node.tagPath))
+					.onClick(() => this.cb.onNewChild(node.tagPath))
 			);
 			menu.showAtMouseEvent(e);
 		});
@@ -229,7 +262,7 @@ export class TrellisTreeView extends ItemView {
 	/** Collapse everything if anything is open, else expand everything. */
 	private toggleCollapseAll() {
 		const folders = new Set<string>();
-		this.collectFolderPaths(this.getRoots(), folders);
+		this.collectFolderPaths(this.cb.getRoots(), folders);
 		const allCollapsed = [...folders].every((p) => this.collapsed.has(p));
 		if (allCollapsed) this.collapsed.clear();
 		else folders.forEach((p) => this.collapsed.add(p));
@@ -249,7 +282,7 @@ export class TrellisTreeView extends ItemView {
 	private revealActiveFile() {
 		const active = this.app.workspace.getActiveFile();
 		if (!active) return;
-		const tagPath = this.findTagPath(this.getRoots(), active.path);
+		const tagPath = this.findTagPath(this.cb.getRoots(), active.path);
 		if (tagPath) {
 			// Un-collapse every ancestor of the active note.
 			for (const p of [...this.collapsed]) {

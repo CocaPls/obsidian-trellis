@@ -108,7 +108,9 @@ location tag, pick the one to keep; the rest are removed (undoable).
 - **Separator** — the character(s) between the tagkey and the title (e.g. `-`)
 - **Key position** — prefix (start) or suffix (end) of the filename
 - **Sidebar tree view** — on / off
+- **Sidebar view name** — a custom title for the tree view's tab (blank = default)
 - **Tree sort** — tagkey / modified time / created time
+- **Sidebar header buttons** — show or hide each header action button individually
 - **Language** — auto / Korean / English
 
 ## 🔧 Compatibility

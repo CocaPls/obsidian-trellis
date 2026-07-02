@@ -32,7 +32,12 @@ import {
 	assembleBasename,
 	separatorMigratedName,
 } from "./tagkey";
-import { TrellisTreeView, TRELLIS_TREE_VIEW } from "./tree-view";
+import {
+	TrellisTreeView,
+	TRELLIS_TREE_VIEW,
+	HeaderButtonVisibility,
+	HEADER_BUTTON_IDS,
+} from "./tree-view";
 import { t, setLang, LangSetting } from "./i18n";
 import {
 	DuplicateNote,
@@ -91,6 +96,10 @@ interface TrellisSettings {
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
 	treeViewEnabled: boolean;
+	/** Custom tab title for the tree view; "" = the localized default. */
+	treeViewName: string;
+	/** Which action buttons show in the tree-view header (all on by default). */
+	headerButtons: HeaderButtonVisibility;
 	sortKey: SortKey;
 	sortAsc: boolean;
 	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
@@ -106,6 +115,16 @@ interface TrellisSettings {
 const DEFAULT_SETTINGS: TrellisSettings = {
 	schema: defaultSchema(),
 	treeViewEnabled: true,
+	treeViewName: "",
+	headerButtons: {
+		newNote: true,
+		sort: true,
+		collapseAll: true,
+		showCurrent: true,
+		bootstrap: true,
+		cascade: true,
+		undo: true,
+	},
 	sortKey: "tagkey",
 	sortAsc: true,
 	language: "auto",
@@ -155,28 +174,29 @@ export default class TrellisPlugin extends Plugin {
 		this.registerView(
 			TRELLIS_TREE_VIEW,
 			(leaf) =>
-				new TrellisTreeView(
-					leaf,
-					() => this.sortedNoteTree(),
-					() => this.settings.sortAsc,
-					() => void this.toggleSortDir(),
-					(parentTagPath) => this.openNewNoteModal(parentTagPath),
-					() => this.newNoteFromActive(),
-					() =>
+				new TrellisTreeView(leaf, {
+					getRoots: () => this.sortedNoteTree(),
+					getSortAsc: () => this.settings.sortAsc,
+					getDisplayName: () => this.treeDisplayName(),
+					getButtons: () => this.settings.headerButtons,
+					onToggleSort: () => void this.toggleSortDir(),
+					onNewChild: (parentTagPath) => this.openNewNoteModal(parentTagPath),
+					onNewNote: () => this.newNoteFromActive(),
+					onBootstrap: () =>
 						new BootstrapSelectModal(
 							this.app,
 							(paths) => this.bootstrapDryRun(paths),
 							(f) => this.locationTagOf(f) !== null
 						).open(),
-					() =>
+					onCascade: () =>
 						new CascadeRenameModal(this.app, (from, to) =>
 							void this.cascadeRename(from, to)
 						).open(),
-					() => void this.undoBootstrap(),
-					() => void this.undoSeparatorChange()
-				)
+					onUndoBootstrap: () => void this.undoBootstrap(),
+					onUndoSeparator: () => void this.undoSeparatorChange(),
+				})
 		);
-		this.ribbonEl = this.addRibbonIcon("list-tree", t("view.treeName"), () =>
+		this.ribbonEl = this.addRibbonIcon("list-tree", this.treeDisplayName(), () =>
 			void this.activateTreeView()
 		);
 		this.addCommand({
@@ -322,6 +342,12 @@ export default class TrellisPlugin extends Plugin {
 			delete s.separator;
 			delete s.keyPosition;
 		}
+		// Own copy of headerButtons so a toggle never mutates the shared default;
+		// missing keys (older saved data) fall back to visible.
+		this.settings.headerButtons = {
+			...DEFAULT_SETTINGS.headerButtons,
+			...(data.headerButtons as Partial<HeaderButtonVisibility> | undefined),
+		};
 	}
 
 	// --- Single-key view of the schema (settings-tab read/write helpers) ----
@@ -581,6 +607,23 @@ export default class TrellisPlugin extends Plugin {
 		} else {
 			this.ribbonEl?.hide();
 			this.app.workspace.detachLeavesOfType(TRELLIS_TREE_VIEW);
+		}
+	}
+
+	/** The tree view's tab title: the user's custom name, or the localized
+	 *  default when the setting is blank. */
+	private treeDisplayName(): string {
+		return this.settings.treeViewName.trim() || t("view.treeName");
+	}
+
+	/** Re-apply the tree title to the ribbon tooltip and every open tree tab
+	 *  after the name (or UI language) changes. updateHeader re-reads the view's
+	 *  getDisplayText; it degrades to a no-op if the API is unavailable. */
+	applyTreeViewName() {
+		const name = this.treeDisplayName();
+		this.ribbonEl?.setAttribute("aria-label", name);
+		for (const leaf of this.app.workspace.getLeavesOfType(TRELLIS_TREE_VIEW)) {
+			(leaf as { updateHeader?: () => void }).updateHeader?.();
 		}
 	}
 
@@ -981,6 +1024,7 @@ class TrellisSettingTab extends PluginSettingTab {
 						setLang(this.plugin.settings.language);
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
+						this.plugin.applyTreeViewName(); // re-localize the tab title
 						this.display(); // re-render this tab in the new language
 					})
 			);
@@ -1070,6 +1114,21 @@ class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Custom tab title for the tree view (blank = the localized default).
+		new Setting(containerEl)
+			.setName(t("setting.treeLabelName"))
+			.setDesc(t("setting.treeLabelDesc"))
+			.addText((text) =>
+				text
+					.setPlaceholder(t("view.treeName"))
+					.setValue(this.plugin.settings.treeViewName)
+					.onChange(async (value) => {
+						this.plugin.settings.treeViewName = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyTreeViewName();
+					})
+			);
+
 		new Setting(containerEl)
 			.setName(t("setting.sortName"))
 			.setDesc(t("setting.sortDesc"))
@@ -1086,5 +1145,25 @@ class TrellisSettingTab extends PluginSettingTab {
 						this.plugin.rebuildTrees();
 					})
 			);
+
+		// Per-button visibility for the tree-view header. A hidden button's action
+		// is still reachable from the command palette (bootstrap, cascade, undo…).
+		new Setting(containerEl)
+			.setName(t("setting.headerButtonsName"))
+			.setDesc(t("setting.headerButtonsDesc"))
+			.setHeading();
+		for (const id of HEADER_BUTTON_IDS) {
+			new Setting(containerEl)
+				.setName(t(`setting.hb.${id}`))
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.headerButtons[id])
+						.onChange(async (value) => {
+							this.plugin.settings.headerButtons[id] = value;
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+						})
+				);
+		}
 	}
 }
