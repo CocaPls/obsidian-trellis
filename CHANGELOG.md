@@ -6,7 +6,20 @@ development milestones; `0.1.0` is the first public release.
 > Note: `0.0.3` and `0.0.4` were developed in one working tree and landed in the
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
-> through `0.1.1`.
+> through `0.1.2`.
+
+## 0.1.3 — Separator migration hotfix
+
+- Fix separator batch-change producing mixed boundaries such as `S88_-Title`,
+  `S88-_Title`, or repeated variants like `S88_-_Title` when moving between
+  separators. The migration now treats any contiguous run of old/new separators
+  immediately next to the tagkey as boundary residue and normalizes it to the
+  new separator, while preserving separators inside the title.
+- Keep normal tag-to-filename sync suppressed while a separator migration owns
+  the rename pass, so follow-up rename/metadata events cannot re-process files
+  with the wrong live separator.
+- Record only successfully renamed files in the separator undo record.
+- Allow changing the separator even when the dry-run finds no affected files.
 
 ## 0.1.2 — Marketplace review cleanup
 

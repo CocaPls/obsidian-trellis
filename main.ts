@@ -160,6 +160,8 @@ export default class TrellisPlugin extends Plugin {
 	/** Files already warned about carrying multiple location tags (one note =
 	 *  one location). Cleared when a file returns to a single location tag. */
 	private multiWarned = new Set<string>();
+	/** Suppress normal filename sync while separator migration owns renames. */
+	private separatorMigrationRunning = false;
 
 	/** Cached note tree; null = stale, rebuilt on next sortedNoteTree(). */
 	private treeCache: NoteTreeNode[] | null = null;
@@ -412,6 +414,7 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Sync one file's location tag into its filename tagkey (one direction). */
 	private async syncFile(file: TFile) {
+		if (this.separatorMigrationRunning) return;
 		if (this.renaming.has(file.path)) return; // guard: our own rename echo
 
 		const cache = this.app.metadataCache.getFileCache(file);
@@ -822,6 +825,10 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const rows = this.previewSeparatorChange(newSep);
+		if (rows.length === 0) {
+			void this.applySeparatorChange(newSep, rows).finally(onDone);
+			return;
+		}
 		new SeparatorChangeModal(this.app, oldSep, newSep, rows, onDone, () =>
 			void this.applySeparatorChange(newSep, rows)
 		).open();
@@ -834,12 +841,10 @@ export default class TrellisPlugin extends Plugin {
 		rows: { path: string; oldName: string; newName: string }[]
 	) {
 		const oldSep = primarySeparator(this.settings.schema);
-		// Flip the setting first so one-directional sync now targets the new sep.
-		this.setPrimarySeparator(newSep);
-		await this.saveSettings();
 		const renames: SeparatorRename[] = [];
 		const total = rows.length;
 		const progress = new Notice(t("notice.sepProgress", { done: 0, total }), 0);
+		this.separatorMigrationRunning = true;
 		try {
 			for (let i = 0; i < rows.length; i++) {
 				const r = rows[i];
@@ -847,15 +852,17 @@ export default class TrellisPlugin extends Plugin {
 				if (file instanceof TFile) {
 					const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 					const newPath = normalizePath(`${dir}${r.newName}.${file.extension}`);
-					await this.renameGuarded(file, newPath); // own try/catch — bad file can't abort
-					renames.push({ path: newPath, oldBasename: r.oldName });
+					const renamed = await this.renameGuarded(file, newPath);
+					if (renamed) renames.push({ path: newPath, oldBasename: r.oldName });
 				}
 				if ((i + 1) % 25 === 0 || i + 1 === total) {
 					progress.setMessage(t("notice.sepProgress", { done: i + 1, total }));
 				}
 			}
 		} finally {
+			this.separatorMigrationRunning = false;
 			progress.hide();
+			this.setPrimarySeparator(newSep);
 			this.settings.lastSeparatorChange = { oldSep, newSep, renames };
 			await this.saveSettings();
 		}
@@ -987,16 +994,18 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Rename a file with the infinite-loop guard set, so our own rename's
 	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
-	private async renameGuarded(file: TFile, newPath: string) {
+	private async renameGuarded(file: TFile, newPath: string): Promise<boolean> {
 		// Capture the OLD path — renameFile mutates file.path to newPath in place.
 		const oldPath = file.path;
 		this.renaming.add(oldPath);
 		this.renaming.add(newPath);
 		try {
 			await this.app.fileManager.renameFile(file, newPath);
+			return true;
 		} catch (e) {
 			console.error("TRELLIS rename failed", e);
 			new Notice(t("notice.renameFailed", { name: file.basename }));
+			return false;
 		} finally {
 			this.renaming.delete(oldPath);
 			window.setTimeout(() => this.renaming.delete(newPath), 200);

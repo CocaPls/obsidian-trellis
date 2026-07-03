@@ -11,6 +11,7 @@ import {
 	assembleBasename,
 	syncedBasename,
 	separatorMigratedName,
+	extractTitleForSeparatorMigration,
 	extractTagkey,
 	extractTitle,
 	renameTagPath,
@@ -183,6 +184,60 @@ test("separatorMigratedName swaps the boundary separator, preserves the title", 
 	assert.equal(separatorMigratedName("S88B07_tree", "S88B07", oldS, newS), "S88B07-tree");
 	// tagkey-only file: nothing to change
 	assert.equal(separatorMigratedName("S88B07", "S88B07", oldS, newS), null);
+});
+
+test("separatorMigratedName repairs mixed prefix boundaries from partial migrations", () => {
+	const hyphen = schemaFromLegacy("trel", "-", "prefix");
+	const underscore = schemaFromLegacy("trel", "_", "prefix");
+	assert.equal(
+		extractTitleForSeparatorMigration("S88-TRELLIS", "S88", hyphen, underscore),
+		"TRELLIS"
+	);
+	assert.equal(separatorMigratedName("S88-TRELLIS", "S88", hyphen, underscore), "S88_TRELLIS");
+	assert.equal(
+		separatorMigratedName("S88_-TRELLIS", "S88", hyphen, underscore),
+		"S88_TRELLIS"
+	);
+	assert.equal(
+		separatorMigratedName("S88_-_TRELLIS", "S88", hyphen, underscore),
+		"S88_TRELLIS"
+	);
+	for (const name of [
+		"S88-_TRELLIS",
+		"S88-_-TRELLIS",
+		"S88__--__TRELLIS",
+		"S88--TRELLIS",
+		"S88__TRELLIS",
+	]) {
+		assert.equal(separatorMigratedName(name, "S88", hyphen, underscore), "S88_TRELLIS");
+	}
+});
+
+test("separatorMigratedName repairs mixed suffix boundaries from partial migrations", () => {
+	const hyphen = schemaFromLegacy("trel", "-", "suffix");
+	const underscore = schemaFromLegacy("trel", "_", "suffix");
+	assert.equal(
+		extractTitleForSeparatorMigration("TRELLIS-S88", "S88", hyphen, underscore),
+		"TRELLIS"
+	);
+	assert.equal(separatorMigratedName("TRELLIS-S88", "S88", hyphen, underscore), "TRELLIS_S88");
+	assert.equal(
+		separatorMigratedName("TRELLIS_-S88", "S88", hyphen, underscore),
+		"TRELLIS_S88"
+	);
+	assert.equal(
+		separatorMigratedName("TRELLIS_-_S88", "S88", hyphen, underscore),
+		"TRELLIS_S88"
+	);
+	for (const name of [
+		"TRELLIS-_S88",
+		"TRELLIS-_-S88",
+		"TRELLIS__--__S88",
+		"TRELLIS--S88",
+		"TRELLIS__S88",
+	]) {
+		assert.equal(separatorMigratedName(name, "S88", hyphen, underscore), "TRELLIS_S88");
+	}
 });
 
 test("separatorMigratedName preserves the NEW separator already inside the title", () => {

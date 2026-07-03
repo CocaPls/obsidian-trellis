@@ -291,6 +291,68 @@ export function syncedBasename(
 }
 
 /**
+ * Extract the title for a separator migration. This path knows both the old and
+ * new boundary separators, so it can repair a partial/mixed boundary like
+ * `S88_-Title` while moving `-` → `_`.
+ */
+export function extractTitleForSeparatorMigration(
+	basename: string,
+	tagkey: string,
+	oldSchema: TrellisSchema,
+	newSchema: TrellisSchema
+): string {
+	const oldSep = primarySeparator(oldSchema);
+	const newSep = primarySeparator(newSchema);
+	const stripLeadingBoundary = (value: string): string => {
+		let out = value;
+		let changed = true;
+		while (changed) {
+			changed = false;
+			for (const sep of [oldSep, newSep]) {
+				if (sep && out.startsWith(sep)) {
+					out = out.slice(sep.length);
+					changed = true;
+				}
+			}
+		}
+		return out;
+	};
+	const stripTrailingBoundary = (value: string): string => {
+		let out = value;
+		let changed = true;
+		while (changed) {
+			changed = false;
+			for (const sep of [oldSep, newSep]) {
+				if (sep && out.endsWith(sep)) {
+					out = out.slice(0, out.length - sep.length);
+					changed = true;
+				}
+			}
+		}
+		return out;
+	};
+
+	if (tagPosition(oldSchema) === "suffix") {
+		if (basename.endsWith(tagkey)) {
+			const head = basename.slice(0, basename.length - tagkey.length);
+			return stripTrailingBoundary(head);
+		}
+		let head: string;
+		{
+			const i = basename.lastIndexOf(oldSep);
+			head = i === -1 ? "" : basename.slice(0, i);
+		}
+		return head;
+	}
+
+	if (basename.startsWith(tagkey)) {
+		return stripLeadingBoundary(basename.slice(tagkey.length));
+	}
+	const i = basename.indexOf(oldSep);
+	return i === -1 ? "" : basename.slice(i + oldSep.length);
+}
+
+/**
  * Separator migration: re-emit a basename with a NEW separator, preserving the
  * title verbatim (including any occurrences of the new OR old separator inside
  * it). The tagkey boundary is found with the OLD separator (oldSchema), then the
@@ -305,7 +367,12 @@ export function separatorMigratedName(
 	oldSchema: TrellisSchema,
 	newSchema: TrellisSchema
 ): string | null {
-	const title = extractTitle(basename, tagkey, oldSchema); // old-sep boundary
+	const title = extractTitleForSeparatorMigration(
+		basename,
+		tagkey,
+		oldSchema,
+		newSchema
+	);
 	const rebuilt = assembleBasename(tagkey, title, newSchema); // new-sep emit
 	return rebuilt === basename ? null : rebuilt;
 }
