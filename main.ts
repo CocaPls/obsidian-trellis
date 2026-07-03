@@ -754,10 +754,21 @@ export default class TrellisPlugin extends Plugin {
 				if (file instanceof TFile) {
 					try {
 						await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+							const before =
+								typeof fm.tags === "string"
+									? fm.tags.split(/[,\s]+/).filter(Boolean)
+									: Array.isArray(fm.tags)
+										? fm.tags.filter((t): t is string => typeof t === "string")
+										: [];
 							const tags = normalizeTagList(fm.tags);
-							if (!tags.includes(r.tag)) fm.tags = [...tags, r.tag];
+							const added = !tags.includes(r.tag);
+							if (added) tags.push(r.tag);
+							const changed =
+								tags.length !== before.length ||
+								tags.some((tag, index) => tag !== before[index]);
+							if (changed) fm.tags = tags;
+							if (added) record.push({ path: r.path, tag: r.tag });
 						});
-						record.push({ path: r.path, tag: r.tag });
 					} catch (e) {
 						failed.push(r.path);
 						console.error("TRELLIS bootstrap skipped (frontmatter error)", r.path, e);

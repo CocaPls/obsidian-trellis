@@ -6,7 +6,15 @@ development milestones; `0.1.0` is the first public release.
 > Note: `0.0.3` and `0.0.4` were developed in one working tree and landed in the
 > `0.0.4` commit, but are tracked as separate logical versions here. Git tags
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
-> through `0.1.2`.
+> through `0.1.4`.
+
+## 0.1.4 — Frontmatter tag dedupe hotfix
+
+- Deduplicate exact repeated frontmatter tags while preserving tag order.
+- Let bootstrap normalize existing duplicate tag arrays even when the target
+  location tag is already present.
+- Record bootstrap undo entries only for tags actually added by that bootstrap
+  run, so cleanup-only normalization is not treated as newly added tags.
 
 ## 0.1.3 — Separator migration hotfix
 

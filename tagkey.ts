@@ -400,9 +400,13 @@ export function renameTagPath(
  * tags; non-strings are dropped.
  */
 export function normalizeTagList(raw: unknown): string[] {
-	if (typeof raw === "string") return raw.split(/[,\s]+/).filter(Boolean);
-	if (Array.isArray(raw)) return raw.filter((t): t is string => typeof t === "string");
-	return [];
+	const tags =
+		typeof raw === "string"
+			? raw.split(/[,\s]+/).filter(Boolean)
+			: Array.isArray(raw)
+				? raw.filter((t): t is string => typeof t === "string")
+				: [];
+	return [...new Set(tags)];
 }
 
 /**

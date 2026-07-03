@@ -284,7 +284,9 @@ test("renameTagPath respects boundaries (no partial-segment match)", () => {
 
 test("normalizeTagList handles string, array, and junk", () => {
 	assert.deepEqual(normalizeTagList(["trel/S88", "x"]), ["trel/S88", "x"]);
+	assert.deepEqual(normalizeTagList(["trel/S88", "x", "trel/S88"]), ["trel/S88", "x"]);
 	assert.deepEqual(normalizeTagList("trel/S88, x"), ["trel/S88", "x"]);
+	assert.deepEqual(normalizeTagList("trel/S88, x trel/S88"), ["trel/S88", "x"]);
 	assert.deepEqual(normalizeTagList("trel/S88"), ["trel/S88"]);
 	assert.deepEqual(normalizeTagList(undefined), []);
 	assert.deepEqual(normalizeTagList([1, "ok", null]), ["ok"]);
