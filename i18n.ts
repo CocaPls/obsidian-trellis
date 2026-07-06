@@ -65,6 +65,7 @@ const EN: Record<string, string> = {
 	"notice.treeOff": "tree view is off (enable it in settings)",
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "rename failed for {name}",
+	"notice.renameCollision": "skipped {name}: target \"{target}\" already exists",
 	"notice.noTagkey": "could not derive tagkey (check namespace)",
 	"notice.exists": '"{base}" already exists',
 	"notice.createFailed": 'failed to create "{base}"',
@@ -82,6 +83,13 @@ const EN: Record<string, string> = {
 	"notice.parentRequired": "parent is required",
 	"notice.segmentRequired": "segment is required",
 	"notice.nsEmpty": "namespace cannot be empty",
+	"notice.nsBadChar":
+		"namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
+	"notice.nsApplied": "namespace set to '{ns}'",
+	"setting.apply": "Apply",
+	"setting.section.general": "General",
+	"setting.section.scheme": "Filename scheme",
+	"setting.section.tree": "Sidebar tree view",
 	"notice.sepEmpty": "separator cannot be empty",
 	"notice.sepBadChar":
 		"separator cannot contain letters, digits, '/', or filename-illegal characters (\\ : * ? \" < > |)",
@@ -206,6 +214,48 @@ const EN: Record<string, string> = {
 	"modal.bootstrapSelect.tagged": "✓ tagged",
 	"ph.bootstrapSearch": "Search notes by name…",
 	"notice.bootstrapNoSelection": "nothing selected",
+	// bulk progress modal (0.2.0)
+	"bulk.pause": "Pause",
+	"bulk.resume": "Resume",
+	"bulk.cancel": "Cancel",
+	"bulk.elapsed": "{sec}s elapsed",
+	"bulk.errors": "{n} error(s)",
+	"bulk.slowHint":
+		"Slow? Usually many targets or slow file I/O (e.g. a cloud-synced vault).",
+	"bulk.title.bootstrap": "Applying bootstrap",
+	"bulk.title.separator": "Changing separator",
+	"bulk.progress": "{done} / {total}",
+	"bulk.done": "Done",
+	"bulk.cancelledLabel": "Cancelled",
+	"bulk.ok": "OK",
+	"bulk.summary": "{done} processed · {skipped} skipped",
+	"bulk.skippedTitle": "Skipped notes ({n})",
+	"bulk.skippedDesc":
+		"Skipped due to a frontmatter parse error (e.g. duplicate YAML keys). Fix these by hand, then run it again.",
+	"notice.bootstrapCancelled":
+		'bootstrap cancelled — {n} file(s) already tagged (undo via "Undo last bootstrap")',
+	"notice.sepCancelled":
+		'separator change cancelled — {n} file(s) already renamed (undo via "Undo last separator change")',
+	// advanced multi-key slot editor (0.2.0, experimental)
+	"setting.advName": "Advanced — multi-key slots (experimental)",
+	"setting.advDesc":
+		"Edit the filename as an array of key slots. Each extra tag-key slot syncs from its own tag namespace; the name slot stays free. Tree view, bootstrap, cascade and separator migration still follow tag slot 1. Files adopt the new schema on their next tag change — no batch rename happens here.",
+	"setting.advSlots": "Slots",
+	"adv.slot": "Slot {n}",
+	"adv.roleTag": "Tag key",
+	"adv.roleName": "Name key (free title)",
+	"adv.nsPh": "namespace, e.g. trel",
+	"adv.sep": "Separator {n} (between slot {a} and slot {b})",
+	"adv.addTag": "Add tag-key slot",
+	"adv.addName": "Add name-key slot",
+	"adv.moveUp": "Move up",
+	"adv.moveDown": "Move down",
+	"adv.remove": "Remove slot",
+	"notice.advLastTag": "at least one tag-key slot is required",
+	"notice.advOneName": "only one name-key slot is supported",
+	"notice.advNsEmpty": "tag slot namespace cannot be empty",
+	"notice.advNsDup": "tag slot namespaces must be distinct",
+	"notice.advReset": "schema reset to single-key (tag + name)",
 };
 
 const KO: Record<string, string> = {
@@ -224,6 +274,7 @@ const KO: Record<string, string> = {
 	"notice.treeOff": "트리 뷰가 꺼져 있습니다 (설정에서 켜세요)",
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "{name} 이름 변경 실패",
+	"notice.renameCollision": "{name} 건너뜀: 대상 \"{target}\" 이(가) 이미 있습니다",
 	"notice.noTagkey": "태그키를 도출할 수 없습니다 (네임스페이스 확인)",
 	"notice.exists": '"{base}" 이(가) 이미 있습니다',
 	"notice.createFailed": '"{base}" 생성 실패',
@@ -241,6 +292,13 @@ const KO: Record<string, string> = {
 	"notice.parentRequired": "부모가 필요합니다",
 	"notice.segmentRequired": "세그먼트가 필요합니다",
 	"notice.nsEmpty": "네임스페이스는 비울 수 없습니다",
+	"notice.nsBadChar":
+		"네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
+	"notice.nsApplied": "네임스페이스를 '{ns}' 로 설정했습니다",
+	"setting.apply": "적용",
+	"setting.section.general": "일반",
+	"setting.section.scheme": "파일명 규칙",
+	"setting.section.tree": "사이드바 트리 뷰",
 	"notice.sepEmpty": "구분자는 비울 수 없습니다",
 	"notice.sepBadChar":
 		"구분자에 영문·숫자·'/'·파일명 금지문자(\\ : * ? \" < > |)는 쓸 수 없습니다",
@@ -363,6 +421,48 @@ const KO: Record<string, string> = {
 	"modal.bootstrapSelect.tagged": "✓ 태그됨",
 	"ph.bootstrapSearch": "이름으로 노트 검색…",
 	"notice.bootstrapNoSelection": "선택된 항목이 없습니다",
+	// bulk progress modal (0.2.0)
+	"bulk.pause": "일시정지",
+	"bulk.resume": "재개",
+	"bulk.cancel": "중단",
+	"bulk.elapsed": "{sec}초 경과",
+	"bulk.errors": "오류 {n}건",
+	"bulk.slowHint":
+		"느린가요? 보통 대상 수가 많거나 파일 I/O가 느린 경우입니다 (예: 클라우드 동기화 볼트).",
+	"bulk.title.bootstrap": "부트스트랩 적용 중",
+	"bulk.title.separator": "구분자 변경 중",
+	"bulk.progress": "{done} / {total}",
+	"bulk.done": "완료",
+	"bulk.cancelledLabel": "중단됨",
+	"bulk.ok": "확인",
+	"bulk.summary": "{done}개 처리 · {skipped}개 건너뜀",
+	"bulk.skippedTitle": "건너뛴 노트 ({n})",
+	"bulk.skippedDesc":
+		"frontmatter 파싱 오류(예: 중복 YAML 키)로 건너뜀. 직접 고친 뒤 다시 실행하세요.",
+	"notice.bootstrapCancelled":
+		'부트스트랩 중단 — {n}개 파일은 이미 태그됨 ("마지막 부트스트랩 되돌리기"로 취소 가능)',
+	"notice.sepCancelled":
+		'구분자 변경 중단 — {n}개 파일은 이미 변경됨 ("마지막 구분자 변경 되돌리기"로 취소 가능)',
+	// advanced multi-key slot editor (0.2.0, experimental)
+	"setting.advName": "고급 — 멀티키 슬롯 (시험 기능)",
+	"setting.advDesc":
+		"파일명을 키 슬롯 배열로 편집합니다. 추가한 태그키 슬롯은 각자의 태그 네임스페이스에서 동기화되고, 네임키 슬롯은 자유 제목으로 남습니다. 트리 뷰·부트스트랩·cascade·구분자 일괄변경은 여전히 1번 태그키 기준입니다. 기존 파일은 다음 태그 변경 때 새 스키마로 맞춰집니다 — 여기서 일괄 변경은 일어나지 않습니다.",
+	"setting.advSlots": "슬롯",
+	"adv.slot": "슬롯 {n}",
+	"adv.roleTag": "태그키",
+	"adv.roleName": "네임키 (자유 제목)",
+	"adv.nsPh": "네임스페이스, 예: trel",
+	"adv.sep": "구분자 {n} (슬롯 {a}·{b} 사이)",
+	"adv.addTag": "태그키 슬롯 추가",
+	"adv.addName": "네임키 슬롯 추가",
+	"adv.moveUp": "위로",
+	"adv.moveDown": "아래로",
+	"adv.remove": "슬롯 삭제",
+	"notice.advLastTag": "태그키 슬롯은 최소 1개 필요합니다",
+	"notice.advOneName": "네임키 슬롯은 1개까지만 지원합니다",
+	"notice.advNsEmpty": "태그 슬롯 네임스페이스는 비울 수 없습니다",
+	"notice.advNsDup": "태그 슬롯 네임스페이스는 서로 달라야 합니다",
+	"notice.advReset": "스키마를 단일키(태그+네임)로 재설정했습니다",
 };
 
 const STRINGS: Record<Lang, Record<string, string>> = { en: EN, ko: KO };

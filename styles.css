@@ -156,3 +156,40 @@
 	justify-content: flex-end;
 	margin-top: 1em;
 }
+
+/* Bulk-pass progress modal (bootstrap apply / separator change). */
+.trellis-progress-modal .trellis-progress-bar {
+	height: 8px;
+	border-radius: 4px;
+	background: var(--background-modifier-border);
+	overflow: hidden;
+	margin: 0.6em 0 0.4em;
+}
+
+.trellis-progress-modal .trellis-progress-bar-fill {
+	height: 100%;
+	width: 0%;
+	background: var(--interactive-accent);
+	transition: width 0.15s ease;
+}
+
+.trellis-progress-modal .trellis-progress-bar-fill.is-cancelled {
+	background: var(--text-error);
+}
+
+.trellis-progress-modal .trellis-progress-count {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-progress-modal .trellis-progress-meta,
+.trellis-progress-modal .trellis-progress-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-top: 0.2em;
+	min-height: 1.1em;
+}
+
+.trellis-progress-modal .trellis-progress-skipped {
+	margin: 0.6em 0;
+}

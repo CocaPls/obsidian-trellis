@@ -8,6 +8,61 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
+## 0.2.0 — Multi-key & bulk UX (unreleased, experimental)
+
+- **Multi-key slots (advanced mode, experimental)** — a settings toggle exposes
+  the slot editor over the 0.0.6 schema foundation: add/remove/reorder tag-key
+  and name-key slots, per-slot tag namespaces, and per-gap separators. Each tag
+  slot syncs from its own namespace; the (single) name slot stays free. Tree
+  view, bootstrap, cascade and separator migration still follow tag slot 1.
+  The battle-tested 2-slot single-key engine remains the default path.
+- **Bulk pass progress modal** — bootstrap apply and separator migration now
+  show a small modal with a live count + progress bar, Pause/Resume and Cancel
+  buttons, elapsed time and error count (plus a slow-run hint after 10s), and a
+  Done state that lists the notes it had to skip so they can be reviewed. This
+  replaces the old progress Notice (which poked the unofficial `Notice.noticeEl`).
+- **Quieter bulk passes** — per-file rename notices are suppressed while a bulk
+  pass (bootstrap / separator change / cascade) runs, so the top-right no longer
+  floods; the modal shows aggregate status instead.
+- **Explicit Apply in settings** — the namespace and separator settings are now
+  staged in their field and committed by an Apply button (separator still opens
+  its confirm dialog), instead of applying on every keystroke / on blur.
+- **Settings tab grouped into sections** — General, Filename scheme, and Sidebar
+  tree view headings for a cleaner top-to-bottom layout.
+- **No-separator title protection** — assigning a tag to a file whose name has
+  no separator no longer overwrites the name: if the basename doesn't look like
+  a bare tagkey (character-class runs that round-trip), the tagkey is prepended
+  and the name is preserved (`trellisupgradecheck` → `ZZ99-trellisupgradecheck`
+  instead of `ZZ99`). Names that DO look like a stale tagkey (index notes,
+  e.g. `S88`) are still replaced.
+
+Hardening from a multi-angle code review, before any real-vault use:
+
+- **Multi-key name extraction is boundary-aware** — a tag slot is consumed only
+  when its value sits on a separator boundary, so a title that coincidentally
+  ends/begins with a tag slot's text (`S88B07-ideaP09Z01`) is preserved whole
+  instead of being truncated.
+- **Multi-key tagkey-only filenames stay intact** — a bare index note whose name
+  is exactly its tagkey (`BT01`, no separator, no title) no longer folds the
+  tagkey into the name slot and duplicates it (`BT01-BT01`) under a multi-key
+  schema. This mirrors the single-key no-separator protection, which the
+  multi-key path was missing (found by dogfooding a bootstrap in a dummy vault).
+- **Separator-change cancel rolls back cleanly** — cancelling a separator
+  migration now reverts the renames already made and does NOT commit the new
+  separator, so the vault and the setting can't end up half-applied. Undo keeps
+  its record when a restore fails, so it can be retried, and respects each
+  rename's success instead of assuming it worked.
+- **Rename collision guard** — sync and separator migration refuse to rename a
+  file onto a different existing file, matching the check new-note creation
+  already had.
+- **Undo error isolation** — bootstrap and dedup undo now isolate per-file
+  frontmatter errors (like apply already did), so one malformed YAML file can't
+  abort the whole undo.
+- **Namespace validation** — tag namespaces are restricted to letters, digits,
+  `-` and `_`, rejecting `/`, whitespace, control characters and YAML/tag
+  metacharacters that could corrupt tag matching or inject into new-note
+  frontmatter.
+
 ## 0.1.4 — Frontmatter tag dedupe hotfix
 
 - Deduplicate exact repeated frontmatter tags while preserving tag order.

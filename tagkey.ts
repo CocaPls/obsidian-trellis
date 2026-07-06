@@ -184,10 +184,21 @@ export function parentTagPath(tagPath: string): string {
  *    tag that would silently rename the file later.
  */
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
-	const segs = tagkey.match(/[A-Za-z]+|[0-9]+/g);
-	if (!segs || segs.length < 2) return null; // need a class transition
-	if (segs.join("") !== tagkey) return null; // must round-trip exactly
+	if (!looksLikeTagkey(tagkey)) return null;
+	const segs = tagkey.match(/[A-Za-z]+|[0-9]+/g)!;
 	return `${primaryNamespace(schema)}/${segs.join("/")}`;
+}
+
+/**
+ * Whether a string plausibly IS a bare tagkey: it decomposes into 2+
+ * character-class runs (letters/digits) that round-trip exactly — the same
+ * guards bootstrap uses. Used to tell a tagkey-only index note ("S88") apart
+ * from a free title ("trellisupgradecheck") when a filename has no separator,
+ * so sync prepends the tagkey instead of overwriting a real title.
+ */
+export function looksLikeTagkey(s: string): boolean {
+	const segs = s.match(/[A-Za-z]+|[0-9]+/g);
+	return segs !== null && segs.length >= 2 && segs.join("") === s;
 }
 
 /**
@@ -228,6 +239,11 @@ export function extractTagkey(basename: string, schema: TrellisSchema): string {
  * (e.g. "S99B07tree-idea" → title "tree-idea"). Otherwise the tagkey slot was
  * itself altered, so fall back to the separator-delimited slot. One boundary
  * separator is stripped.
+ *
+ * No-separator, no-tagkey-match basenames (0.2.0 data-safety rule): the whole
+ * basename is either a stale tagkey (an index note — replace it) or a free
+ * title (keep it — the tagkey is PREPENDED on reassembly, never overwriting a
+ * real title). looksLikeTagkey() is the tiebreaker.
  */
 export function extractTitle(
 	basename: string,
@@ -241,7 +257,8 @@ export function extractTitle(
 			head = basename.slice(0, basename.length - tagkey.length);
 		} else {
 			const i = basename.lastIndexOf(sep);
-			head = i === -1 ? "" : basename.slice(0, i + sep.length);
+			if (i === -1) return looksLikeTagkey(basename) ? "" : basename;
+			head = basename.slice(0, i + sep.length);
 		}
 		return head.endsWith(sep) ? head.slice(0, head.length - sep.length) : head;
 	}
@@ -250,7 +267,8 @@ export function extractTitle(
 		rest = basename.slice(tagkey.length);
 	} else {
 		const i = basename.indexOf(sep);
-		rest = i === -1 ? "" : basename.slice(i);
+		if (i === -1) return looksLikeTagkey(basename) ? "" : basename;
+		rest = basename.slice(i);
 	}
 	return rest.startsWith(sep) ? rest.slice(sep.length) : rest;
 }
@@ -287,6 +305,182 @@ export function syncedBasename(
 ): string | null {
 	const title = extractTitle(basename, tagkey, schema);
 	const rebuilt = assembleBasename(tagkey, title, schema);
+	return rebuilt === basename ? null : rebuilt;
+}
+
+// --- Multi-key parsing (0.2.0 advanced mode, experimental) ------------------
+// The general-form engine over the slot array: each tag slot syncs from its
+// OWN namespace, at most one name slot holds the free title, and separators
+// are consumed positionally (B09 §4). The 2-slot single-key path above stays
+// the default; these run only when the schema is actually multi-key.
+
+/** True when the schema needs the multi-key path: more than one tag slot, or
+ *  any shape other than the battle-tested 2-slot [tag, name] pair. */
+export function isMultiKey(schema: TrellisSchema): boolean {
+	const tagCount = schema.slots.filter((s) => s.role === "tag").length;
+	return tagCount !== 1 || schema.slots.length !== 2;
+}
+
+/**
+ * Whether a tag namespace is safe to use: a non-empty run of letters, digits,
+ * hyphen or underscore. This excludes "/", whitespace, control characters and
+ * tag/YAML metacharacters (",", "[", "]", "#", quotes, newlines), so a namespace
+ * can never break tag matching (`#ns/…`) or inject into the `tags: [ns/…]`
+ * frontmatter that new-note creation writes. Namespaces are the tag ROOT only
+ * (the hierarchy comes from the tag path), so this allowlist is not restrictive
+ * in practice (e.g. "trel", "tree", "proj").
+ */
+export function isValidNamespace(ns: string): boolean {
+	return /^[A-Za-z0-9_-]+$/.test(ns);
+}
+
+/** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
+export function tagToTagkeyNs(tag: string, namespace: string): string | null {
+	const prefix = `#${namespace}/`;
+	if (!tag.startsWith(prefix)) return null;
+	const path = tag.slice(prefix.length);
+	if (path.length === 0) return null;
+	return path.split("/").join("");
+}
+
+/** First location tag under a namespace → its tagkey, or null. */
+export function pickTagkeyNs(tags: string[], namespace: string): string | null {
+	for (const t of tags) {
+		const k = tagToTagkeyNs(t, namespace);
+		if (k !== null) return k;
+	}
+	return null;
+}
+
+/**
+ * Resolve each slot's tagkey from the note's tags: tag slots pick the first
+ * tag under their own namespace (null when the note has none — that slot is
+ * simply omitted from the filename); name slots are always null here (their
+ * value comes from the basename, see extractNameMulti).
+ */
+export function slotTagkeys(
+	tags: string[],
+	schema: TrellisSchema
+): (string | null)[] {
+	return schema.slots.map((s) =>
+		s.role === "tag" && s.namespace ? pickTagkeyNs(tags, s.namespace) : null
+	);
+}
+
+/**
+ * Assemble a basename from per-slot values (null/"" = slot omitted). The
+ * separator emitted before a slot is the one declared before it in the schema
+ * (separators[i-1]); omitted slots drop their separator with them.
+ */
+export function assembleBasenameMulti(
+	values: (string | null)[],
+	schema: TrellisSchema
+): string {
+	let out = "";
+	let any = false;
+	for (let i = 0; i < schema.slots.length; i++) {
+		const v = values[i];
+		if (v === null || v === undefined || v === "") continue;
+		if (any) out += schema.separators[i - 1] ?? primarySeparator(schema);
+		out += v;
+		any = true;
+	}
+	return out;
+}
+
+/** Strip ONE leading boundary separator (whichever schema separator matches). */
+function stripOneLeadingSep(s: string, schema: TrellisSchema): string {
+	for (const sep of schema.separators) {
+		if (sep && s.startsWith(sep)) return s.slice(sep.length);
+	}
+	return s;
+}
+
+/** Strip ONE trailing boundary separator (whichever schema separator matches). */
+function stripOneTrailingSep(s: string, schema: TrellisSchema): string {
+	for (const sep of schema.separators) {
+		if (sep && s.endsWith(sep)) return s.slice(0, s.length - sep.length);
+	}
+	return s;
+}
+
+/**
+ * Extract the (single) name-slot value from a basename by anchoring on the
+ * KNOWN tag-slot values: slots left of the name slot are consumed from the
+ * left, slots right of it from the right; the remainder is the name. A tag
+ * slot whose value doesn't match (user damaged it) falls back to the
+ * positional separator, mirroring extractTitle — reassembly restores it.
+ * Returns "" when the schema has no name slot.
+ */
+export function extractNameMulti(
+	basename: string,
+	tagkeys: (string | null)[],
+	schema: TrellisSchema
+): string {
+	const nameIdx = schema.slots.findIndex((s) => s.role === "name");
+	if (nameIdx === -1) return "";
+	let rest = basename;
+	// Left side: slots 0 .. nameIdx-1, consumed left to right. A tag slot is
+	// consumed ONLY when its value is followed by the slot's separator — a bare
+	// `startsWith(v)` would strip a title that merely happens to begin with the
+	// tagkey text (a middle slot has no positional anchor of its own). Without a
+	// clean boundary, fall back to the positional separator, else leave `rest`
+	// whole so a real title is never truncated on a coincidental match.
+	for (let i = 0; i < nameIdx; i++) {
+		const v = tagkeys[i];
+		if (!v) continue; // omitted slot — nothing in the filename for it
+		const sepAfter = schema.separators[i] ?? "";
+		if (rest === v) {
+			// The tag value IS the entire remainder: a tagkey-only filename (an
+			// index note, no title). Consume it so the name is empty — never fold
+			// the tagkey into the name (which would duplicate it as "BT01-BT01").
+			rest = "";
+		} else if (sepAfter && rest.startsWith(v + sepAfter)) {
+			rest = rest.slice(v.length); // sepAfter stripped just below
+		} else {
+			const j = sepAfter ? rest.indexOf(sepAfter) : -1;
+			rest = j === -1 ? rest : rest.slice(j);
+		}
+		rest = stripOneLeadingSep(rest, schema);
+	}
+	// Right side: slots nameIdx+1 .. end, consumed right to left. Symmetric
+	// boundary rule: consume the tagkey only with its leading separator (or when
+	// it is the whole remainder — a tagkey-only filename).
+	for (let i = schema.slots.length - 1; i > nameIdx; i--) {
+		const v = tagkeys[i];
+		if (!v) continue;
+		const sepBefore = schema.separators[i - 1] ?? "";
+		if (rest === v) {
+			rest = "";
+		} else if (sepBefore && rest.endsWith(sepBefore + v)) {
+			rest = rest.slice(0, rest.length - sepBefore.length - v.length);
+		} else {
+			const j = sepBefore ? rest.lastIndexOf(sepBefore) : -1;
+			if (j !== -1) rest = rest.slice(0, j);
+		}
+		rest = stripOneTrailingSep(rest, schema);
+	}
+	return rest;
+}
+
+/**
+ * Multi-key counterpart of syncedBasename: resolve every tag slot from the
+ * note's tags, keep the name slot from the current basename, reassemble, and
+ * compare. Returns null when no tag slot resolved (never touch the file) or
+ * when the basename is already in sync.
+ */
+export function syncedBasenameMulti(
+	basename: string,
+	tags: string[],
+	schema: TrellisSchema
+): string | null {
+	const keys = slotTagkeys(tags, schema);
+	const hasTag = schema.slots.some((s, i) => s.role === "tag" && keys[i]);
+	if (!hasTag) return null;
+	const name = extractNameMulti(basename, keys, schema);
+	const values = schema.slots.map((s, i) => (s.role === "name" ? name : keys[i]));
+	const rebuilt = assembleBasenameMulti(values, schema);
+	if (rebuilt === "") return null;
 	return rebuilt === basename ? null : rebuilt;
 }
 

@@ -32,6 +32,9 @@ import {
 	tagkeyToTagPath,
 	assembleBasename,
 	separatorMigratedName,
+	isMultiKey,
+	syncedBasenameMulti,
+	isValidNamespace,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -50,6 +53,7 @@ import {
 	BootstrapPreviewModal,
 	BootstrapErrorsModal,
 	SeparatorChangeModal,
+	BulkProgressModal,
 } from "./modals";
 
 type SortKey = "tagkey" | "mtime" | "ctime";
@@ -106,6 +110,8 @@ interface DedupRecord {
 interface TrellisSettings {
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
+	/** Advanced mode (0.2.0, experimental): expose the multi-key slot editor. */
+	advancedMode: boolean;
 	treeViewEnabled: boolean;
 	/** Custom tab title for the tree view; "" = the localized default. */
 	treeViewName: string;
@@ -125,6 +131,7 @@ interface TrellisSettings {
 
 const DEFAULT_SETTINGS: TrellisSettings = {
 	schema: defaultSchema(),
+	advancedMode: false,
 	treeViewEnabled: true,
 	treeViewName: "",
 	headerButtons: {
@@ -162,6 +169,10 @@ export default class TrellisPlugin extends Plugin {
 	private multiWarned = new Set<string>();
 	/** Suppress normal filename sync while separator migration owns renames. */
 	private separatorMigrationRunning = false;
+	/** A bulk pass (bootstrap / separator change / cascade) is running: suppress
+	 *  per-file success/failure notices so the top-right doesn't flood — the
+	 *  progress modal shows aggregate status instead. */
+	private bulkActive = false;
 
 	/** Cached note tree; null = stale, rebuilt on next sortedNoteTree(). */
 	private treeCache: NoteTreeNode[] | null = null;
@@ -440,14 +451,33 @@ export default class TrellisPlugin extends Plugin {
 			this.multiWarned.delete(file.path);
 		}
 
-		const tagkey = pickTagkey(tags, this.settings.schema);
-		if (tagkey === null) return; // no location tag → never touch the file
-
-		const newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
-		if (newBasename === null) return; // already in sync
+		// Multi-key schema (advanced, experimental): every tag slot resolves from
+		// its own namespace; the 2-slot single-key path stays the default.
+		let newBasename: string | null;
+		if (isMultiKey(this.settings.schema)) {
+			newBasename = syncedBasenameMulti(file.basename, tags, this.settings.schema);
+		} else {
+			const tagkey = pickTagkey(tags, this.settings.schema);
+			if (tagkey === null) return; // no location tag → never touch the file
+			newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
+		}
+		if (newBasename === null) return; // already in sync (or no tag at all)
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
+
+		// Collision guard: never rename onto an existing DIFFERENT file — that
+		// would clobber the target (or throw). Warn once and leave both files
+		// alone; the user resolves the name clash by hand.
+		const existing = this.app.vault.getAbstractFileByPath(newPath);
+		if (existing && existing !== file) {
+			if (!this.multiWarned.has(file.path)) {
+				this.multiWarned.add(file.path);
+				new Notice(t("notice.renameCollision", { name: file.basename, target: newBasename }));
+				console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
+			}
+			return;
+		}
 
 		// Capture the OLD path first — renameFile mutates file.path to newPath
 		// in place, so `file.path` in finally would otherwise be the new path.
@@ -457,7 +487,9 @@ export default class TrellisPlugin extends Plugin {
 		try {
 			// renameFile = same path as a manual rename → wikilinks auto-update.
 			await this.app.fileManager.renameFile(file, newPath);
-			new Notice(t("notice.renamed", { from: file.basename, to: newBasename }));
+			if (!this.bulkActive) {
+				new Notice(t("notice.renamed", { from: file.basename, to: newBasename }));
+			}
 		} catch (e) {
 			console.error("TRELLIS rename failed", e);
 			new Notice(t("notice.renameFailed", { name: file.basename }));
@@ -681,25 +713,32 @@ export default class TrellisPlugin extends Plugin {
 		const files = this.app.vault.getMarkdownFiles();
 		let retagged = 0;
 		const failed: string[] = [];
-		for (const file of files) {
-			let touched = false;
-			try {
-				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-					const tags = normalizeTagList(fm.tags);
-					if (tags.length === 0) return;
-					const next = tags.map((t) => renameTagPath(t, from, to) ?? t);
-					if (next.some((t, i) => t !== tags[i])) {
-						fm.tags = next;
-						touched = true;
-					}
-				});
-			} catch (e) {
-				// A malformed YAML file must not abort the whole cascade.
-				console.error("TRELLIS cascade skipped (frontmatter error)", file.path, e);
-				failed.push(file.basename);
-				continue;
+		// Suppress per-file rename notices: the tag edits below drive many syncFile
+		// renames, which would otherwise flood the top-right one Notice per file.
+		this.bulkActive = true;
+		try {
+			for (const file of files) {
+				let touched = false;
+				try {
+					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+						const tags = normalizeTagList(fm.tags);
+						if (tags.length === 0) return;
+						const next = tags.map((t) => renameTagPath(t, from, to) ?? t);
+						if (next.some((t, i) => t !== tags[i])) {
+							fm.tags = next;
+							touched = true;
+						}
+					});
+				} catch (e) {
+					// A malformed YAML file must not abort the whole cascade.
+					console.error("TRELLIS cascade skipped (frontmatter error)", file.path, e);
+					failed.push(file.basename);
+					continue;
+				}
+				if (touched) retagged++;
 			}
-			if (touched) retagged++;
+		} finally {
+			this.bulkActive = false;
 		}
 		new Notice(
 			retagged > 0
@@ -739,16 +778,20 @@ export default class TrellisPlugin extends Plugin {
 	 *
 	 *  Robust against a single bad file: a frontmatter parse error (e.g. a file
 	 *  with duplicate YAML keys) is caught per-file and collected, so it can
-	 *  never abort the whole pass. A live progress Notice tracks the run, and the
-	 *  undo record is saved in `finally` so even an interrupted pass stays
-	 *  undoable. */
+	 *  never abort the whole pass. A progress modal (pause / cancel + live count)
+	 *  tracks the run, and the undo record is saved in `finally` so even an
+	 *  interrupted pass stays undoable; the modal's Done state lists the files it
+	 *  had to skip. */
 	private async applyBootstrap(assign: { path: string; tag: string }[]) {
 		const record: BootstrapRecord[] = [];
 		const failed: string[] = [];
 		const total = assign.length;
-		const progress = new Notice(t("notice.bootstrapProgress", { done: 0, total }), 0);
+		const progress = new BulkProgressModal(this.app, t("bulk.title.bootstrap"));
+		progress.open();
+		this.bulkActive = true;
 		try {
 			for (let i = 0; i < assign.length; i++) {
+				if (!(await progress.gate())) break; // cancelled — keep what's written
 				const r = assign[i];
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (file instanceof TFile) {
@@ -774,22 +817,15 @@ export default class TrellisPlugin extends Plugin {
 						console.error("TRELLIS bootstrap skipped (frontmatter error)", r.path, e);
 					}
 				}
-				if ((i + 1) % 25 === 0 || i + 1 === total) {
-					progress.setMessage(t("notice.bootstrapProgress", { done: i + 1, total }));
-				}
+				progress.report(i + 1, total, failed.length);
 			}
 		} finally {
-			progress.hide();
+			this.bulkActive = false;
 			// Save what we managed to write even if the loop threw — keeps undo intact.
 			this.settings.lastBootstrap = record;
 			await this.saveSettings();
+			progress.finish({ processed: record.length, skipped: failed });
 		}
-		new Notice(
-			failed.length
-				? t("notice.bootstrappedWithErrors", { n: record.length, failed: failed.length })
-				: t("notice.bootstrapped", { n: record.length })
-		);
-		if (failed.length) new BootstrapErrorsModal(this.app, failed).open();
 	}
 
 	// --- Separator batch change (v0.0.7) -----------------------------------
@@ -853,35 +889,80 @@ export default class TrellisPlugin extends Plugin {
 	) {
 		const oldSep = primarySeparator(this.settings.schema);
 		const renames: SeparatorRename[] = [];
+		const failedNames: string[] = [];
 		const total = rows.length;
-		const progress = new Notice(t("notice.sepProgress", { done: 0, total }), 0);
+		// No files to rename → just flip the setting, no modal needed.
+		const progress = total > 0 ? new BulkProgressModal(this.app, t("bulk.title.separator")) : null;
+		progress?.open();
 		this.separatorMigrationRunning = true;
+		this.bulkActive = true;
 		try {
 			for (let i = 0; i < rows.length; i++) {
+				if (progress && !(await progress.gate())) break; // cancelled — keep renames so far
 				const r = rows[i];
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (file instanceof TFile) {
 					const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 					const newPath = normalizePath(`${dir}${r.newName}.${file.extension}`);
-					const renamed = await this.renameGuarded(file, newPath);
-					if (renamed) renames.push({ path: newPath, oldBasename: r.oldName });
+					if (await this.renameGuarded(file, newPath)) {
+						renames.push({ path: newPath, oldBasename: r.oldName });
+					} else {
+						failedNames.push(r.oldName);
+					}
 				}
-				if ((i + 1) % 25 === 0 || i + 1 === total) {
-					progress.setMessage(t("notice.sepProgress", { done: i + 1, total }));
-				}
+				progress?.report(i + 1, total, failedNames.length);
 			}
 		} finally {
-			this.separatorMigrationRunning = false;
-			progress.hide();
-			this.setPrimarySeparator(newSep);
-			this.settings.lastSeparatorChange = { oldSep, newSep, renames };
-			await this.saveSettings();
+			this.bulkActive = false;
+			if (progress?.wasCancelled) {
+				// Cancel = clean rollback: undo the renames done so far and DON'T
+				// commit the new separator, so the vault + setting stay consistent
+				// (no old/new filenames coexisting under a half-applied setting).
+				const { undone, failed: revertFailed } = await this.revertSeparatorRenames(renames);
+				this.separatorMigrationRunning = false;
+				this.settings.lastSeparatorChange =
+					revertFailed > 0 ? { oldSep, newSep, renames } : undefined;
+				await this.saveSettings();
+				this.rebuildTrees();
+				progress.finish({ processed: undone, skipped: failedNames });
+			} else {
+				this.separatorMigrationRunning = false;
+				this.setPrimarySeparator(newSep);
+				this.settings.lastSeparatorChange =
+					renames.length > 0 ? { oldSep, newSep, renames } : undefined;
+				await this.saveSettings();
+				this.rebuildTrees();
+				if (progress) progress.finish({ processed: renames.length, skipped: failedNames });
+				else new Notice(t("notice.sepChanged", { n: renames.length, from: oldSep, to: newSep }));
+			}
 		}
-		this.rebuildTrees();
-		new Notice(t("notice.sepChanged", { n: renames.length, from: oldSep, to: newSep }));
 	}
 
-	/** Undo the last separator change: restore the setting AND each filename. */
+	/** Rename each recorded file back to its pre-change basename (link-safe).
+	 *  Skips a file whose target already exists. Returns how many were restored
+	 *  and how many failed, so callers can decide whether to keep the record. */
+	private async revertSeparatorRenames(
+		renames: SeparatorRename[]
+	): Promise<{ undone: number; failed: number }> {
+		let undone = 0;
+		let failed = 0;
+		for (const r of renames) {
+			const file = this.app.vault.getAbstractFileByPath(r.path);
+			if (!(file instanceof TFile)) {
+				failed++;
+				continue;
+			}
+			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+			const newPath = normalizePath(`${dir}${r.oldBasename}.${file.extension}`);
+			if (await this.renameGuarded(file, newPath)) undone++;
+			else failed++;
+		}
+		return { undone, failed };
+	}
+
+	/** Undo the last separator change: restore the setting AND each filename.
+	 *  Keeps the undo record if any file failed to restore, so it can be retried,
+	 *  and only clears it once every recorded rename is reverted. */
 	private async undoSeparatorChange() {
 		const rec = this.settings.lastSeparatorChange;
 		if (!rec || rec.renames.length === 0) {
@@ -889,17 +970,10 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		this.setPrimarySeparator(rec.oldSep);
-		await this.saveSettings();
-		let undone = 0;
-		for (const r of rec.renames) {
-			const file = this.app.vault.getAbstractFileByPath(r.path);
-			if (!(file instanceof TFile)) continue;
-			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-			const newPath = normalizePath(`${dir}${r.oldBasename}.${file.extension}`);
-			await this.renameGuarded(file, newPath);
-			undone++;
-		}
-		this.settings.lastSeparatorChange = undefined;
+		this.separatorMigrationRunning = true;
+		const { undone, failed } = await this.revertSeparatorRenames(rec.renames);
+		this.separatorMigrationRunning = false;
+		this.settings.lastSeparatorChange = failed > 0 ? rec : undefined;
 		await this.saveSettings();
 		this.rebuildTrees();
 		new Notice(t("notice.sepReverted", { n: undone }));
@@ -988,17 +1062,25 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		let restored = 0;
+		const failed: DedupRecord[] = [];
 		for (const r of record) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
-			await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-				const tags = normalizeTagList(fm.tags);
-				for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
-				fm.tags = tags;
-			});
-			restored++;
+			// Per-file isolation: a malformed YAML file must not abort the whole
+			// undo — collect it and keep the record so it can be retried.
+			try {
+				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+					const tags = normalizeTagList(fm.tags);
+					for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
+					fm.tags = tags;
+				});
+				restored++;
+			} catch (e) {
+				console.error("TRELLIS dedup undo skipped (frontmatter error)", r.path, e);
+				failed.push(r);
+			}
 		}
-		this.settings.lastDedup = undefined;
+		this.settings.lastDedup = failed.length > 0 ? failed : undefined;
 		await this.saveSettings();
 		new Notice(t("notice.dedupUndone", { n: restored }));
 	}
@@ -1006,6 +1088,16 @@ export default class TrellisPlugin extends Plugin {
 	/** Rename a file with the infinite-loop guard set, so our own rename's
 	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
 	private async renameGuarded(file: TFile, newPath: string): Promise<boolean> {
+		// Collision guard: refuse to rename onto a different existing file so a
+		// separator migration / undo can never clobber an unrelated note.
+		const existing = this.app.vault.getAbstractFileByPath(newPath);
+		if (existing && existing !== file) {
+			console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
+			if (!this.bulkActive) {
+				new Notice(t("notice.renameCollision", { name: file.basename, target: newPath }));
+			}
+			return false;
+		}
 		// Capture the OLD path — renameFile mutates file.path to newPath in place.
 		const oldPath = file.path;
 		this.renaming.add(oldPath);
@@ -1015,7 +1107,7 @@ export default class TrellisPlugin extends Plugin {
 			return true;
 		} catch (e) {
 			console.error("TRELLIS rename failed", e);
-			new Notice(t("notice.renameFailed", { name: file.basename }));
+			if (!this.bulkActive) new Notice(t("notice.renameFailed", { name: file.basename }));
 			return false;
 		} finally {
 			this.renaming.delete(oldPath);
@@ -1031,18 +1123,26 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		let undone = 0;
+		const failed: BootstrapRecord[] = [];
 		for (const r of record) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) continue;
-			await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-				const tags = normalizeTagList(fm.tags);
-				const next = tags.filter((t) => t !== r.tag);
-				if (next.length) fm.tags = next;
-				else delete fm.tags;
-			});
-			undone++;
+			// Per-file isolation: a malformed YAML file must not abort the whole
+			// undo — collect it and keep the record so it can be retried.
+			try {
+				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+					const tags = normalizeTagList(fm.tags);
+					const next = tags.filter((t) => t !== r.tag);
+					if (next.length) fm.tags = next;
+					else delete fm.tags;
+				});
+				undone++;
+			} catch (e) {
+				console.error("TRELLIS bootstrap undo skipped (frontmatter error)", r.path, e);
+				failed.push(r);
+			}
 		}
-		this.settings.lastBootstrap = [];
+		this.settings.lastBootstrap = failed.length > 0 ? failed : [];
 		await this.saveSettings();
 		new Notice(t("notice.undid", { n: undone }));
 	}
@@ -1060,6 +1160,9 @@ class TrellisSettingTab extends PluginSettingTab {
 	display() {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		// ── General ──────────────────────────────────────────────────────────
+		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
 
 		new Setting(containerEl)
 			.setName(t("setting.langName"))
@@ -1081,77 +1184,120 @@ class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// ── Filename scheme ──────────────────────────────────────────────────
+		new Setting(containerEl).setName(t("setting.section.scheme")).setHeading();
+
+		// Simple (single-key) schema knobs. Hidden in advanced mode — the slot
+		// editor covers namespace/separator/position as slot properties.
+		if (!this.plugin.settings.advancedMode) {
+			// Namespace: staged in the field, committed on the Apply button — no
+			// silent per-keystroke changes to the source-of-truth namespace.
+			{
+				let pending = primaryNamespace(this.plugin.settings.schema);
+				new Setting(containerEl)
+					.setName(t("setting.nsName"))
+					.setDesc(t("setting.nsDesc"))
+					.addText((text) =>
+						text
+							.setPlaceholder("trel")
+							.setValue(pending)
+							.onChange((v) => (pending = v))
+					)
+					.addButton((b) =>
+						b.setButtonText(t("setting.apply")).onClick(async () => {
+							const v = pending.trim().replace(/^#/, "").replace(/\/$/, "");
+							if (v === "") {
+								new Notice(t("notice.nsEmpty"));
+								return;
+							}
+							if (!isValidNamespace(v)) {
+								new Notice(t("notice.nsBadChar"));
+								return;
+							}
+							if (v === primaryNamespace(this.plugin.settings.schema)) return;
+							this.plugin.setPrimaryNamespace(v);
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+							new Notice(t("notice.nsApplied", { ns: v }));
+						})
+					);
+			}
+
+			// Separator: staged in the field; Apply opens the confirm dialog +
+			// vault-wide batch rename (one-directional, like the tag engine).
+			{
+				let pending = primarySeparator(this.plugin.settings.schema);
+				new Setting(containerEl)
+					.setName(t("setting.sepName"))
+					.setDesc(t("setting.sepDesc"))
+					.addText((text) =>
+						text
+							.setPlaceholder("-")
+							.setValue(pending)
+							.onChange((v) => (pending = v))
+					)
+					.addButton((b) =>
+						b.setButtonText(t("setting.apply")).onClick(() => {
+							const v = pending;
+							if (v === primarySeparator(this.plugin.settings.schema)) return;
+							if (v === "") {
+								new Notice(t("notice.sepEmpty"));
+								return;
+							}
+							// Reject letters, digits, `/` (tagkey collision) and chars
+							// illegal in filenames (\ : * ? " < > |).
+							if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
+								new Notice(t("notice.sepBadChar"));
+								return;
+							}
+							// Re-render on close so the field reflects the final value.
+							this.plugin.requestSeparatorChange(v, () => this.display());
+						})
+					);
+			}
+
+			new Setting(containerEl)
+				.setName(t("setting.posName"))
+				.setDesc(t("setting.posDesc"))
+				.addDropdown((dd) =>
+					dd
+						.addOption("prefix", t("setting.posPrefix"))
+						.addOption("suffix", t("setting.posSuffix"))
+						.setValue(tagPosition(this.plugin.settings.schema))
+						.onChange(async (value) => {
+							this.plugin.setKeyPosition(value === "suffix" ? "suffix" : "prefix");
+							await this.plugin.saveSettings();
+						})
+				);
+		}
+
+		// Advanced mode (0.2.0, experimental): the multi-key slot editor.
 		new Setting(containerEl)
-			.setName(t("setting.nsName"))
-			.setDesc(t("setting.nsDesc"))
-			.addText((text) =>
-				text
-					.setPlaceholder("trel")
-					.setValue(primaryNamespace(this.plugin.settings.schema))
+			.setName(t("setting.advName"))
+			.setDesc(t("setting.advDesc"))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.advancedMode)
 					.onChange(async (value) => {
-						const v = value.trim().replace(/^#/, "").replace(/\/$/, "");
-						if (v === "") {
-							new Notice(t("notice.nsEmpty"));
-							return;
+						this.plugin.settings.advancedMode = value;
+						if (!value && isMultiKey(this.plugin.settings.schema)) {
+							// Simple mode keeps the single-key invariant: collapse to
+							// the primary tag slot + a name slot, primary separator.
+							const ns = primaryNamespace(this.plugin.settings.schema) || "trel";
+							const sep = primarySeparator(this.plugin.settings.schema) || "-";
+							const pos = tagPosition(this.plugin.settings.schema);
+							this.plugin.settings.schema = schemaFromLegacy(ns, sep, pos);
+							new Notice(t("notice.advReset"));
 						}
-						this.plugin.setPrimaryNamespace(v);
 						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+						this.display();
 					})
 			);
+		if (this.plugin.settings.advancedMode) this.renderSlotEditor(containerEl);
 
-		// Separator: changing it triggers a confirm dialog + vault-wide batch
-		// rename (one-directional, like the tag engine). We commit on blur/Enter,
-		// not per keystroke, so the dialog appears once the edit is finished.
-		new Setting(containerEl)
-			.setName(t("setting.sepName"))
-			.setDesc(t("setting.sepDesc"))
-			.addText((text) => {
-				const current = () => primarySeparator(this.plugin.settings.schema);
-				let pending = current();
-				text.setPlaceholder("-").setValue(pending).onChange((v) => (pending = v));
-				const reset = () => text.setValue(current());
-				const commit = () => {
-					const v = pending;
-					if (v === current()) return; // unchanged
-					if (v === "") {
-						new Notice(t("notice.sepEmpty"));
-						reset();
-						return;
-					}
-					// Reject letters, digits, `/` (tagkey collision) and characters
-					// that are illegal in filenames (\ : * ? " < > |) — otherwise the
-					// assembled basename can't be written.
-					if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
-						new Notice(t("notice.sepBadChar"));
-						reset();
-						return;
-					}
-					// Confirm + batch apply; re-render the tab when the dialog closes
-					// so the input reflects the final (applied or cancelled) value.
-					this.plugin.requestSeparatorChange(v, () => this.display());
-				};
-				text.inputEl.addEventListener("blur", commit);
-				text.inputEl.addEventListener("keydown", (e) => {
-					if (e.key === "Enter") {
-						e.preventDefault();
-						text.inputEl.blur();
-					}
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(t("setting.posName"))
-			.setDesc(t("setting.posDesc"))
-			.addDropdown((dd) =>
-				dd
-					.addOption("prefix", t("setting.posPrefix"))
-					.addOption("suffix", t("setting.posSuffix"))
-					.setValue(tagPosition(this.plugin.settings.schema))
-					.onChange(async (value) => {
-						this.plugin.setKeyPosition(value === "suffix" ? "suffix" : "prefix");
-						await this.plugin.saveSettings();
-					})
-			);
+		// ── Sidebar tree view ────────────────────────────────────────────────
+		new Setting(containerEl).setName(t("setting.section.tree")).setHeading();
 
 		new Setting(containerEl)
 			.setName(t("setting.treeName"))
@@ -1217,5 +1363,186 @@ class TrellisSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+	}
+
+	// --- Multi-key slot editor (advanced mode, 0.2.0 experimental) ----------
+	// The schema IS the settings object here; every edit saves + re-renders.
+	// Guards keep the schema valid: ≥1 tag slot, ≤1 name slot, distinct
+	// namespaces, legal non-empty separators (slots n → separators n-1).
+
+	private renderSlotEditor(containerEl: HTMLElement) {
+		const schema = this.plugin.settings.schema;
+		const save = async () => {
+			this.ensureSeparators(schema);
+			await this.plugin.saveSettings();
+			this.plugin.rebuildTrees();
+			this.display();
+		};
+
+		new Setting(containerEl).setName(t("setting.advSlots")).setHeading();
+
+		schema.slots.forEach((slot, i) => {
+			const row = new Setting(containerEl).setName(t("adv.slot", { n: i + 1 }));
+			row.addDropdown((dd) =>
+				dd
+					.addOption("tag", t("adv.roleTag"))
+					.addOption("name", t("adv.roleName"))
+					.setValue(slot.role)
+					.onChange(async (v) => {
+						const role = v === "name" ? "name" : "tag";
+						if (role === slot.role) return;
+						if (role === "name") {
+							if (schema.slots.some((s, j) => j !== i && s.role === "name")) {
+								new Notice(t("notice.advOneName"));
+								this.display();
+								return;
+							}
+							if (schema.slots.filter((s) => s.role === "tag").length <= 1) {
+								new Notice(t("notice.advLastTag"));
+								this.display();
+								return;
+							}
+							slot.role = "name";
+							delete slot.namespace;
+						} else {
+							slot.role = "tag";
+							slot.namespace = slot.namespace || this.nextFreeNamespace(schema);
+						}
+						await save();
+					})
+			);
+			if (slot.role === "tag") {
+				row.addText((text) =>
+					text
+						.setPlaceholder(t("adv.nsPh"))
+						.setValue(slot.namespace ?? "")
+						.onChange(async (v) => {
+							const ns = v.trim().replace(/^#/, "").replace(/\/$/, "");
+							if (ns === "") {
+								new Notice(t("notice.advNsEmpty"));
+								return;
+							}
+							if (!isValidNamespace(ns)) {
+								new Notice(t("notice.nsBadChar"));
+								return;
+							}
+							if (
+								schema.slots.some(
+									(s, j) => j !== i && s.role === "tag" && s.namespace === ns
+								)
+							) {
+								new Notice(t("notice.advNsDup"));
+								return;
+							}
+							slot.namespace = ns;
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+						})
+				);
+			}
+			row.addExtraButton((b) =>
+				b
+					.setIcon("arrow-up")
+					.setTooltip(t("adv.moveUp"))
+					.setDisabled(i === 0)
+					.onClick(async () => {
+						if (i === 0) return;
+						[schema.slots[i - 1], schema.slots[i]] = [schema.slots[i], schema.slots[i - 1]];
+						await save();
+					})
+			);
+			row.addExtraButton((b) =>
+				b
+					.setIcon("arrow-down")
+					.setTooltip(t("adv.moveDown"))
+					.setDisabled(i === schema.slots.length - 1)
+					.onClick(async () => {
+						if (i === schema.slots.length - 1) return;
+						[schema.slots[i], schema.slots[i + 1]] = [schema.slots[i + 1], schema.slots[i]];
+						await save();
+					})
+			);
+			row.addExtraButton((b) =>
+				b
+					.setIcon("trash")
+					.setTooltip(t("adv.remove"))
+					.onClick(async () => {
+						if (
+							slot.role === "tag" &&
+							schema.slots.filter((s) => s.role === "tag").length <= 1
+						) {
+							new Notice(t("notice.advLastTag"));
+							return;
+						}
+						schema.slots.splice(i, 1);
+						await save();
+					})
+			);
+			// The separator between this slot and the next (slots n → seps n-1).
+			if (i < schema.slots.length - 1) {
+				new Setting(containerEl)
+					.setName(t("adv.sep", { n: i + 1, a: i + 1, b: i + 2 }))
+					.addText((text) =>
+						text
+							.setPlaceholder("-")
+							.setValue(schema.separators[i] ?? "-")
+							.onChange(async (v) => {
+								if (v === "") {
+									new Notice(t("notice.sepEmpty"));
+									return;
+								}
+								if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
+									new Notice(t("notice.sepBadChar"));
+									return;
+								}
+								schema.separators[i] = v;
+								await this.plugin.saveSettings();
+							})
+					);
+			}
+		});
+
+		new Setting(containerEl)
+			.addButton((b) =>
+				b.setButtonText(t("adv.addTag")).onClick(async () => {
+					schema.slots.push({
+						role: "tag",
+						namespace: this.nextFreeNamespace(schema),
+					});
+					await save();
+				})
+			)
+			.addButton((b) =>
+				b
+					.setButtonText(t("adv.addName"))
+					.setDisabled(schema.slots.some((s) => s.role === "name"))
+					.onClick(async () => {
+						if (schema.slots.some((s) => s.role === "name")) {
+							new Notice(t("notice.advOneName"));
+							return;
+						}
+						schema.slots.push({ role: "name" });
+						await save();
+					})
+			);
+	}
+
+	/** Keep separators aligned with the slot count (n slots → n-1 separators). */
+	private ensureSeparators(schema: TrellisSchema) {
+		const need = Math.max(0, schema.slots.length - 1);
+		const fill = schema.separators[schema.separators.length - 1] || "-";
+		while (schema.separators.length < need) schema.separators.push(fill);
+		schema.separators.length = need;
+	}
+
+	/** A namespace not yet used by any tag slot, for a freshly added slot. */
+	private nextFreeNamespace(schema: TrellisSchema): string {
+		const used = new Set(
+			schema.slots.filter((s) => s.role === "tag").map((s) => s.namespace)
+		);
+		if (!used.has("trel")) return "trel";
+		let i = 2;
+		while (used.has(`key${i}`)) i++;
+		return `key${i}`;
 	}
 }

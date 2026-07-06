@@ -22,6 +22,15 @@ import {
 	buildNoteTree,
 	sortNoteTree,
 	tagkeyToTagPath,
+	looksLikeTagkey,
+	isMultiKey,
+	tagToTagkeyNs,
+	pickTagkeyNs,
+	slotTagkeys,
+	assembleBasenameMulti,
+	extractNameMulti,
+	syncedBasenameMulti,
+	isValidNamespace,
 } from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -146,8 +155,9 @@ test("extractTitle (suffix) recovers the title from the head", () => {
 test("syncedBasename restores tagkey AND separator, keeps only the title free", () => {
 	// separator deleted → title preserved, separator restored
 	assert.equal(syncedBasename("S99B07tree-idea", "S99B07", cfg), "S99B07-tree-idea");
-	// tagkey damaged with no separator → title gone, tagkey-only restore
-	assert.equal(syncedBasename("ZZZZ", "S99B07", cfg), "S99B07");
+	// no separator, not tagkey-like → treated as a free title, tagkey PREPENDED
+	// (0.2.0 data-safety change: never overwrite a real title)
+	assert.equal(syncedBasename("ZZZZ", "S99B07", cfg), "S99B07-ZZZZ");
 	// already correct → no change
 	assert.equal(syncedBasename("S99B07-tree-idea", "S99B07", cfg), null);
 	// title with multiple separators is preserved whole
@@ -436,4 +446,202 @@ test("tagkey/title survive date + session codes after the tagkey", () => {
 	assert.equal(assembleBasename("S89L11", title, us), "S89L11_0629_S88-11_세션대시보드");
 	// The tagkey still decomposes into its hierarchical tag.
 	assert.equal(tagkeyToTagPath("S88L11", us), "tree/S/88/L/11");
+});
+
+// --- No-separator title protection (0.2.0 data safety) ---------------------
+
+test("looksLikeTagkey accepts multi-run tagkeys, rejects plain words/numbers", () => {
+	assert.equal(looksLikeTagkey("S88"), true); // letter + digits
+	assert.equal(looksLikeTagkey("S88B07"), true);
+	assert.equal(looksLikeTagkey("A1B2"), true);
+	assert.equal(looksLikeTagkey("S"), false); // single run
+	assert.equal(looksLikeTagkey("ZZ"), false); // single letter run
+	assert.equal(looksLikeTagkey("trellisupgradecheck"), false); // plain word
+	assert.equal(looksLikeTagkey("12345"), false); // plain number
+	assert.equal(looksLikeTagkey("my-note"), false); // not round-trip-safe (has '-')
+	assert.equal(looksLikeTagkey("무제노트"), false); // no ASCII class runs
+});
+
+test("extractTitle: no-separator free title is preserved (not overwritten)", () => {
+	// The file "trellisupgradecheck" has no separator and does NOT look like a
+	// tagkey, so its whole name is the title — the tagkey is prepended, not swapped.
+	assert.equal(extractTitle("trellisupgradecheck", "ZZ99", cfg), "trellisupgradecheck");
+	assert.equal(syncedBasename("trellisupgradecheck", "ZZ99", cfg), "ZZ99-trellisupgradecheck");
+	// A Korean free title likewise survives.
+	assert.equal(syncedBasename("무제노트", "S88B07", cfg), "S88B07-무제노트");
+});
+
+test("extractTitle: a bare tagkey-only index note is still replaced", () => {
+	// "S88" looks like a tagkey (letter+digits), so it's a stale index-note prefix
+	// to replace, not a title to keep.
+	assert.equal(extractTitle("S88", "S99", cfg), "");
+	assert.equal(syncedBasename("S88", "S99", cfg), "S99");
+});
+
+test("extractTitle: suffix mode preserves a no-separator free title", () => {
+	assert.equal(extractTitle("freetitle", "S88B07", cfgSuffix), "freetitle");
+	assert.equal(syncedBasename("freetitle", "S88B07", cfgSuffix), "freetitle-S88B07");
+	// tagkey-like bare name is replaced in suffix mode too
+	assert.equal(syncedBasename("A1B2", "S88B07", cfgSuffix), "S88B07");
+});
+
+// --- Multi-key data model (0.2.0 advanced mode) ----------------------------
+
+const twoTag: TrellisSchema = {
+	slots: [
+		{ role: "tag", namespace: "trel" },
+		{ role: "name" },
+		{ role: "tag", namespace: "proj" },
+	],
+	separators: ["-", "-"],
+};
+
+test("isMultiKey is true only for non-default slot shapes", () => {
+	assert.equal(isMultiKey(cfg), false); // [tag, name]
+	assert.equal(isMultiKey(cfgSuffix), false); // [name, tag]
+	assert.equal(isMultiKey(twoTag), true); // two tag slots
+	assert.equal(
+		isMultiKey({ slots: [{ role: "tag", namespace: "trel" }], separators: [] }),
+		true // single slot, no name
+	);
+});
+
+test("tagToTagkeyNs / pickTagkeyNs resolve per-namespace", () => {
+	assert.equal(tagToTagkeyNs("#trel/S88/B07", "trel"), "S88B07");
+	assert.equal(tagToTagkeyNs("#proj/P02/C03", "trel"), null);
+	assert.equal(pickTagkeyNs(["#x/y", "#proj/P02/C03"], "proj"), "P02C03");
+	assert.equal(pickTagkeyNs(["#x/y"], "proj"), null);
+});
+
+test("slotTagkeys aligns each tag slot to its own namespace", () => {
+	const tags = ["#trel/S88/B07", "#proj/P02/C03", "#status/wip"];
+	assert.deepEqual(slotTagkeys(tags, twoTag), ["S88B07", null, "P02C03"]);
+	// missing proj tag → that slot is null (omitted from the filename)
+	assert.deepEqual(slotTagkeys(["#trel/S88/B07"], twoTag), ["S88B07", null, null]);
+});
+
+test("assembleBasenameMulti joins present slots, dropping omitted ones + their sep", () => {
+	assert.equal(assembleBasenameMulti(["S88B07", "idea", "P02C03"], twoTag), "S88B07-idea-P02C03");
+	// omitted trailing tag slot → its separator drops with it
+	assert.equal(assembleBasenameMulti(["S88B07", "idea", null], twoTag), "S88B07-idea");
+	// omitted middle name slot
+	assert.equal(assembleBasenameMulti(["S88B07", "", "P02C03"], twoTag), "S88B07-P02C03");
+	// only first slot present
+	assert.equal(assembleBasenameMulti(["S88B07", null, null], twoTag), "S88B07");
+});
+
+test("extractNameMulti anchors the name between known tag slots", () => {
+	assert.equal(extractNameMulti("S88B07-idea-P02C03", ["S88B07", null, "P02C03"], twoTag), "idea");
+	// multi-word title between the two tag slots is preserved whole
+	assert.equal(
+		extractNameMulti("S88B07-multi-word-P02C03", ["S88B07", null, "P02C03"], twoTag),
+		"multi-word"
+	);
+	// trailing tag slot omitted → name runs to the end
+	assert.equal(extractNameMulti("S88B07-idea", ["S88B07", null, null], twoTag), "idea");
+});
+
+test("syncedBasameMulti syncs both tag slots, preserving the free name", () => {
+	// rename proj tag P02C03 → P09Z01, keep the name
+	assert.equal(
+		syncedBasenameMulti("S88B07-idea-P02C03", ["#trel/S88/B07", "#proj/P09/Z01"], twoTag),
+		"S88B07-idea-P09Z01"
+	);
+	// already in sync → null
+	assert.equal(
+		syncedBasenameMulti("S88B07-idea-P02C03", ["#trel/S88/B07", "#proj/P02/C03"], twoTag),
+		null
+	);
+	// no tag in any slot's namespace → never touch the file
+	assert.equal(syncedBasenameMulti("whatever", ["#status/wip"], twoTag), null);
+	// only the first tag present, the proj slot's tag is gone: we cannot tell if
+	// the filename's "P02C03" is a stale tagkey to drop or part of the free name,
+	// so the conservative rule ("a slot with no managed tag is left alone") wins —
+	// the segment is absorbed into the name and nothing is deleted (null = no change).
+	assert.equal(
+		syncedBasenameMulti("S88B07-idea-P02C03", ["#trel/S88/B07"], twoTag),
+		null
+	);
+});
+
+test("syncedBasenameMulti with a leading name slot (name, tag, tag)", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "name" },
+			{ role: "tag", namespace: "trel" },
+			{ role: "tag", namespace: "proj" },
+		],
+		separators: ["-", "-"],
+	};
+	assert.equal(
+		syncedBasenameMulti("idea-S88B07-P02C03", ["#trel/S88/B99", "#proj/P02/C03"], schema),
+		"idea-S88B99-P02C03"
+	);
+});
+
+test("extractNameMulti never truncates a title that ends with the tagkey text sans separator", () => {
+	// Regression (Codex B/C review): a bare endsWith would strip "P09Z01" from the
+	// title "ideaP09Z01" because it coincidentally matches the trailing tagkey. With
+	// the boundary rule, no clean "-P09Z01" boundary exists, so the title is kept
+	// whole and the proj tagkey is appended (data preserved, never silently lost).
+	assert.equal(
+		extractNameMulti("S88B07-ideaP09Z01", ["S88B07", null, "P09Z01"], twoTag),
+		"ideaP09Z01"
+	);
+	assert.equal(
+		syncedBasenameMulti("S88B07-ideaP09Z01", ["#trel/S88/B07", "#proj/P09/Z01"], twoTag),
+		"S88B07-ideaP09Z01-P09Z01"
+	);
+	// Symmetric on the left: a title that starts with a leading tagkey's text.
+	const leadTag: TrellisSchema = {
+		slots: [{ role: "name" }, { role: "tag", namespace: "trel" }],
+		separators: ["-"],
+	};
+	// name slot first, tag slot last: "S88B07idea" title ending — no boundary, kept.
+	assert.equal(
+		syncedBasenameMulti("titleS88B07", ["#trel/S88/B07"], leadTag),
+		"titleS88B07-S88B07"
+	);
+});
+
+test("extractNameMulti keeps a tagkey-only filename name-empty (no BT01→BT01-BT01)", () => {
+	// Regression (boss's dummy-vault test): bootstrapping a bare index note "BT01"
+	// (tag tree/BT/01, no separator, no title) under a MULTI-KEY schema must not
+	// fold the tagkey into the name slot and duplicate it.
+	const oneTag: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "tree" }, { role: "name" }, { role: "tag", namespace: "trel" }],
+		separators: ["-", "-"],
+	};
+	assert.equal(extractNameMulti("BT01", ["BT01", null, null], oneTag), "");
+	assert.equal(syncedBasenameMulti("BT01", ["#tree/BT/01"], oneTag), null); // already in sync
+	// Suffix-style: tagkey-only with a trailing tag slot.
+	const nameThenTag: TrellisSchema = {
+		slots: [{ role: "name" }, { role: "tag", namespace: "tree" }],
+		separators: ["-"],
+	};
+	assert.equal(extractNameMulti("S88B07", [null, "S88B07"], nameThenTag), "");
+	assert.equal(syncedBasenameMulti("S88B07", ["#tree/S88/B07"], nameThenTag), null);
+});
+
+test("extractNameMulti still consumes tagkeys that DO sit on a separator boundary", () => {
+	// The boundary rule must not over-preserve: a proper "-P02C03" boundary is
+	// still consumed so a normal rename works.
+	assert.equal(
+		extractNameMulti("S88B07-idea-P02C03", ["S88B07", null, "P02C03"], twoTag),
+		"idea"
+	);
+});
+
+test("isValidNamespace allows plain names, rejects path/traversal/control/YAML chars", () => {
+	assert.equal(isValidNamespace("trel"), true);
+	assert.equal(isValidNamespace("tree"), true);
+	assert.equal(isValidNamespace("proj-2"), true);
+	assert.equal(isValidNamespace("key_2"), true);
+	assert.equal(isValidNamespace(""), false);
+	assert.equal(isValidNamespace("a/b"), false); // path separator
+	assert.equal(isValidNamespace("../x"), false); // traversal
+	assert.equal(isValidNamespace("a b"), false); // whitespace
+	assert.equal(isValidNamespace("x]\ntags: [evil"), false); // YAML/newline injection
+	assert.equal(isValidNamespace("a,b"), false); // tag list separator
+	assert.equal(isValidNamespace("#trel"), false); // hash
 });

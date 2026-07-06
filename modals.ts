@@ -714,6 +714,144 @@ export class SeparatorChangeModal extends Modal {
 	}
 }
 
+/**
+ * A small modal that tracks a long bulk pass (bootstrap apply, separator change)
+ * with a live count + progress bar, Pause/Resume and Cancel, then a Done state
+ * with a review list of skipped notes and an OK button. Replaces the old
+ * Notice-based progress (which poked the unofficial `Notice.noticeEl`).
+ *
+ * The driving loop calls `gate()` each iteration (blocks while paused, returns
+ * false once cancelled so the caller breaks) and `report()` to update the UI,
+ * then `finish()` once — which swaps the modal to its summary state and keeps it
+ * open until the user clicks OK.
+ */
+export class BulkProgressModal extends Modal {
+	private paused = false;
+	private cancelled = false;
+	private finished = false;
+	private waiters: (() => void)[] = [];
+	private startedAt = 0;
+	private barFill!: HTMLElement;
+	private countEl!: HTMLElement;
+	private metaEl!: HTMLElement;
+	private hintEl!: HTMLElement;
+
+	constructor(app: App, private readonly title: string) {
+		super(app);
+	}
+
+	onOpen() {
+		this.startedAt = Date.now();
+		const { contentEl } = this;
+		contentEl.addClass("trellis-progress-modal");
+		contentEl.createEl("h3", { text: this.title });
+
+		const bar = contentEl.createDiv({ cls: "trellis-progress-bar" });
+		this.barFill = bar.createDiv({ cls: "trellis-progress-bar-fill" });
+		this.countEl = contentEl.createDiv({ cls: "trellis-progress-count", text: "0 / 0" });
+		this.metaEl = contentEl.createDiv({ cls: "trellis-progress-meta" });
+		this.hintEl = contentEl.createDiv({ cls: "trellis-progress-hint" });
+
+		new Setting(contentEl)
+			.addButton((b) =>
+				b.setButtonText(t("bulk.pause")).onClick(() => {
+					this.paused = !this.paused;
+					b.setButtonText(this.paused ? t("bulk.resume") : t("bulk.pause"));
+					if (!this.paused) this.release();
+				})
+			)
+			.addButton((b) =>
+				b
+					.setButtonText(t("bulk.cancel"))
+					.setWarning()
+					.onClick(() => {
+						this.cancelled = true;
+						this.paused = false;
+						this.release();
+					})
+			);
+	}
+
+	private release() {
+		const w = this.waiters;
+		this.waiters = [];
+		for (const r of w) r();
+	}
+
+	/** Await while paused; resolves false once cancelled (caller should break). */
+	async gate(): Promise<boolean> {
+		while (this.paused && !this.cancelled) {
+			await new Promise<void>((res) => this.waiters.push(res));
+		}
+		return !this.cancelled;
+	}
+
+	get wasCancelled(): boolean {
+		return this.cancelled;
+	}
+
+	/** Update the bar, count, and elapsed/error meta (call as work progresses). */
+	report(done: number, total: number, failed: number) {
+		const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+		this.barFill.style.width = `${pct}%`;
+		this.countEl.setText(t("bulk.progress", { done, total }));
+		const sec = Math.round((Date.now() - this.startedAt) / 1000);
+		let meta = t("bulk.elapsed", { sec });
+		if (failed > 0) meta += ` · ${t("bulk.errors", { n: failed })}`;
+		this.metaEl.setText(meta);
+		this.hintEl.setText(sec > 10 ? t("bulk.slowHint") : "");
+	}
+
+	/** Swap to the summary state: a done/cancelled heading, the processed count,
+	 *  a collapsible list of skipped notes, and an OK button that closes. */
+	finish(opts: { processed: number; skipped: string[] }) {
+		this.finished = true;
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass("trellis-progress-modal");
+		contentEl.createEl("h3", {
+			text: `${this.title} — ${this.cancelled ? t("bulk.cancelledLabel") : t("bulk.done")}`,
+		});
+		const bar = contentEl.createDiv({ cls: "trellis-progress-bar" });
+		const fill = bar.createDiv({ cls: "trellis-progress-bar-fill" });
+		fill.style.width = "100%";
+		if (this.cancelled) fill.addClass("is-cancelled");
+
+		contentEl.createDiv({
+			cls: "trellis-progress-count",
+			text: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
+		});
+
+		if (opts.skipped.length) {
+			const details = contentEl.createEl("details", { cls: "trellis-progress-skipped" });
+			details.createEl("summary", {
+				text: t("bulk.skippedTitle", { n: opts.skipped.length }),
+			});
+			details.createEl("p", {
+				cls: "setting-item-description",
+				text: t("bulk.skippedDesc"),
+			});
+			const list = details.createDiv({ cls: "trellis-bootstrap-list" });
+			for (const p of opts.skipped) {
+				list.createDiv({ cls: "trellis-bootstrap-skip", text: p });
+			}
+		}
+
+		new Setting(contentEl).addButton((b) =>
+			b.setButtonText(t("bulk.ok")).setCta().onClick(() => this.close())
+		);
+	}
+
+	onClose() {
+		// Closing before finish (Esc / backdrop) counts as cancel so the loop stops.
+		if (!this.finished) {
+			this.cancelled = true;
+			this.release();
+		}
+		this.contentEl.empty();
+	}
+}
+
 /** Autocomplete for a tag-path text input, sourced from the vault's live tags
  *  (every nesting level). */
 class TagPathSuggest extends AbstractInputSuggest<string> {
