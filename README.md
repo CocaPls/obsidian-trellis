@@ -151,7 +151,7 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 ## 🔧 Compatibility
 
-Requires Obsidian **1.4.10** or newer.
+Requires Obsidian **1.8.7** or newer.
 
 ## 🧱 Design (internals)
 

@@ -197,3 +197,15 @@
 .trellis-progress-modal .trellis-progress-skipped {
 	margin: 0.6em 0;
 }
+
+/* Destructive-action button styling (bootstrap/separator apply, bulk cancel).
+   A CSS class instead of the deprecated setWarning() / version-gated
+   setDestructive() — themeable via Obsidian's own error variables. */
+button.trellis-destructive {
+	background-color: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
+button.trellis-destructive:hover {
+	background-color: var(--background-modifier-error-hover);
+}

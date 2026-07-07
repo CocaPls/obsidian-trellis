@@ -1181,6 +1181,12 @@ class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	display() {
+		this.render();
+	}
+
+	/** Imperative render of the settings tab. Our own re-render triggers call
+	 *  this directly instead of the framework's deprecated display() entry. */
+	private render() {
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -1203,7 +1209,7 @@ class TrellisSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
 						this.plugin.applyTreeViewName(); // re-localize the tab title
-						this.display(); // re-render this tab in the new language
+						this.render(); // re-render this tab in the new language
 					})
 			);
 
@@ -1277,7 +1283,7 @@ class TrellisSettingTab extends PluginSettingTab {
 								return;
 							}
 							// Re-render on close so the field reflects the final value.
-							this.plugin.requestSeparatorChange(v, () => this.display());
+							this.plugin.requestSeparatorChange(v, () => this.render());
 						})
 					);
 			}
@@ -1318,7 +1324,7 @@ class TrellisSettingTab extends PluginSettingTab {
 						}
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
-						this.display();
+						this.render();
 					})
 			);
 		if (this.plugin.settings.advancedMode) this.renderSlotEditor(containerEl);
@@ -1448,7 +1454,7 @@ class TrellisSettingTab extends PluginSettingTab {
 		// and are validated on Apply, so they don't re-render on every keystroke.
 		const refresh = () => {
 			this.ensureSeparators(schema);
-			this.display();
+			this.render();
 		};
 
 		new Setting(containerEl).setName(t("setting.advSlots")).setHeading();
@@ -1466,12 +1472,12 @@ class TrellisSettingTab extends PluginSettingTab {
 						if (role === "name") {
 							if (schema.slots.some((s, j) => j !== i && s.role === "name")) {
 								new Notice(t("notice.advOneName"));
-								this.display();
+								this.render();
 								return;
 							}
 							if (schema.slots.filter((s) => s.role === "tag").length <= 1) {
 								new Notice(t("notice.advLastTag"));
-								this.display();
+								this.render();
 								return;
 							}
 							slot.role = "name";
@@ -1583,7 +1589,7 @@ class TrellisSettingTab extends PluginSettingTab {
 								await this.plugin.saveSettings();
 								this.plugin.rebuildTrees();
 								new Notice(t("notice.advApplied"));
-								this.display();
+								this.render();
 							};
 							if (this.plugin.settings.suppressSchemaConfirm) {
 								void commit();
@@ -1604,7 +1610,7 @@ class TrellisSettingTab extends PluginSettingTab {
 				.addButton((b) =>
 					b.setButtonText(t("adv.revert")).onClick(() => {
 						this.draftSchema = null;
-						this.display();
+						this.render();
 					})
 				);
 		}
