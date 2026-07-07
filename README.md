@@ -106,6 +106,12 @@ single-key engine stays the default path. While multi-key is on, the tree view,
 bootstrap, cascade, and separator batch-change still operate on the first tag-key
 slot.
 
+The slot editor **stages** your edits: add or remove slots, set each namespace,
+and nothing changes until you press **Apply** and confirm — existing files are
+re-synced only as their tags change, never renamed on the spot. Namespaces and
+separators are validated inline, so an empty, duplicate, or illegal value is
+caught before it can reach your vault.
+
 ## 📸 Screenshots
 
 **Bootstrap — pick what to onboard.** Already-tagged notes are shown as done;
@@ -130,7 +136,7 @@ location tag, pick the one to keep; the rest are removed (undoable).
 - **Location tag namespace** — which tags are the source of truth (e.g. `trel`);
   staged and committed with an **Apply** button
 - **Separator** — the character(s) between the tagkey and the title (e.g. `-`);
-  applied vault-wide after a confirmation
+  validated as you type and applied vault-wide after a confirmation
 - **Key position** — prefix (start) or suffix (end) of the filename
 - **Advanced — multi-key slots** — off by default; opt-in slot editor for
   multi-key schemes (experimental, see above)
@@ -139,10 +145,13 @@ location tag, pick the one to keep; the rest are removed (undoable).
 - **Tree sort** — tagkey / modified time / created time
 - **Sidebar header buttons** — show or hide each header action button individually
 - **Language** — auto / Korean / English
+- **Managed notes** — a read-only summary of how many notes carry a managed
+  location tag and which namespaces are active, so you can confirm your setup at
+  a glance
 
 ## 🔧 Compatibility
 
-Requires Obsidian **1.4.0** or newer.
+Requires Obsidian **1.4.10** or newer.
 
 ## 🧱 Design (internals)
 
