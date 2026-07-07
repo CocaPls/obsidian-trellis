@@ -43,8 +43,9 @@ match; edit the tagkey by hand and it's restored from the tag.
 - **Bootstrap** — onboard an existing vault that already has filename prefixes
   but no tags yet. Pick the scope with a checkbox tree (whole vault, folders, or
   individual notes; drag to sweep-select, search, or show only untagged notes),
-  preview as a dry-run, watch live progress, and undo in one step. Per-file
-  errors are isolated so one bad note never stops the run. Bootstrap splits a
+  preview as a dry-run, watch live progress (pause / resume / cancel), and undo
+  in one step. Per-file errors are isolated so one bad note never stops the run.
+  Bootstrap splits a
   prefix into tag segments at letter↔digit boundaries (`S88B07` → `S/88/B/07`,
   `PROJ123` → `PROJ/123`), so it isn't tied to one naming scheme; prefixes with
   no such boundary, or with characters a tag can't hold, are skipped and listed
@@ -60,14 +61,15 @@ match; edit the tagkey by hand and it's restored from the tag.
 
 ## 📦 Installation
 
-**Manual (current):**
+**Community plugins:** In Obsidian, open **Settings → Community plugins → Browse**,
+search for **Trellis**, then install and enable it.
+
+**Manual:**
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the latest
    [release](../../releases).
 2. Put them in your vault's `.obsidian/plugins/trellis/` folder.
 3. Enable the plugin in **Settings → Community plugins**.
-
-*(A community-plugin marketplace listing is planned.)*
 
 ## 🚀 Usage
 
@@ -82,6 +84,27 @@ match; edit the tagkey by hand and it's restored from the tag.
    with more than one location tag and pick which to keep.
 6. **Change the separator** — change it in settings; after a confirmation, it's
    applied vault-wide.
+
+## 🧪 Advanced — multi-key schemes (experimental)
+
+By default a filename is one tag-key prefix plus a free title. If your notes need
+**more than one identifier** — say a project code *and* a cross-cutting area code
+— turn on **Advanced — multi-key slots** in settings to define the filename as an
+ordered array of **slots**:
+
+- one or more **tag-key** slots, each synced from its own tag namespace;
+- one **name** slot (your free title);
+- a separator between each pair of slots.
+
+```
+#trel/AA/01  +  #key2/BB/02      →   AA01-my-note--BB02
+retag the second   #key2/BB/09    →   AA01-my-note--BB09   (automatic)
+```
+
+This is **experimental and opt-in**: it is off by default, and the battle-tested
+single-key engine stays the default path. While multi-key is on, the tree view,
+bootstrap, cascade, and separator batch-change still operate on the first tag-key
+slot.
 
 ## 📸 Screenshots
 
@@ -104,9 +127,13 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 ![Settings tab](screenshots/settings.png)
 
-- **Location tag namespace** — which tags are the source of truth (e.g. `trel`)
-- **Separator** — the character(s) between the tagkey and the title (e.g. `-`)
+- **Location tag namespace** — which tags are the source of truth (e.g. `trel`);
+  staged and committed with an **Apply** button
+- **Separator** — the character(s) between the tagkey and the title (e.g. `-`);
+  applied vault-wide after a confirmation
 - **Key position** — prefix (start) or suffix (end) of the filename
+- **Advanced — multi-key slots** — off by default; opt-in slot editor for
+  multi-key schemes (experimental, see above)
 - **Sidebar tree view** — on / off
 - **Sidebar view name** — a custom title for the tree view's tab (blank = default)
 - **Tree sort** — tagkey / modified time / created time
