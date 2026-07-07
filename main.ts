@@ -167,6 +167,11 @@ export default class TrellisPlugin extends Plugin {
 	/** Files already warned about carrying multiple location tags (one note =
 	 *  one location). Cleared when a file returns to a single location tag. */
 	private multiWarned = new Set<string>();
+	/** Files already warned about a rename collision. Its own set — the
+	 *  duplicate-tag branch clears multiWarned every sync, which would re-fire
+	 *  a collision Notice on every edit of a still-colliding file. Cleared once
+	 *  the file syncs cleanly (collision resolved). */
+	private collisionWarned = new Set<string>();
 	/** Suppress normal filename sync while separator migration owns renames. */
 	private separatorMigrationRunning = false;
 	/** A bulk pass (bootstrap / separator change / cascade) is running: suppress
@@ -268,6 +273,7 @@ export default class TrellisPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("rename", (file, oldPath) => {
 				this.multiWarned.delete(oldPath); // stale warning key at the old path
+				this.collisionWarned.delete(oldPath);
 				if (file instanceof TFile && file.extension === "md") {
 					void this.syncFile(file);
 				}
@@ -280,6 +286,7 @@ export default class TrellisPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("delete", (file) => {
 				this.multiWarned.delete(file.path); // drop warning key for a gone file
+				this.collisionWarned.delete(file.path);
 				this.scheduleTreeRefresh();
 			})
 		);
@@ -461,23 +468,32 @@ export default class TrellisPlugin extends Plugin {
 			if (tagkey === null) return; // no location tag → never touch the file
 			newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
 		}
-		if (newBasename === null) return; // already in sync (or no tag at all)
+		if (newBasename === null) {
+			// Already in sync — a previously reported collision (if any) is over.
+			this.collisionWarned.delete(file.path);
+			return;
+		}
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
 
 		// Collision guard: never rename onto an existing DIFFERENT file — that
 		// would clobber the target (or throw). Warn once and leave both files
-		// alone; the user resolves the name clash by hand.
+		// alone; the user resolves the name clash by hand. Its own warned-set:
+		// keyed per file until the clash resolves, and suppressed during bulk
+		// passes like every other per-file notice.
 		const existing = this.app.vault.getAbstractFileByPath(newPath);
 		if (existing && existing !== file) {
-			if (!this.multiWarned.has(file.path)) {
-				this.multiWarned.add(file.path);
-				new Notice(t("notice.renameCollision", { name: file.basename, target: newBasename }));
+			if (!this.collisionWarned.has(file.path)) {
+				this.collisionWarned.add(file.path);
+				if (!this.bulkActive) {
+					new Notice(t("notice.renameCollision", { name: file.basename, target: newBasename }));
+				}
 				console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
 			}
 			return;
 		}
+		this.collisionWarned.delete(file.path);
 
 		// Capture the OLD path first — renameFile mutates file.path to newPath
 		// in place, so `file.path` in finally would otherwise be the new path.

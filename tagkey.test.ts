@@ -645,3 +645,45 @@ test("isValidNamespace allows plain names, rejects path/traversal/control/YAML c
 	assert.equal(isValidNamespace("a,b"), false); // tag list separator
 	assert.equal(isValidNamespace("#trel"), false); // hash
 });
+
+test("extractNameMulti: empty name slot with prefix-colliding separators stays intact", () => {
+	// Regression (self-review, confirmed by execution): with separators ["-", "--"]
+	// an EMPTY name slot drops its own separator, so "AA01--BB02" carries the
+	// LONGER gap separator. Shortest-first boundary matching half-consumed it
+	// ("-" inside "--") and folded the leftover into the name, renaming the file
+	// to "AA01--BB02--BB02" — permanently. Longest-first matching keeps it stable.
+	const collide: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel" },
+			{ role: "name" },
+			{ role: "tag", namespace: "key2" },
+		],
+		separators: ["-", "--"],
+	};
+	const tags = ["#trel/AA/01", "#key2/BB/02"];
+	assert.equal(extractNameMulti("AA01--BB02", ["AA01", null, "BB02"], collide), "");
+	assert.equal(syncedBasenameMulti("AA01--BB02", tags, collide), null); // stable
+	// The normal titled form keeps round-tripping too.
+	assert.equal(syncedBasenameMulti("AA01-demo--BB02", tags, collide), null);
+});
+
+test("extractNameMulti: a title's own trailing separator characters are preserved", () => {
+	// Regression (self-review, confirmed by execution): the right-side consume
+	// removed separator+tagkey and then stripped ONE MORE trailing separator,
+	// eating a title's genuine trailing "-" ("demo-" → "demo"). The exact
+	// boundary consume needs no extra strip.
+	const collide: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel" },
+			{ role: "name" },
+			{ role: "tag", namespace: "key2" },
+		],
+		separators: ["-", "--"],
+	};
+	const tags = ["#trel/AA/01", "#key2/BB/02"];
+	assert.equal(
+		extractNameMulti("AA01-demo---BB02", ["AA01", null, "BB02"], collide),
+		"demo-"
+	);
+	assert.equal(syncedBasenameMulti("AA01-demo---BB02", tags, collide), null); // stable
+});

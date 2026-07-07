@@ -8,7 +8,7 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
-## 0.2.0 — Multi-key & bulk UX (unreleased, experimental)
+## 0.2.0 — Multi-key & bulk UX (experimental)
 
 - **Multi-key slots (advanced mode, experimental)** — a settings toggle exposes
   the slot editor over the 0.0.6 schema foundation: add/remove/reorder tag-key
@@ -62,6 +62,18 @@ Hardening from a multi-angle code review, before any real-vault use:
   `-` and `_`, rejecting `/`, whitespace, control characters and YAML/tag
   metacharacters that could corrupt tag matching or inject into new-note
   frontmatter.
+- **Multi-key boundary matching is longest-separator-first** — with separators
+  like `-` and `--`, an empty name slot drops its own separator, so the filename
+  carries the longer gap separator; shortest-first matching half-consumed it and
+  folded the leftover into the name (`AA01--BB02` → `AA01--BB02--BB02`,
+  permanently). Boundaries now try every schema separator longest-first, and the
+  right-side consume no longer strips an extra separator, so a title's own
+  trailing separator characters (`demo-`) survive a sync.
+- **Collision notice fires once per clash** — a file that can't sync because its
+  target name is taken warned again on every edit (the duplicate-tag pass kept
+  clearing the warned flag); the collision warning now has its own flag, cleared
+  when the clash resolves, and is suppressed during bulk passes like every other
+  per-file notice.
 
 ## 0.1.4 — Frontmatter tag dedupe hotfix
 

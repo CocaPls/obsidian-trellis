@@ -388,18 +388,20 @@ export function assembleBasenameMulti(
 	return out;
 }
 
-/** Strip ONE leading boundary separator (whichever schema separator matches). */
-function stripOneLeadingSep(s: string, schema: TrellisSchema): string {
-	for (const sep of schema.separators) {
-		if (sep && s.startsWith(sep)) return s.slice(sep.length);
-	}
-	return s;
+/** The schema's distinct separators, longest first — so a boundary match never
+ *  stops at a shorter separator that is a prefix of a longer one ("-" vs "--").
+ *  Matching shortest-first is what let an omitted name slot's longer gap
+ *  separator be half-consumed, duplicating a tagkey into the name. */
+function sepsLongestFirst(schema: TrellisSchema): string[] {
+	return [...new Set(schema.separators.filter(Boolean))].sort(
+		(a, b) => b.length - a.length
+	);
 }
 
-/** Strip ONE trailing boundary separator (whichever schema separator matches). */
-function stripOneTrailingSep(s: string, schema: TrellisSchema): string {
-	for (const sep of schema.separators) {
-		if (sep && s.endsWith(sep)) return s.slice(0, s.length - sep.length);
+/** Strip ONE leading boundary separator (longest schema separator that matches). */
+function stripOneLeadingSep(s: string, schema: TrellisSchema): string {
+	for (const sep of sepsLongestFirst(schema)) {
+		if (s.startsWith(sep)) return s.slice(sep.length);
 	}
 	return s;
 }
@@ -419,46 +421,66 @@ export function extractNameMulti(
 ): string {
 	const nameIdx = schema.slots.findIndex((s) => s.role === "name");
 	if (nameIdx === -1) return "";
+	const seps = sepsLongestFirst(schema);
 	let rest = basename;
 	// Left side: slots 0 .. nameIdx-1, consumed left to right. A tag slot is
-	// consumed ONLY when its value is followed by the slot's separator — a bare
+	// consumed ONLY when its value is followed by a separator boundary — a bare
 	// `startsWith(v)` would strip a title that merely happens to begin with the
-	// tagkey text (a middle slot has no positional anchor of its own). Without a
-	// clean boundary, fall back to the positional separator, else leave `rest`
-	// whole so a real title is never truncated on a coincidental match.
+	// tagkey text. The boundary is tried against EVERY schema separator, longest
+	// first: which gap separator actually follows this slot depends on which
+	// later slots are omitted (an empty name slot drops its own separator), so
+	// the declared positional one alone would half-match a longer neighbour
+	// ("-" inside "--") and corrupt the name. Without any clean boundary, fall
+	// back to the positional separator, else leave `rest` whole so a real title
+	// is never truncated on a coincidental match.
 	for (let i = 0; i < nameIdx; i++) {
 		const v = tagkeys[i];
 		if (!v) continue; // omitted slot — nothing in the filename for it
-		const sepAfter = schema.separators[i] ?? "";
 		if (rest === v) {
 			// The tag value IS the entire remainder: a tagkey-only filename (an
 			// index note, no title). Consume it so the name is empty — never fold
 			// the tagkey into the name (which would duplicate it as "BT01-BT01").
 			rest = "";
-		} else if (sepAfter && rest.startsWith(v + sepAfter)) {
-			rest = rest.slice(v.length); // sepAfter stripped just below
-		} else {
-			const j = sepAfter ? rest.indexOf(sepAfter) : -1;
-			rest = j === -1 ? rest : rest.slice(j);
+			continue;
 		}
-		rest = stripOneLeadingSep(rest, schema);
+		let consumed = false;
+		for (const sep of seps) {
+			if (rest.startsWith(v + sep)) {
+				rest = rest.slice(v.length + sep.length);
+				consumed = true;
+				break;
+			}
+		}
+		if (consumed) continue;
+		// Damaged tag slot: fall back to the declared positional separator.
+		const sepAfter = schema.separators[i] ?? "";
+		const j = sepAfter ? rest.indexOf(sepAfter) : -1;
+		if (j !== -1) rest = stripOneLeadingSep(rest.slice(j), schema);
 	}
 	// Right side: slots nameIdx+1 .. end, consumed right to left. Symmetric
-	// boundary rule: consume the tagkey only with its leading separator (or when
-	// it is the whole remainder — a tagkey-only filename).
+	// boundary rule: consume separator+tagkey EXACTLY (or the whole remainder —
+	// a tagkey-only filename). No extra strip afterwards: the boundary consume
+	// already took the separator, so stripping again would eat a title's own
+	// trailing separator characters ("demo-" → "demo").
 	for (let i = schema.slots.length - 1; i > nameIdx; i--) {
 		const v = tagkeys[i];
 		if (!v) continue;
-		const sepBefore = schema.separators[i - 1] ?? "";
 		if (rest === v) {
 			rest = "";
-		} else if (sepBefore && rest.endsWith(sepBefore + v)) {
-			rest = rest.slice(0, rest.length - sepBefore.length - v.length);
-		} else {
-			const j = sepBefore ? rest.lastIndexOf(sepBefore) : -1;
-			if (j !== -1) rest = rest.slice(0, j);
+			continue;
 		}
-		rest = stripOneTrailingSep(rest, schema);
+		let consumed = false;
+		for (const sep of seps) {
+			if (rest.endsWith(sep + v)) {
+				rest = rest.slice(0, rest.length - sep.length - v.length);
+				consumed = true;
+				break;
+			}
+		}
+		if (consumed) continue;
+		const sepBefore = schema.separators[i - 1] ?? "";
+		const j = sepBefore ? rest.lastIndexOf(sepBefore) : -1;
+		if (j !== -1) rest = rest.slice(0, j);
 	}
 	return rest;
 }
