@@ -923,7 +923,11 @@ export class ConfirmModal extends Modal {
 		app: App,
 		private readonly titleText: string,
 		private readonly message: string,
-		private readonly onConfirm: (dontAsk: boolean) => void
+		private readonly onConfirm: (dontAsk: boolean) => void,
+		/** Offer the "don't ask again" toggle. Callers that ignore the flag
+		 *  (e.g. the vault-wide root migration — it must ALWAYS confirm) pass
+		 *  false so no phantom checkbox is shown. */
+		private readonly showDontAsk = true
 	) {
 		super(app);
 	}
@@ -935,9 +939,11 @@ export class ConfirmModal extends Modal {
 			cls: "setting-item-description",
 			text: this.message,
 		});
-		new Setting(contentEl)
-			.setName(t("modal.confirm.dontAsk"))
-			.addToggle((tg) => tg.setValue(false).onChange((v) => (this.dontAsk = v)));
+		if (this.showDontAsk) {
+			new Setting(contentEl)
+				.setName(t("modal.confirm.dontAsk"))
+				.addToggle((tg) => tg.setValue(false).onChange((v) => (this.dontAsk = v)));
+		}
 		new Setting(contentEl)
 			.addButton((b) =>
 				b

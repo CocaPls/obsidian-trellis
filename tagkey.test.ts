@@ -821,3 +821,8 @@ test("tagkeyToTagPath with a zettel scheme accepts a single digit run", () => {
 	// Non-matching tagkeys still fall back to the generic split:
 	assert.equal(tagkeyToTagPath("S88B07", zettel), "z/S/88/B/07");
 });
+
+test("suggestSegment spark: base-26 length-first max — Z vs AA never re-suggests AA", () => {
+	assert.equal(suggestSegment("spark", "88", ["Y", "Z", "AA"], NOW), "AB");
+	assert.equal(suggestSegment("spark", "88", ["Z", "AA", "AB"], NOW), "AC");
+});

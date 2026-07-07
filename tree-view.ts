@@ -140,7 +140,10 @@ export class TrellisTreeView extends ItemView {
 				() => this.cb.onToggleViewMode()
 			);
 		}
-		if (vis.sort) {
+		// Sort applies to the notes tree only — nested mode is fixed segment
+		// order (buildTagTree), so hide the button there instead of showing a
+		// control that does nothing.
+		if (vis.sort && this.cb.getViewMode() !== "tags") {
 			const asc = this.cb.getSortAsc();
 			this.addButton(
 				buttons,

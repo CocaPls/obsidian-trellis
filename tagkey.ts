@@ -785,9 +785,12 @@ export function suggestSegment(
 	if (siblings.length > 0) {
 		if (digitSibs.length === siblings.length) return nextNumberRun(digitSibs);
 		if (letterSibs.length === siblings.length) {
-			const max = [...letterSibs].sort((a, b) =>
-				a.toUpperCase() < b.toUpperCase() ? -1 : 1
-			)[letterSibs.length - 1];
+			// Base-26 order = length FIRST, then lexicographic — plain lexicographic
+			// would rank "Z" above "AA" and re-suggest an existing "AA".
+			const max = [...letterSibs].sort((a, b) => {
+				if (a.length !== b.length) return a.length - b.length;
+				return a.toUpperCase() < b.toUpperCase() ? -1 : 1;
+			})[letterSibs.length - 1];
 			return nextLetterRun(max);
 		}
 		return digitSibs.length ? nextNumberRun(digitSibs) : "01";

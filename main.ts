@@ -969,7 +969,9 @@ export default class TrellisPlugin extends Plugin {
 		const separators = [...this.settings.schema.separators];
 		if (separators.length === 0) separators.push(sep);
 		else separators[0] = sep;
-		return { slots, separators };
+		// Carry the root too — the clone must stay a faithful schema (dropping it
+		// would make any namespace-matching on the clone silently rootless).
+		return { rootNamespace: this.settings.schema.rootNamespace, slots, separators };
 	}
 
 	/** Dry-run: which tagged files a switch to `newSep` would rename. The tag is
@@ -1308,7 +1310,8 @@ export default class TrellisPlugin extends Plugin {
 			this.app,
 			t("modal.root.title"),
 			t("modal.root.desc", { from: oldRoot || "—", to: newRoot || "—", n }),
-			() => void this.applyRootChange(newRoot).finally(onDone)
+			() => void this.applyRootChange(newRoot).finally(onDone),
+			false // vault-wide migration must always confirm — no "don't ask again"
 		).open();
 	}
 
@@ -1591,10 +1594,18 @@ class TrellisSettingTab extends PluginSettingTab {
 						if (!value && isMultiKey(this.plugin.settings.schema)) {
 							// Simple mode keeps the single-key invariant: collapse to
 							// the primary tag slot + a name slot, primary separator.
-							const ns = primaryNamespace(this.plugin.settings.schema) || "trel";
-							const sep = primarySeparator(this.plugin.settings.schema) || "-";
-							const pos = tagPosition(this.plugin.settings.schema);
-							this.plugin.settings.schema = schemaFromLegacy(ns, sep, pos);
+							// Root + primary scheme survive the collapse — losing the
+							// root here would silently orphan every managed tag.
+							const old = this.plugin.settings.schema;
+							const ns = primaryNamespace(old) || "trel";
+							const sep = primarySeparator(old) || "-";
+							const pos = tagPosition(old);
+							const scheme = old.slots.find((s) => s.role === "tag")?.scheme;
+							const next = schemaFromLegacy(ns, sep, pos);
+							next.rootNamespace = old.rootNamespace;
+							const tagSlot = next.slots.find((s) => s.role === "tag");
+							if (tagSlot && scheme) tagSlot.scheme = scheme;
+							this.plugin.settings.schema = next;
 							new Notice(t("notice.advReset"));
 						}
 						await this.plugin.saveSettings();
@@ -1926,6 +1937,11 @@ class TrellisSettingTab extends PluginSettingTab {
 							}
 							const commit = async () => {
 								this.ensureSeparators(schema);
+								// The root is edited OUTSIDE the draft (its own Apply runs a
+								// vault migration). Always take the LIVE root: a stale draft
+								// copy would otherwise revert a migrated root with no
+								// migration, orphaning every managed tag.
+								schema.rootNamespace = this.plugin.settings.schema.rootNamespace;
 								this.plugin.settings.schema = schema;
 								this.draftSchema = null;
 								await this.plugin.saveSettings();
