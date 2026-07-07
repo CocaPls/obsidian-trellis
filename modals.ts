@@ -17,6 +17,14 @@ import {
 	filterTagSuggestions,
 } from "./tagkey";
 
+/** Destructive-action button styling. setDestructive() shipped in 1.13.0; our
+ *  minAppVersion predates it, so fall back to the deprecated setWarning() on
+ *  older apps where the method is absent. */
+function setDestructiveCompat(b: ButtonComponent): ButtonComponent {
+	if (typeof b.setDestructive === "function") return b.setDestructive();
+	return b.setWarning();
+}
+
 /** Two-field modal: which tag path to rename, and to what. */
 export interface DuplicateNote {
 	file: TFile;
@@ -447,7 +455,7 @@ export class BootstrapSelectModal extends Modal {
 			const row = parent.createDiv({
 				cls: "trellis-bootstrap-treerow trellis-bootstrap-folder",
 			});
-			row.style.setProperty("--trellis-depth", String(depth));
+			row.setCssProps({ "--trellis-depth": String(depth) });
 
 			const caret = row.createSpan({
 				cls: "trellis-bootstrap-caret",
@@ -491,7 +499,7 @@ export class BootstrapSelectModal extends Modal {
 					? "trellis-bootstrap-treerow trellis-bootstrap-file trellis-bootstrap-tagged"
 					: "trellis-bootstrap-treerow trellis-bootstrap-file",
 			});
-			row.style.setProperty("--trellis-depth", String(depth));
+			row.setCssProps({ "--trellis-depth": String(depth) });
 
 			row.createSpan({ cls: "trellis-bootstrap-caret", text: "" });
 
@@ -599,13 +607,12 @@ export class BootstrapPreviewModal extends Modal {
 		const buttons = new Setting(contentEl);
 		if (this.assign.length) {
 			buttons.addButton((b) =>
-				b
-					.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
-					.setWarning()
-					.onClick(() => {
-						this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
-						this.close();
-					})
+				setDestructiveCompat(
+					b.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
+				).onClick(() => {
+					this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
+					this.close();
+				})
 			);
 		}
 		buttons.addButton((b) =>
@@ -695,13 +702,12 @@ export class SeparatorChangeModal extends Modal {
 
 		const buttons = new Setting(contentEl);
 		buttons.addButton((b) =>
-			b
-				.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
-				.setWarning()
-				.onClick(() => {
-					this.onApply();
-					this.close();
-				})
+			setDestructiveCompat(
+				b.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
+			).onClick(() => {
+				this.onApply();
+				this.close();
+			})
 		);
 		buttons.addButton((b) =>
 			b.setButtonText(t("modal.sep.cancel")).onClick(() => this.close())
@@ -761,14 +767,11 @@ export class BulkProgressModal extends Modal {
 				})
 			)
 			.addButton((b) =>
-				b
-					.setButtonText(t("bulk.cancel"))
-					.setWarning()
-					.onClick(() => {
-						this.cancelled = true;
-						this.paused = false;
-						this.release();
-					})
+				setDestructiveCompat(b.setButtonText(t("bulk.cancel"))).onClick(() => {
+					this.cancelled = true;
+					this.paused = false;
+					this.release();
+				})
 			);
 	}
 
@@ -793,7 +796,7 @@ export class BulkProgressModal extends Modal {
 	/** Update the bar, count, and elapsed/error meta (call as work progresses). */
 	report(done: number, total: number, failed: number) {
 		const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-		this.barFill.style.width = `${pct}%`;
+		this.barFill.setCssStyles({ width: `${pct}%` });
 		this.countEl.setText(t("bulk.progress", { done, total }));
 		const sec = Math.round((Date.now() - this.startedAt) / 1000);
 		let meta = t("bulk.elapsed", { sec });
@@ -813,8 +816,7 @@ export class BulkProgressModal extends Modal {
 			text: `${this.title} — ${this.cancelled ? t("bulk.cancelledLabel") : t("bulk.done")}`,
 		});
 		const bar = contentEl.createDiv({ cls: "trellis-progress-bar" });
-		const fill = bar.createDiv({ cls: "trellis-progress-bar-fill" });
-		fill.style.width = "100%";
+		const fill = bar.createDiv({ cls: "trellis-progress-bar-fill is-full" });
 		if (this.cancelled) fill.addClass("is-cancelled");
 
 		contentEl.createDiv({

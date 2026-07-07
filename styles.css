@@ -173,6 +173,10 @@
 	transition: width 0.15s ease;
 }
 
+.trellis-progress-modal .trellis-progress-bar-fill.is-full {
+	width: 100%;
+}
+
 .trellis-progress-modal .trellis-progress-bar-fill.is-cancelled {
 	background: var(--text-error);
 }
