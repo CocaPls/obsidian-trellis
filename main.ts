@@ -13,19 +13,28 @@ import {
 import {
 	TrellisSchema,
 	KeySlot,
+	SchemeId,
+	SCHEME_IDS,
 	defaultSchema,
 	schemaFromLegacy,
 	primaryNamespace,
+	primaryNsPath,
+	nsPath,
 	primarySeparator,
 	tagPosition,
 	duplicateLocationGroups,
 	NoteTreeNode,
+	TagTreeNode,
 	tagToTagkey,
 	pickTagkey,
 	syncedBasename,
 	renameTagPath,
+	rootMigratedTag,
+	suggestSegment,
+	scaffoldingPaths,
 	normalizeTagList,
 	buildNoteTree,
+	buildTagTree,
 	sortNoteTree,
 	parentTagPath,
 	extractTagkey,
@@ -111,6 +120,20 @@ interface DedupRecord {
 	removed: string[];
 }
 
+/** The last root-namespace change (for undo — the migration is symmetric). */
+interface RootChangeRecord {
+	oldRoot: string;
+	newRoot: string;
+}
+
+/** How the sidebar renders (0.3.0, experimental): "notes" = real notes only,
+ *  segment layers transparent (classic); "tags" = the full nested tag
+ *  hierarchy, folder-style, like the core tag pane. */
+type TreeViewMode = "notes" | "tags";
+
+/** What a note row shows in nested mode: its filename or its tag segment. */
+type TreeLabelMode = "filename" | "tag";
+
 interface TrellisSettings {
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
@@ -125,6 +148,14 @@ interface TrellisSettings {
 	headerButtons: HeaderButtonVisibility;
 	sortKey: SortKey;
 	sortAsc: boolean;
+	/** Sidebar mode (0.3.0): classic notes tree or nested tag tree. */
+	treeViewMode: TreeViewMode;
+	/** Nested mode: show the root/namespace scaffolding layers as rows. */
+	treeShowRoot: boolean;
+	/** Nested mode: list notes with no managed tag in a bottom section. */
+	treeShowUntagged: boolean;
+	/** Nested mode: note rows show the filename or only the tag segment. */
+	treeLabelMode: TreeLabelMode;
 	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
 	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
@@ -133,6 +164,8 @@ interface TrellisSettings {
 	lastSeparatorChange?: SeparatorChangeRecord;
 	/** Location tags removed by the last duplicate-tag cleanup (for undo). */
 	lastDedup?: DedupRecord[];
+	/** The last root-namespace change (for undo). */
+	lastRootChange?: RootChangeRecord;
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
@@ -143,6 +176,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeViewName: "",
 	headerButtons: {
 		newNote: true,
+		viewMode: true,
 		sort: true,
 		collapseAll: true,
 		showCurrent: true,
@@ -152,6 +186,10 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	},
 	sortKey: "tagkey",
 	sortAsc: true,
+	treeViewMode: "notes",
+	treeShowRoot: true,
+	treeShowUntagged: true,
+	treeLabelMode: "filename",
 	language: "auto",
 };
 
@@ -194,6 +232,8 @@ export default class TrellisPlugin extends Plugin {
 	private readonly scheduleTreeRefresh = debounce(
 		() => {
 			this.treeCache = null;
+			this.tagTreeCache = null;
+			this.untaggedCache = null;
 			this.refreshTreeViews();
 		},
 		200,
@@ -222,6 +262,14 @@ export default class TrellisPlugin extends Plugin {
 						getSortAsc: () => this.settings.sortAsc,
 						getDisplayName: () => this.treeDisplayName(),
 						getButtons: () => this.settings.headerButtons,
+						getViewMode: () => this.settings.treeViewMode,
+						onToggleViewMode: () => void this.toggleTreeViewMode(),
+						getTagRoot: () => this.fullTagTree(),
+						getShowRoot: () => this.settings.treeShowRoot,
+						getScaffolding: () => scaffoldingPaths(this.settings.schema),
+						getLabelMode: () => this.settings.treeLabelMode,
+						getShowUntagged: () => this.settings.treeShowUntagged,
+						getUntagged: () => this.untaggedNotes(),
 						onToggleSort: () => void this.toggleSortDir(),
 						onNewChild: (parentTagPath) => this.openNewNoteModal(parentTagPath),
 						onNewNote: () => this.newNoteFromActive(),
@@ -342,6 +390,7 @@ export default class TrellisPlugin extends Plugin {
 			name: t("cmd.dedupUndo"),
 			callback: () => void this.undoDedup(),
 		});
+		this.registerRootCommands();
 
 		// Right-click a note → cascade-rename its location tag (From prefilled).
 		this.registerEvent(
@@ -528,9 +577,9 @@ export default class TrellisPlugin extends Plugin {
 	private sortedNoteTree(): NoteTreeNode[] {
 		if (this.treeCache) return this.treeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
-		const ns = primaryNamespace(this.settings.schema);
-		const prefix = `#${ns}/`;
-		const exact = `#${ns}`;
+		const full = primaryNsPath(this.settings.schema); // root-aware
+		const prefix = `#${full}/`;
+		const exact = `#${full}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
@@ -544,9 +593,64 @@ export default class TrellisPlugin extends Plugin {
 		return this.treeCache;
 	}
 
+	// --- Nested tag view data (0.3.0 experimental, B24) ---------------------
+
+	/** Cached full tag tree (nested mode) + untagged note list. Invalidated
+	 *  together with treeCache. */
+	private tagTreeCache: TagTreeNode | null = null;
+	private untaggedCache: string[] | null = null;
+
+	/** Every managed tag on every note (ALL slot namespaces, root-aware), as
+	 *  entries for the full nested tag tree. A note tagged in two namespaces
+	 *  appears under both branches. Also collects the untagged list. */
+	private fullTagTree(): TagTreeNode {
+		if (this.tagTreeCache) return this.tagTreeCache;
+		const entries: { tagPath: string; notePath: string }[] = [];
+		const untagged: string[] = [];
+		const fulls = tagNamespaces(this.settings.schema).map((ns) =>
+			nsPath(this.settings.schema, ns)
+		);
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const tags = cache ? getAllTags(cache) ?? [] : [];
+			const managed = [
+				...new Set(
+					tags.filter((t) =>
+						fulls.some((f) => t === `#${f}` || t.startsWith(`#${f}/`))
+					)
+				),
+			];
+			if (managed.length === 0) {
+				untagged.push(file.path);
+				continue;
+			}
+			for (const tag of managed) {
+				entries.push({ tagPath: tag.replace(/^#/, ""), notePath: file.path });
+			}
+		}
+		this.tagTreeCache = buildTagTree(entries);
+		this.untaggedCache = untagged.sort();
+		return this.tagTreeCache;
+	}
+
+	private untaggedNotes(): string[] {
+		if (!this.untaggedCache) this.fullTagTree(); // fills both caches
+		return this.untaggedCache ?? [];
+	}
+
+	/** Flip the sidebar between the classic notes tree and the nested tag tree. */
+	async toggleTreeViewMode() {
+		this.settings.treeViewMode =
+			this.settings.treeViewMode === "tags" ? "notes" : "tags";
+		await this.saveSettings();
+		this.rebuildTrees();
+	}
+
 	/** Invalidate the cache and re-render immediately (sort/namespace change). */
 	rebuildTrees() {
 		this.treeCache = null;
+		this.tagTreeCache = null;
+		this.untaggedCache = null;
 		this.refreshTreeViews();
 	}
 
@@ -591,7 +695,8 @@ export default class TrellisPlugin extends Plugin {
 		new NewChildNoteModal(
 			this.app,
 			initialParent,
-			(parent, segment, title) => void this.createChildNote(parent, segment, title)
+			(parent, segment, title) => void this.createChildNote(parent, segment, title),
+			(parent) => this.segmentSuggestionFor(parent) // scheme prefill (0.3.0)
 		).open();
 	}
 
@@ -614,9 +719,9 @@ export default class TrellisPlugin extends Plugin {
 	/** Direct-child segments already in use under a parent tag path. */
 	private childSegmentsOf(parentTagPath: string): string[] {
 		const segs: string[] = [];
-		const ns = primaryNamespace(this.settings.schema);
-		const prefix = `#${ns}/`;
-		const exact = `#${ns}`;
+		const full = primaryNsPath(this.settings.schema); // root-aware
+		const prefix = `#${full}/`;
+		const exact = `#${full}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
@@ -717,11 +822,11 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
-	/** The note's location tag (namespace match), without the leading '#'. */
+	/** The note's location tag (namespace match, root-aware), without the '#'. */
 	private locationTagOf(file: TFile): string | null {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
-		const prefix = `#${primaryNamespace(this.settings.schema)}/`;
+		const prefix = `#${primaryNsPath(this.settings.schema)}/`;
 		const tag = (getAllTags(cache) ?? []).find((t) => t.startsWith(prefix));
 		return tag ? tag.replace(/^#/, "") : null;
 	}
@@ -1169,6 +1274,140 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveSettings();
 		new Notice(t("notice.undid", { n: undone }));
 	}
+
+	// --- Root namespace change (0.3.0 experimental, B25) --------------------
+	// The root is the layer-1 owner every managed tag starts with. Changing it
+	// (including from/to "no root") is a vault-wide TAG migration: filenames
+	// never change (the tagkey is namespace-independent), so this reuses the
+	// bulk machinery (progress modal, per-file error isolation, undo) but only
+	// rewrites frontmatter tags.
+
+	/** How many notes a root change would rewrite (dry count for the confirm). */
+	private countRootChange(oldRoot: string, newRoot: string): number {
+		const slotNs = tagNamespaces(this.settings.schema);
+		let n = 0;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (!cache) continue;
+			const tags = normalizeTagList(cache.frontmatter?.tags);
+			if (tags.some((tg) => rootMigratedTag(tg, oldRoot, newRoot, slotNs) !== null))
+				n++;
+		}
+		return n;
+	}
+
+	/** Confirm + run a root-namespace change (called from settings Apply). */
+	requestRootChange(newRoot: string, onDone: () => void) {
+		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
+		if (newRoot === oldRoot) {
+			onDone();
+			return;
+		}
+		const n = this.countRootChange(oldRoot, newRoot);
+		new ConfirmModal(
+			this.app,
+			t("modal.root.title"),
+			t("modal.root.desc", { from: oldRoot || "—", to: newRoot || "—", n }),
+			() => void this.applyRootChange(newRoot).finally(onDone)
+		).open();
+	}
+
+	/** Flip the schema's root, then rewrite every managed frontmatter tag to the
+	 *  new shape. The schema flips FIRST so already-migrated tags are managed
+	 *  (and sync-checked) under the new shape while not-yet-migrated ones are
+	 *  simply unmanaged-and-untouched — never mis-parsed. Undo is the symmetric
+	 *  migration back. */
+	private async applyRootChange(newRoot: string) {
+		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
+		const slotNs = tagNamespaces(this.settings.schema);
+		this.settings.schema.rootNamespace = newRoot;
+		await this.saveSettings();
+		let changed = 0;
+		const failed: string[] = [];
+		const files = this.app.vault.getMarkdownFiles();
+		const progress = new BulkProgressModal(this.app, t("bulk.title.root"));
+		progress.open();
+		this.bulkActive = true;
+		try {
+			for (let i = 0; i < files.length; i++) {
+				if (!(await progress.gate())) break; // cancelled — undo restores
+				const file = files[i];
+				try {
+					let touched = false;
+					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+						const tags = normalizeTagList(fm.tags);
+						if (tags.length === 0) return;
+						const next = tags.map(
+							(tg) => rootMigratedTag(tg, oldRoot, newRoot, slotNs) ?? tg
+						);
+						if (next.some((tg, j) => tg !== tags[j])) {
+							fm.tags = next;
+							touched = true;
+						}
+					});
+					if (touched) changed++;
+				} catch (e) {
+					failed.push(file.basename);
+					console.error("TRELLIS root change skipped (frontmatter error)", file.path, e);
+				}
+				progress.report(i + 1, files.length, failed.length);
+			}
+		} finally {
+			this.bulkActive = false;
+			// Record even a partial pass — undo migrates whatever is in the new
+			// shape back, and files that never migrated are untouched by it.
+			this.settings.lastRootChange = { oldRoot, newRoot };
+			await this.saveSettings();
+			this.rebuildTrees();
+			progress.finish({ processed: changed, skipped: failed });
+			new Notice(
+				t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
+			);
+		}
+	}
+
+	/** Undo the last root change: run the symmetric migration back. The apply
+	 *  pass reports its own count Notice; no separate tally here (a post-hoc
+	 *  count would read the already-migrated state and always be 0). */
+	private async undoRootChange() {
+		const rec = this.settings.lastRootChange;
+		if (!rec) {
+			new Notice(t("notice.noRootChange"));
+			return;
+		}
+		this.settings.lastRootChange = undefined;
+		await this.applyRootChange(rec.oldRoot);
+	}
+
+	registerRootCommands() {
+		this.addCommand({
+			id: "root-change-undo",
+			name: t("cmd.rootUndo"),
+			callback: () => void this.undoRootChange(),
+		});
+	}
+
+	// --- ID scheme (0.3.0 experimental, B26) ---------------------------------
+
+	/** Read/write the primary tag slot's scheme (simple-mode dropdown). */
+	getPrimaryScheme(): SchemeId | "" {
+		return this.settings.schema.slots.find((s) => s.role === "tag")?.scheme ?? "";
+	}
+
+	setPrimaryScheme(scheme: SchemeId | "") {
+		const slot = this.firstTagSlot();
+		if (scheme === "") delete slot.scheme;
+		else slot.scheme = scheme;
+	}
+
+	/** Suggested next segment under a parent, per the primary slot's scheme.
+	 *  null = no scheme (the modal stays fully manual, format-agnostic). */
+	segmentSuggestionFor(parent: string): string | null {
+		const scheme = this.settings.schema.slots.find((s) => s.role === "tag")?.scheme;
+		if (!scheme || !parent) return null;
+		const parentSeg = parent.split("/").pop() ?? "";
+		return suggestSegment(scheme, parentSeg, this.childSegmentsOf(parent), new Date());
+	}
 }
 
 /** Settings: namespace, separator, key position. */
@@ -1295,6 +1534,48 @@ class TrellisSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+
+			// ID scheme preset for the primary tag slot (0.3.0, experimental). In
+			// advanced mode the per-slot dropdown in the editor covers this.
+			new Setting(containerEl)
+				.setName(t("setting.schemeName"))
+				.setDesc(t("setting.schemeDesc"))
+				.addDropdown((dd) => {
+					dd.addOption("", t("scheme.none"));
+					for (const id of SCHEME_IDS) dd.addOption(id, t(`scheme.${id}`));
+					dd.setValue(this.plugin.getPrimaryScheme()).onChange(async (v) => {
+						this.plugin.setPrimaryScheme(
+							(SCHEME_IDS as string[]).includes(v) ? (v as SchemeId) : ""
+						);
+						await this.plugin.saveSettings();
+					});
+				});
+		}
+
+		// Root namespace (0.3.0, experimental — B25). Applies to every slot, so
+		// it lives outside the simple/advanced split. Staged + Apply: committing
+		// runs a vault-wide tag migration behind a confirm (undoable).
+		{
+			let pending = (this.plugin.settings.schema.rootNamespace ?? "").trim();
+			new Setting(containerEl)
+				.setName(t("setting.rootName"))
+				.setDesc(t("setting.rootDesc"))
+				.addText((text) =>
+					text
+						.setPlaceholder("trellis")
+						.setValue(pending)
+						.onChange((v) => (pending = v))
+				)
+				.addButton((b) =>
+					b.setButtonText(t("setting.apply")).onClick(() => {
+						const v = pending.trim().replace(/^#/, "").replace(/\/$/, "");
+						if (v !== "" && !isValidNamespace(v)) {
+							new Notice(t("notice.rootBadChar"));
+							return;
+						}
+						this.plugin.requestRootChange(v, () => this.display());
+					})
+				);
 		}
 
 		// Advanced mode (0.2.0, experimental): the multi-key slot editor.
@@ -1370,6 +1651,64 @@ class TrellisSettingTab extends PluginSettingTab {
 						this.plugin.rebuildTrees();
 					})
 			);
+
+		// Nested tag mode (0.3.0, experimental — B24).
+		new Setting(containerEl)
+			.setName(t("setting.treeModeName"))
+			.setDesc(t("setting.treeModeDesc"))
+			.addDropdown((dd) =>
+				dd
+					.addOption("notes", t("setting.treeModeNotes"))
+					.addOption("tags", t("setting.treeModeTags"))
+					.setValue(this.plugin.settings.treeViewMode)
+					.onChange(async (value) => {
+						this.plugin.settings.treeViewMode = value === "tags" ? "tags" : "notes";
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+						this.display();
+					})
+			);
+		if (this.plugin.settings.treeViewMode === "tags") {
+			new Setting(containerEl)
+				.setName(t("setting.showRootName"))
+				.setDesc(t("setting.showRootDesc"))
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.treeShowRoot)
+						.onChange(async (value) => {
+							this.plugin.settings.treeShowRoot = value;
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+						})
+				);
+			new Setting(containerEl)
+				.setName(t("setting.untaggedName"))
+				.setDesc(t("setting.untaggedDesc"))
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.treeShowUntagged)
+						.onChange(async (value) => {
+							this.plugin.settings.treeShowUntagged = value;
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+						})
+				);
+			new Setting(containerEl)
+				.setName(t("setting.labelModeName"))
+				.setDesc(t("setting.labelModeDesc"))
+				.addDropdown((dd) =>
+					dd
+						.addOption("filename", t("setting.labelModeFilename"))
+						.addOption("tag", t("setting.labelModeTag"))
+						.setValue(this.plugin.settings.treeLabelMode)
+						.onChange(async (value) => {
+							this.plugin.settings.treeLabelMode =
+								value === "tag" ? "tag" : "filename";
+							await this.plugin.saveSettings();
+							this.plugin.rebuildTrees();
+						})
+				);
+		}
 
 		// Per-button visibility for the tree-view header. A hidden button's action
 		// is still reachable from the command palette (bootstrap, cascade, undo…).
@@ -1493,6 +1832,15 @@ class TrellisSettingTab extends PluginSettingTab {
 							slot.namespace = v.trim().replace(/^#/, "").replace(/\/$/, "");
 						})
 				);
+				// Per-slot ID scheme (0.3.0). Staged like the rest of the draft.
+				row.addDropdown((dd) => {
+					dd.addOption("", t("scheme.none"));
+					for (const id of SCHEME_IDS) dd.addOption(id, t(`scheme.${id}`));
+					dd.setValue(slot.scheme ?? "").onChange((v) => {
+						if ((SCHEME_IDS as string[]).includes(v)) slot.scheme = v as SchemeId;
+						else delete slot.scheme;
+					});
+				});
 			}
 			row.addExtraButton((b) =>
 				b
@@ -1613,7 +1961,8 @@ class TrellisSettingTab extends PluginSettingTab {
 	/** Read-only summary: how many notes carry a managed location tag, and which
 	 *  namespaces TRELLIS is currently managing. */
 	private renderStats(containerEl: HTMLElement) {
-		const namespaces = tagNamespaces(this.plugin.settings.schema);
+		const schema = this.plugin.settings.schema;
+		const fulls = tagNamespaces(schema).map((ns) => nsPath(schema, ns)); // root-aware
 		const files = this.app.vault.getMarkdownFiles();
 		let managed = 0;
 		for (const f of files) {
@@ -1621,7 +1970,7 @@ class TrellisSettingTab extends PluginSettingTab {
 			const tags = cache ? getAllTags(cache) ?? [] : [];
 			if (
 				tags.some((tag) =>
-					namespaces.some((ns) => tag === `#${ns}` || tag.startsWith(`#${ns}/`))
+					fulls.some((ns) => tag === `#${ns}` || tag.startsWith(`#${ns}/`))
 				)
 			)
 				managed++;
@@ -1632,7 +1981,7 @@ class TrellisSettingTab extends PluginSettingTab {
 				t("setting.statsDesc", {
 					managed,
 					total: files.length,
-					ns: namespaces.join(", ") || "—",
+					ns: fulls.join(", ") || "—",
 				})
 			);
 	}

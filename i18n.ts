@@ -281,6 +281,51 @@ const EN: Record<string, string> = {
 	"notice.advNsEmpty": "tag slot namespace cannot be empty",
 	"notice.advNsDup": "tag slot namespaces must be distinct",
 	"notice.advReset": "schema reset to single-key (tag + name)",
+	// root namespace (0.3.0 experimental, B25)
+	"setting.rootName": "Root namespace (experimental)",
+	"setting.rootDesc":
+		"A single owner root every managed tag starts with (e.g. \"trellis\" → #trellis/tree/…). Leave empty for the classic rootless shape. Applying migrates every managed tag in the vault (undoable); filenames do not change.",
+	"cmd.rootUndo": "Undo last root namespace change",
+	"modal.root.title": "Change root namespace?",
+	"modal.root.desc":
+		"\"{from}\" → \"{to}\": rewrites the managed location tags on {n} note(s). Filenames stay the same — only the tag's owner layer moves. Undoable.",
+	"notice.rootChanged": "root namespace \"{from}\" → \"{to}\" on {n} note(s)",
+	"notice.rootUndone": "root namespace reverted on {n} note(s)",
+	"notice.noRootChange": "no root namespace change to undo",
+	"notice.rootBadChar":
+		"root namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
+	"bulk.title.root": "Changing root namespace",
+	// ID scheme presets (0.3.0 experimental, B26)
+	"setting.schemeName": "ID scheme (experimental)",
+	"setting.schemeDesc":
+		"Optional preset for the primary tag slot. Suggests the next segment for new notes and sharpens bootstrap parsing. Live sync stays format-agnostic either way.",
+	"scheme.none": "None (format-agnostic)",
+	"scheme.spark": "Alternating letters/digits (S/88/B/07)",
+	"scheme.zettel": "Zettelkasten timestamp (YYYYMMDDHHMMSS)",
+	"scheme.date": "Date (YYYYMMDD)",
+	"scheme.seq": "Sequence number (1, 2, 3…)",
+	"adv.scheme": "ID scheme",
+	// nested tag view (0.3.0 experimental, B24)
+	"setting.treeModeName": "Tree view mode",
+	"setting.treeModeDesc":
+		"Notes: only real notes, segment layers transparent (classic). Tags: the full nested tag hierarchy, folder-style, like the core tag pane.",
+	"setting.treeModeNotes": "Notes (classic)",
+	"setting.treeModeTags": "Nested tags",
+	"setting.showRootName": "Show namespace layers (nested mode)",
+	"setting.showRootDesc":
+		"Show the root/namespace tags (e.g. tree) as top rows, or start directly at your hierarchy.",
+	"setting.untaggedName": "Show untagged notes (nested mode)",
+	"setting.untaggedDesc":
+		"List notes carrying no managed location tag in a section at the bottom, so onboarding misses stay visible.",
+	"setting.labelModeName": "Row label (nested mode)",
+	"setting.labelModeDesc":
+		"What a note row shows: its filename, or only its tag segment.",
+	"setting.labelModeFilename": "Filename",
+	"setting.labelModeTag": "Tag segment only",
+	"setting.hb.viewMode": "View mode toggle",
+	"tree.modeToNotes": "Switch to notes view",
+	"tree.modeToTags": "Switch to nested tag view",
+	"tree.untagged": "Untagged notes ({n})",
 };
 
 const KO: Record<string, string> = {
@@ -510,6 +555,50 @@ const KO: Record<string, string> = {
 	"notice.advNsEmpty": "태그 슬롯 네임스페이스는 비울 수 없습니다",
 	"notice.advNsDup": "태그 슬롯 네임스페이스는 서로 달라야 합니다",
 	"notice.advReset": "스키마를 단일키(태그+네임)로 재설정했습니다",
+	// root namespace (0.3.0 experimental, B25)
+	"setting.rootName": "루트 네임스페이스 (시험 기능)",
+	"setting.rootDesc":
+		'모든 관리 태그가 시작하는 단일 소유 루트 (예: "trellis" → #trellis/tree/…). 비우면 기존 무루트 형태. 적용하면 볼트의 관리 태그 전체를 마이그레이션합니다(되돌리기 가능). 파일명은 바뀌지 않습니다.',
+	"cmd.rootUndo": "마지막 루트 네임스페이스 변경 되돌리기",
+	"modal.root.title": "루트 네임스페이스를 변경할까요?",
+	"modal.root.desc":
+		'"{from}" → "{to}": {n}개 노트의 관리 위치 태그를 다시 씁니다. 파일명은 그대로이고 태그의 소유 층만 이동합니다. 되돌릴 수 있습니다.',
+	"notice.rootChanged": '루트 네임스페이스 "{from}" → "{to}", {n}개 노트 변경',
+	"notice.rootUndone": "{n}개 노트의 루트 네임스페이스를 되돌렸습니다",
+	"notice.noRootChange": "되돌릴 루트 네임스페이스 변경 없음",
+	"notice.rootBadChar":
+		"루트 네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
+	"bulk.title.root": "루트 네임스페이스 변경 중",
+	// ID scheme presets (0.3.0 experimental, B26)
+	"setting.schemeName": "ID 스킴 (시험 기능)",
+	"setting.schemeDesc":
+		"1번 태그 슬롯의 선택적 프리셋. 새 노트의 다음 세그먼트를 제안하고 부트스트랩 파싱을 정확하게 합니다. 실시간 동기화는 어느 쪽이든 형식-무지 그대로입니다.",
+	"scheme.none": "없음 (형식-무지)",
+	"scheme.spark": "영문/숫자 교대 (S/88/B/07)",
+	"scheme.zettel": "제텔카스텐 타임스탬프 (YYYYMMDDHHMMSS)",
+	"scheme.date": "날짜 (YYYYMMDD)",
+	"scheme.seq": "순번 (1, 2, 3…)",
+	"adv.scheme": "ID 스킴",
+	// nested tag view (0.3.0 experimental, B24)
+	"setting.treeModeName": "트리 뷰 모드",
+	"setting.treeModeDesc":
+		"노트: 실제 노트만, 세그먼트 층 투명 (기존 방식). 태그: 코어 태그창처럼 중첩 태그 계층 전체를 폴더식으로.",
+	"setting.treeModeNotes": "노트 (기존)",
+	"setting.treeModeTags": "중첩 태그",
+	"setting.showRootName": "네임스페이스 층 표시 (중첩 모드)",
+	"setting.showRootDesc":
+		"루트/네임스페이스 태그(예: tree)를 최상위 행으로 보일지, 바로 계층부터 시작할지.",
+	"setting.untaggedName": "무태그 노트 표시 (중첩 모드)",
+	"setting.untaggedDesc":
+		"관리 위치 태그가 없는 노트를 하단 섹션에 나열해 온보딩 누락을 보이게 합니다.",
+	"setting.labelModeName": "행 표시 형식 (중첩 모드)",
+	"setting.labelModeDesc": "노트 행에 파일명을 보일지, 태그 세그먼트만 보일지.",
+	"setting.labelModeFilename": "파일명",
+	"setting.labelModeTag": "태그 세그먼트만",
+	"setting.hb.viewMode": "뷰 모드 전환",
+	"tree.modeToNotes": "노트 뷰로 전환",
+	"tree.modeToTags": "중첩 태그 뷰로 전환",
+	"tree.untagged": "무태그 노트 ({n})",
 };
 
 const STRINGS: Record<Lang, Record<string, string>> = { en: EN, ko: KO };

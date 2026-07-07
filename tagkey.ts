@@ -19,6 +19,21 @@
 export type KeyRole = "tag" | "name";
 
 /**
+ * ID scheme preset for a tag slot (0.3.0, experimental). Absent = the classic
+ * format-agnostic behaviour. A scheme adds two capabilities and changes NOTHING
+ * about live sync: ① new-note segment suggestion, ② bootstrap parse hints.
+ *  - "spark":  alternating letter/digit runs (S/88/B/07); children alternate
+ *              class with their parent, siblings increment.
+ *  - "zettel": one 12–14 digit timestamp ID (Zettelkasten style).
+ *  - "date":   one YYYYMMDD date ID.
+ *  - "seq":    one plain increasing integer (width-preserving).
+ */
+export type SchemeId = "spark" | "zettel" | "date" | "seq";
+
+/** All scheme ids, in dropdown order. */
+export const SCHEME_IDS: SchemeId[] = ["spark", "zettel", "date", "seq"];
+
+/**
  * One slot in the filename schema. A tag-key carries the location-tag
  * namespace it mirrors; a name-key is free user text TRELLIS never rewrites.
  */
@@ -26,6 +41,8 @@ export interface KeySlot {
 	role: KeyRole;
 	/** Location-tag namespace for a tag slot, e.g. "trel". Absent on name slots. */
 	namespace?: string;
+	/** Optional ID scheme preset (0.3.0). Absent = format-agnostic. */
+	scheme?: SchemeId;
 }
 
 /**
@@ -35,10 +52,37 @@ export interface KeySlot {
  * which reproduces the old single-key behaviour. Slot ORDER encodes position:
  * a tag slot at index 0 is a prefix tagkey, a tag slot after the name slot is a
  * suffix tagkey (the old `keyPosition` flag, now absorbed into the array).
+ *
+ * ROOT NAMESPACE (0.3.0, experimental — B25 layer 1): when set, every managed
+ * tag starts with this single owner root, so a tag is
+ *   #{root}/{slot namespace}/{segments…}   e.g. #trellis/tree/S/88
+ * instead of #{slot namespace}/{segments…}. Ownership then reduces to one
+ * prefix check, and the root is the only name that must not collide with a
+ * user's ordinary tags. ""/absent = classic rootless behaviour (0.2.x shape).
+ * Terminology (A안): layer 1 = root namespace, layer 2 = slot namespace,
+ * layers 3+ = segments.
  */
 export interface TrellisSchema {
+	/** Layer-1 owner root shared by every tag slot. ""/absent = no root. */
+	rootNamespace?: string;
 	slots: KeySlot[];
 	separators: string[];
+}
+
+/**
+ * The full tag namespace path of a slot namespace under the schema's root:
+ * "tree" → "trellis/tree" when rootNamespace is "trellis", else "tree".
+ * This is the string every `#{ns}/…` match point uses, so the root layer
+ * threads through matching, bootstrap and dedup from one place.
+ */
+export function nsPath(schema: TrellisSchema, ns: string): string {
+	const root = (schema.rootNamespace ?? "").trim();
+	return root && ns ? `${root}/${ns}` : ns;
+}
+
+/** nsPath of the primary (first) tag slot. */
+export function primaryNsPath(schema: TrellisSchema): string {
+	return nsPath(schema, primaryNamespace(schema));
 }
 
 /**
@@ -119,10 +163,11 @@ export function duplicateLocationGroups(
 ): DuplicateTagGroup[] {
 	const groups: DuplicateTagGroup[] = [];
 	for (const ns of tagNamespaces(schema)) {
+		const full = nsPath(schema, ns); // root-aware match prefix
 		const matched = [
-			...new Set(tags.filter((t) => t === `#${ns}` || t.startsWith(`#${ns}/`))),
+			...new Set(tags.filter((t) => t === `#${full}` || t.startsWith(`#${full}/`))),
 		];
-		if (matched.length > 1) groups.push({ namespace: ns, tags: matched });
+		if (matched.length > 1) groups.push({ namespace: full, tags: matched });
 	}
 	return groups;
 }
@@ -146,7 +191,7 @@ export function tagPosition(schema: TrellisSchema): "prefix" | "suffix" {
  * @param tag  Tag including the leading "#", as Obsidian's getAllTags() yields.
  */
 export function tagToTagkey(tag: string, schema: TrellisSchema): string | null {
-	const prefix = `#${primaryNamespace(schema)}/`;
+	const prefix = `#${primaryNsPath(schema)}/`;
 	if (!tag.startsWith(prefix)) return null;
 	const path = tag.slice(prefix.length);
 	if (path.length === 0) return null;
@@ -184,9 +229,17 @@ export function parentTagPath(tagPath: string): string {
  *    tag that would silently rename the file later.
  */
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
-	if (!looksLikeTagkey(tagkey)) return null;
-	const segs = tagkey.match(/[A-Za-z]+|[0-9]+/g)!;
-	return `${primaryNamespace(schema)}/${segs.join("/")}`;
+	// A scheme on the primary slot parses first (it may accept single-run IDs
+	// the generic guard rejects — a Zettel timestamp is ONE digit run); when the
+	// scheme doesn't recognise the tagkey, fall back to the generic run split so
+	// mixed vaults still onboard.
+	const scheme = schema.slots.find((s) => s.role === "tag")?.scheme;
+	const bySchema = scheme ? schemeSegments(scheme, tagkey) : null;
+	const segs =
+		bySchema ??
+		(looksLikeTagkey(tagkey) ? tagkey.match(/[A-Za-z]+|[0-9]+/g)! : null);
+	if (!segs) return null;
+	return `${primaryNsPath(schema)}/${segs.join("/")}`;
 }
 
 /**
@@ -378,7 +431,9 @@ export function slotTagkeys(
 	schema: TrellisSchema
 ): (string | null)[] {
 	return schema.slots.map((s) =>
-		s.role === "tag" && s.namespace ? pickTagkeyNs(tags, s.namespace) : null
+		s.role === "tag" && s.namespace
+			? pickTagkeyNs(tags, nsPath(schema, s.namespace))
+			: null
 	);
 }
 
@@ -623,6 +678,151 @@ export function renameTagPath(
 	if (tag === oldPath) return newPath;
 	if (tag.startsWith(oldPath + "/")) return newPath + tag.slice(oldPath.length);
 	return null;
+}
+
+// --- Root namespace migration (0.3.0 experimental, B25) ---------------------
+
+/**
+ * Rewrite ONE frontmatter tag (no leading '#') for a root-namespace change:
+ * strip the old root (if any), require a slot-namespace match, then prepend the
+ * new root (if any). Returns null when the tag is not a managed location tag
+ * (or is already in the target shape) — callers keep those verbatim.
+ *   ("tree/S/88", "", "trellis")        → "trellis/tree/S/88"
+ *   ("trellis/tree/S/88", "trellis","") → "tree/S/88"
+ *   ("daily/notes", …)                  → null (not managed)
+ * Filenames never change here — the tagkey (post-namespace segments) is
+ * identical in both shapes; only the tag's owner layer moves.
+ */
+export function rootMigratedTag(
+	tag: string,
+	oldRoot: string,
+	newRoot: string,
+	slotNamespaces: string[]
+): string | null {
+	if (oldRoot === newRoot) return null;
+	let rest = tag;
+	if (oldRoot) {
+		if (!tag.startsWith(oldRoot + "/")) return null; // bare root or foreign tag
+		rest = tag.slice(oldRoot.length + 1);
+	}
+	const managed = slotNamespaces.some(
+		(ns) => ns && (rest === ns || rest.startsWith(ns + "/"))
+	);
+	if (!managed) return null;
+	const next = newRoot ? `${newRoot}/${rest}` : rest;
+	return next === tag ? null : next;
+}
+
+// --- ID scheme presets (0.3.0 experimental, B26) ----------------------------
+// A scheme touches ONLY ① new-note segment suggestion and ② bootstrap parsing.
+// Live sync stays format-agnostic: it mirrors whatever segments the tag holds.
+
+/** The next letter run in alphabetical base-26: "A"→"B", "Z"→"AA", "AZ"→"BA". */
+function nextLetterRun(s: string): string {
+	const upper = s === s.toUpperCase();
+	const chars = s.toUpperCase().split("");
+	let i = chars.length - 1;
+	while (i >= 0) {
+		if (chars[i] !== "Z") {
+			chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+			break;
+		}
+		chars[i] = "A";
+		i--;
+	}
+	if (i < 0) chars.unshift("A");
+	const out = chars.join("");
+	return upper ? out : out.toLowerCase();
+}
+
+/** max+1 over numeric siblings, zero-padded to the widest sibling. */
+function nextNumberRun(siblings: string[]): string {
+	let max = 0;
+	let width = 1;
+	for (const s of siblings) {
+		const n = parseInt(s, 10);
+		if (n > max) max = n;
+		if (s.length > width) width = s.length;
+	}
+	return String(max + 1).padStart(width, "0");
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Suggest the next child segment under a parent, per scheme. The suggestion is
+ * exactly that — the new-note modal prefills it and the user can overtype, so
+ * a wrong guess costs one edit, never a wrong file.
+ *  - spark:  siblings all digits → next number (width kept); all letters →
+ *            next letter run; none → alternate with the parent's class
+ *            (letters → "01", digits → a letter); mixed/unknown → "01".
+ *  - seq:    next number over numeric siblings ("1" when none).
+ *  - zettel: YYYYMMDDHHMMSS of `now`.
+ *  - date:   YYYYMMDD of `now`.
+ */
+export function suggestSegment(
+	scheme: SchemeId,
+	parentSegment: string,
+	siblings: string[],
+	now: Date
+): string {
+	if (scheme === "zettel") {
+		return (
+			`${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}` +
+			`${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
+		);
+	}
+	if (scheme === "date") {
+		return `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
+	}
+	if (scheme === "seq") {
+		const nums = siblings.filter((s) => /^[0-9]+$/.test(s));
+		return nums.length ? nextNumberRun(nums) : "1";
+	}
+	// spark — alternating letter/digit layers.
+	const digitSibs = siblings.filter((s) => /^[0-9]+$/.test(s));
+	const letterSibs = siblings.filter((s) => /^[A-Za-z]+$/.test(s));
+	if (siblings.length > 0) {
+		if (digitSibs.length === siblings.length) return nextNumberRun(digitSibs);
+		if (letterSibs.length === siblings.length) {
+			const max = [...letterSibs].sort((a, b) =>
+				a.toUpperCase() < b.toUpperCase() ? -1 : 1
+			)[letterSibs.length - 1];
+			return nextLetterRun(max);
+		}
+		return digitSibs.length ? nextNumberRun(digitSibs) : "01";
+	}
+	if (/^[A-Za-z]+$/.test(parentSegment)) return "01";
+	if (/^[0-9]+$/.test(parentSegment)) return "A";
+	return "01";
+}
+
+/**
+ * Scheme-aware bootstrap segmentation of a flat tagkey. Returns the segments,
+ * or null when the tagkey doesn't fit the scheme (caller falls back to the
+ * generic character-class run split). Single-ID schemes accept ONE run the
+ * generic guard would reject; spark is exactly the generic split.
+ */
+export function schemeSegments(scheme: SchemeId, tagkey: string): string[] | null {
+	if (scheme === "zettel") return /^[0-9]{12,14}$/.test(tagkey) ? [tagkey] : null;
+	if (scheme === "date") return /^[0-9]{8}$/.test(tagkey) ? [tagkey] : null;
+	if (scheme === "seq") return /^[0-9]+$/.test(tagkey) ? [tagkey] : null;
+	// spark — same alternating run split as the generic path, same guards.
+	return looksLikeTagkey(tagkey) ? tagkey.match(/[A-Za-z]+|[0-9]+/g)! : null;
+}
+
+/**
+ * Tag paths that are pure namespace scaffolding under the current schema — the
+ * root layer and each slot-namespace layer (e.g. {"trellis", "trellis/tree"};
+ * rootless: {"tree"}). The nested tag view can render these transparently when
+ * "show root" is off: they carry structure, not user hierarchy.
+ */
+export function scaffoldingPaths(schema: TrellisSchema): Set<string> {
+	const out = new Set<string>();
+	const root = (schema.rootNamespace ?? "").trim();
+	if (root) out.add(root);
+	for (const ns of tagNamespaces(schema)) out.add(nsPath(schema, ns));
+	return out;
 }
 
 /**

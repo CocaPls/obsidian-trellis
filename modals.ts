@@ -7,6 +7,7 @@ import {
 	TAbstractFile,
 	AbstractInputSuggest,
 	ButtonComponent,
+	TextComponent,
 	getAllTags,
 	Notice,
 } from "obsidian";
@@ -189,21 +190,29 @@ export class CascadeRenameModal extends Modal {
  *  note's location for the header button) and editable WITH tag autocomplete —
  *  it picks an existing location, so completing it is safe. Segment: the user
  *  assigns it by hand — TRELLIS is format-agnostic and must not guess the tagkey
- *  scheme (a wrong "01" in an alphabetic slot would just have to be retyped). */
+ *  scheme (a wrong "01" in an alphabetic slot would just have to be retyped).
+ *  EXCEPT when the primary slot has an ID scheme (0.3.0): then `suggest` yields
+ *  a prefill for the segment, still fully editable, recomputed when the parent
+ *  changes until the user types their own value. */
 export class NewChildNoteModal extends Modal {
 	private parent: string;
 	private segment = "";
 	private title = "";
+	/** True once the user typed in the segment field — stop auto-suggesting. */
+	private segmentTouched = false;
 	private readonly onSubmit: (parent: string, segment: string, title: string) => void;
+	private readonly suggest?: (parent: string) => string | null;
 
 	constructor(
 		app: App,
 		initialParent: string,
-		onSubmit: (parent: string, segment: string, title: string) => void
+		onSubmit: (parent: string, segment: string, title: string) => void,
+		suggest?: (parent: string) => string | null
 	) {
 		super(app);
 		this.parent = initialParent;
 		this.onSubmit = onSubmit;
+		this.suggest = suggest;
 	}
 
 	onOpen() {
@@ -214,6 +223,18 @@ export class NewChildNoteModal extends Modal {
 			cls: "setting-item-description",
 		});
 
+		let segInput: TextComponent | null = null;
+		// Refill the segment with the scheme suggestion for the current parent —
+		// only while the user hasn't typed a value of their own.
+		const refreshSuggestion = () => {
+			if (this.segmentTouched || !this.suggest || !segInput) return;
+			const s = this.suggest(this.parent);
+			if (s !== null) {
+				segInput.setValue(s); // setValue doesn't fire onChange
+				this.segment = s;
+			}
+		};
+
 		new Setting(contentEl)
 			.setName(t("modal.newNote.parentName"))
 			.setDesc(t("modal.newNote.parentDesc"))
@@ -221,17 +242,26 @@ export class NewChildNoteModal extends Modal {
 				input
 					.setPlaceholder("trel/S88")
 					.setValue(this.parent)
-					.onChange((v) => (this.parent = v.trim()));
-				new TagPathSuggest(this.app, input.inputEl, (v) => (this.parent = v));
+					.onChange((v) => {
+						this.parent = v.trim();
+						refreshSuggestion();
+					});
+				new TagPathSuggest(this.app, input.inputEl, (v) => {
+					this.parent = v;
+					refreshSuggestion();
+				});
 			});
 		new Setting(contentEl)
 			.setName(t("modal.newNote.segmentName"))
 			.setDesc(t("modal.newNote.segmentDesc"))
-			.addText((input) =>
-				input
-					.setPlaceholder(t("ph.segment"))
-					.onChange((v) => (this.segment = v.trim()))
-			);
+			.addText((input) => {
+				segInput = input;
+				input.setPlaceholder(t("ph.segment")).onChange((v) => {
+					this.segment = v.trim();
+					this.segmentTouched = true;
+				});
+			});
+		refreshSuggestion();
 		new Setting(contentEl)
 			.setName(t("modal.newNote.titleName"))
 			.addText((input) =>

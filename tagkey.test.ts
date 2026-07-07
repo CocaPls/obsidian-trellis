@@ -712,3 +712,112 @@ test("extractNameMulti: a title's own trailing separator characters are preserve
 	);
 	assert.equal(syncedBasenameMulti("AA01-demo---BB02", tags, collide), null); // stable
 });
+
+// --- 0.3.0 experimental: root namespace (B25) --------------------------------
+
+import {
+	nsPath,
+	primaryNsPath,
+	rootMigratedTag,
+	scaffoldingPaths,
+	suggestSegment,
+	schemeSegments,
+} from "./tagkey.ts";
+
+const ROOTED: TrellisSchema = {
+	rootNamespace: "trellis",
+	slots: [{ role: "tag", namespace: "tree" }, { role: "name" }],
+	separators: ["-"],
+};
+
+test("nsPath: root prepends; empty root is transparent", () => {
+	assert.equal(nsPath(ROOTED, "tree"), "trellis/tree");
+	assert.equal(nsPath(DEFAULT_SCHEMA, "trel"), "trel");
+	assert.equal(primaryNsPath(ROOTED), "trellis/tree");
+});
+
+test("tagToTagkey: rooted tags parse, rootless tags are foreign (and vice versa)", () => {
+	assert.equal(tagToTagkey("#trellis/tree/S/88", ROOTED), "S88");
+	assert.equal(tagToTagkey("#tree/S/88", ROOTED), null);
+	assert.equal(tagToTagkey("#trellis/tree/S/88", DEFAULT_SCHEMA), null);
+});
+
+test("tagkeyToTagPath emits the rooted path", () => {
+	assert.equal(tagkeyToTagPath("S88B07", ROOTED), "trellis/tree/S/88/B/07");
+});
+
+test("duplicateLocationGroups matches rooted namespaces (group key = full path)", () => {
+	const groups = duplicateLocationGroups(
+		["#trellis/tree/S/88", "#trellis/tree/S/99", "#daily/x"],
+		ROOTED
+	);
+	assert.equal(groups.length, 1);
+	assert.equal(groups[0].namespace, "trellis/tree");
+	assert.equal(groups[0].tags.length, 2);
+});
+
+test("rootMigratedTag: add, change, remove; foreign tags untouched", () => {
+	const ns = ["tree"];
+	assert.equal(rootMigratedTag("tree/S/88", "", "trellis", ns), "trellis/tree/S/88");
+	assert.equal(rootMigratedTag("trellis/tree/S/88", "trellis", "", ns), "tree/S/88");
+	assert.equal(rootMigratedTag("trellis/tree/S/88", "trellis", "own", ns), "own/tree/S/88");
+	assert.equal(rootMigratedTag("daily/notes", "", "trellis", ns), null);
+	assert.equal(rootMigratedTag("trellis", "trellis", "", ns), null); // bare root
+	assert.equal(rootMigratedTag("treehouse/x", "", "trellis", ns), null); // boundary
+	assert.equal(rootMigratedTag("tree/S/88", "", "", ns), null); // no-op
+});
+
+test("scaffoldingPaths: root + namespace layers; rootless = namespaces only", () => {
+	assert.deepEqual([...scaffoldingPaths(ROOTED)].sort(), ["trellis", "trellis/tree"]);
+	assert.deepEqual([...scaffoldingPaths(DEFAULT_SCHEMA)], ["trel"]);
+});
+
+// --- 0.3.0 experimental: ID scheme presets (B26) -----------------------------
+
+const NOW = new Date(2026, 6, 7, 15, 4, 9); // 2026-07-07 15:04:09 local
+
+test("suggestSegment spark: siblings increment within their class", () => {
+	assert.equal(suggestSegment("spark", "B", ["01", "02", "07"], NOW), "08");
+	assert.equal(suggestSegment("spark", "88", ["A", "B", "L"], NOW), "M");
+	assert.equal(suggestSegment("spark", "88", ["Z"], NOW), "AA");
+	assert.equal(suggestSegment("spark", "88", ["09"], NOW), "10");
+});
+
+test("suggestSegment spark: no siblings alternates with the parent's class", () => {
+	assert.equal(suggestSegment("spark", "B", [], NOW), "01"); // letters → digits
+	assert.equal(suggestSegment("spark", "88", [], NOW), "A"); // digits → letters
+	assert.equal(suggestSegment("spark", "", [], NOW), "01");
+});
+
+test("suggestSegment seq: max+1, width preserved", () => {
+	assert.equal(suggestSegment("seq", "x", ["1", "2"], NOW), "3");
+	assert.equal(suggestSegment("seq", "x", ["001", "007"], NOW), "008");
+	assert.equal(suggestSegment("seq", "x", [], NOW), "1");
+});
+
+test("suggestSegment zettel/date stamp from now", () => {
+	assert.equal(suggestSegment("zettel", "", [], NOW), "20260707150409");
+	assert.equal(suggestSegment("date", "", [], NOW), "20260707");
+});
+
+test("schemeSegments: single-ID schemes accept one run; mismatch falls back (null)", () => {
+	assert.deepEqual(schemeSegments("zettel", "20260707150409"), ["20260707150409"]);
+	assert.equal(schemeSegments("zettel", "S88B07"), null);
+	assert.deepEqual(schemeSegments("date", "20260707"), ["20260707"]);
+	assert.equal(schemeSegments("date", "2026077"), null);
+	assert.deepEqual(schemeSegments("seq", "042"), ["042"]);
+	assert.deepEqual(schemeSegments("spark", "S88B07"), ["S", "88", "B", "07"]);
+	assert.equal(schemeSegments("spark", "justwords"), null);
+});
+
+test("tagkeyToTagPath with a zettel scheme accepts a single digit run", () => {
+	const zettel: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "z", scheme: "zettel" }, { role: "name" }],
+		separators: ["-"],
+	};
+	assert.equal(tagkeyToTagPath("20260707150409", zettel), "z/20260707150409");
+	// Generic guard alone would reject it (single run):
+	assert.equal(tagkeyToTagPath("20260707150409", DEFAULT_SCHEMA), null);
+	// Non-matching tagkeys still fall back to the generic split:
+	assert.equal(tagkeyToTagPath("S88B07", zettel), "z/S/88/B/07");
+});

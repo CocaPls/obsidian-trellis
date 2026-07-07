@@ -197,3 +197,24 @@
 .trellis-progress-modal .trellis-progress-skipped {
 	margin: 0.6em 0;
 }
+
+/* Nested tag view (0.3.0 experimental, B24) */
+
+/* Underline affordance (folder-note style): this tag row HAS a note — clicking
+   opens it. Pure branch rows have no underline and only collapse/expand. */
+.trellis-tree .trellis-has-note {
+	text-decoration: underline;
+	text-decoration-color: var(--text-faint);
+	text-underline-offset: 2px;
+}
+
+/* Untagged-notes section: separated and muted so it reads as an appendix. */
+.trellis-tree .trellis-untagged {
+	margin-top: 0.6em;
+	border-top: 1px solid var(--background-modifier-border);
+	padding-top: 0.4em;
+}
+
+.trellis-tree .trellis-untagged > .tree-item-self .tree-item-inner {
+	color: var(--text-muted);
+}
