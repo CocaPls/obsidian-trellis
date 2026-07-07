@@ -852,6 +852,80 @@ export class BulkProgressModal extends Modal {
 	}
 }
 
+/** A minimal alert dialog: title, message, OK. Used for validation failures
+ *  (e.g. an illegal separator) where a corner Notice is too easy to miss. */
+export class AlertModal extends Modal {
+	constructor(
+		app: App,
+		private readonly titleText: string,
+		private readonly message: string
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: this.titleText });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: this.message,
+		});
+		new Setting(contentEl).addButton((b) =>
+			b.setButtonText(t("modal.ok")).setCta().onClick(() => this.close())
+		);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+/** A confirm dialog with an optional "don't ask again" checkbox. onConfirm is
+ *  passed whether the box was ticked so the caller can persist the suppression.
+ *  Reserved for non-destructive confirms (applying a schema edit); destructive
+ *  passes like a separator batch-rename keep their own always-shown modal. */
+export class ConfirmModal extends Modal {
+	private dontAsk = false;
+
+	constructor(
+		app: App,
+		private readonly titleText: string,
+		private readonly message: string,
+		private readonly onConfirm: (dontAsk: boolean) => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: this.titleText });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: this.message,
+		});
+		new Setting(contentEl)
+			.setName(t("modal.confirm.dontAsk"))
+			.addToggle((tg) => tg.setValue(false).onChange((v) => (this.dontAsk = v)));
+		new Setting(contentEl)
+			.addButton((b) =>
+				b
+					.setButtonText(t("modal.confirm.ok"))
+					.setCta()
+					.onClick(() => {
+						this.close();
+						this.onConfirm(this.dontAsk);
+					})
+			)
+			.addButton((b) =>
+				b.setButtonText(t("modal.confirm.cancel")).onClick(() => this.close())
+			);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 /** Autocomplete for a tag-path text input, sourced from the vault's live tags
  *  (every nesting level). */
 class TagPathSuggest extends AbstractInputSuggest<string> {

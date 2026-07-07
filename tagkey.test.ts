@@ -31,6 +31,7 @@ import {
 	extractNameMulti,
 	syncedBasenameMulti,
 	isValidNamespace,
+	isValidSeparator,
 } from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -644,6 +645,30 @@ test("isValidNamespace allows plain names, rejects path/traversal/control/YAML c
 	assert.equal(isValidNamespace("x]\ntags: [evil"), false); // YAML/newline injection
 	assert.equal(isValidNamespace("a,b"), false); // tag list separator
 	assert.equal(isValidNamespace("#trel"), false); // hash
+});
+
+test("isValidSeparator accepts parse-safe symbols, rejects filename-hostile ones", () => {
+	assert.equal(isValidSeparator("-"), true); // the default
+	assert.equal(isValidSeparator("--"), true);
+	assert.equal(isValidSeparator("_"), true);
+	assert.equal(isValidSeparator("."), true);
+	assert.equal(isValidSeparator("~"), true);
+	assert.equal(isValidSeparator("=="), true);
+	assert.equal(isValidSeparator(""), false); // empty
+	assert.equal(isValidSeparator("a"), false); // letter blurs the boundary
+	assert.equal(isValidSeparator("1"), false); // digit
+	assert.equal(isValidSeparator("/"), false); // path separator
+	assert.equal(isValidSeparator("\\"), false); // backslash
+	assert.equal(isValidSeparator(":"), false); // filesystem-illegal
+	assert.equal(isValidSeparator("*"), false);
+	assert.equal(isValidSeparator("?"), false);
+	assert.equal(isValidSeparator("<"), false);
+	assert.equal(isValidSeparator("#"), false); // Obsidian tag/wikilink-hostile
+	assert.equal(isValidSeparator("^"), false);
+	assert.equal(isValidSeparator("["), false);
+	assert.equal(isValidSeparator("]"), false);
+	assert.equal(isValidSeparator("- "), false); // whitespace
+	assert.equal(isValidSeparator(" "), false);
 });
 
 test("extractNameMulti: empty name slot with prefix-colliding separators stays intact", () => {

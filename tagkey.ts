@@ -334,6 +334,21 @@ export function isValidNamespace(ns: string): boolean {
 	return /^[A-Za-z0-9_-]+$/.test(ns);
 }
 
+/**
+ * Whether a string is usable as a filename separator. It is inserted between
+ * the tagkey and the title in the actual filename, so it must be non-empty and
+ * must avoid: letters/digits (they'd blur the tagkey↔title boundary), the
+ * filesystem-illegal set (`\ / : * ? " < > |`), the Obsidian/wikilink-hostile
+ * set (`# ^ [ ]`), and any whitespace or control character. Other punctuation
+ * (`-`, `_`, `.`, `~`, `=`, `+`, …) is allowed, so uncommon parse-safe symbols
+ * stay available. Mirrors the reject set the settings UI used inline, made a
+ * pure, tested function shared by simple- and advanced-mode validation.
+ */
+export function isValidSeparator(s: string): boolean {
+	if (s === "") return false;
+	return !/[A-Za-z0-9/\\:*?"<>|#^[\]]|\s/.test(s);
+}
+
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
 export function tagToTagkeyNs(tag: string, namespace: string): string | null {
 	const prefix = `#${namespace}/`;

@@ -35,6 +35,8 @@ import {
 	isMultiKey,
 	syncedBasenameMulti,
 	isValidNamespace,
+	isValidSeparator,
+	tagNamespaces,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -54,6 +56,8 @@ import {
 	BootstrapErrorsModal,
 	SeparatorChangeModal,
 	BulkProgressModal,
+	AlertModal,
+	ConfirmModal,
 } from "./modals";
 
 type SortKey = "tagkey" | "mtime" | "ctime";
@@ -112,6 +116,8 @@ interface TrellisSettings {
 	schema: TrellisSchema;
 	/** Advanced mode (0.2.0, experimental): expose the multi-key slot editor. */
 	advancedMode: boolean;
+	/** Suppress the confirm dialog when applying an advanced-mode schema edit. */
+	suppressSchemaConfirm: boolean;
 	treeViewEnabled: boolean;
 	/** Custom tab title for the tree view; "" = the localized default. */
 	treeViewName: string;
@@ -132,6 +138,7 @@ interface TrellisSettings {
 const DEFAULT_SETTINGS: TrellisSettings = {
 	schema: defaultSchema(),
 	advancedMode: false,
+	suppressSchemaConfirm: false,
 	treeViewEnabled: true,
 	treeViewName: "",
 	headerButtons: {
@@ -1203,6 +1210,8 @@ class TrellisSettingTab extends PluginSettingTab {
 		// ── Filename scheme ──────────────────────────────────────────────────
 		new Setting(containerEl).setName(t("setting.section.scheme")).setHeading();
 
+		this.renderStats(containerEl);
+
 		// Simple (single-key) schema knobs. Hidden in advanced mode — the slot
 		// editor covers namespace/separator/position as slot properties.
 		if (!this.plugin.settings.advancedMode) {
@@ -1256,14 +1265,15 @@ class TrellisSettingTab extends PluginSettingTab {
 						b.setButtonText(t("setting.apply")).onClick(() => {
 							const v = pending;
 							if (v === primarySeparator(this.plugin.settings.schema)) return;
-							if (v === "") {
-								new Notice(t("notice.sepEmpty"));
-								return;
-							}
-							// Reject letters, digits, `/` (tagkey collision) and chars
-							// illegal in filenames (\ : * ? " < > |).
-							if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
-								new Notice(t("notice.sepBadChar"));
+							// A separator goes into the filename: reject empty, letters,
+							// digits, and filename/wikilink-illegal characters. Shown as a
+							// dialog (not a corner Notice) so it isn't missed.
+							if (!isValidSeparator(v)) {
+								new AlertModal(
+									this.app,
+									t("modal.badSep.title"),
+									t("modal.badSep.desc")
+								).open();
 								return;
 							}
 							// Re-render on close so the field reflects the final value.
@@ -1296,6 +1306,7 @@ class TrellisSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.advancedMode)
 					.onChange(async (value) => {
 						this.plugin.settings.advancedMode = value;
+						this.draftSchema = null; // drop any staged (unapplied) edits
 						if (!value && isMultiKey(this.plugin.settings.schema)) {
 							// Simple mode keeps the single-key invariant: collapse to
 							// the primary tag slot + a name slot, primary separator.
@@ -1382,16 +1393,61 @@ class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	// --- Multi-key slot editor (advanced mode, 0.2.0 experimental) ----------
-	// The schema IS the settings object here; every edit saves + re-renders.
-	// Guards keep the schema valid: ≥1 tag slot, ≤1 name slot, distinct
+	// Edits are STAGED in a draft schema (draft()) and only reach the live
+	// settings when Apply commits them — no per-keystroke writes to the schema.
+	// Guards keep a committed schema valid: ≥1 tag slot, ≤1 name slot, distinct
 	// namespaces, legal non-empty separators (slots n → separators n-1).
 
+	/** The staged schema for advanced mode. null = no pending edits (== live). */
+	private draftSchema: TrellisSchema | null = null;
+
+	private draft(): TrellisSchema {
+		if (!this.draftSchema) {
+			this.draftSchema = JSON.parse(
+				JSON.stringify(this.plugin.settings.schema)
+			) as TrellisSchema;
+			this.ensureSeparators(this.draftSchema);
+		}
+		return this.draftSchema;
+	}
+
+	private draftDirty(): boolean {
+		return (
+			this.draftSchema != null &&
+			JSON.stringify(this.draftSchema) !==
+				JSON.stringify(this.plugin.settings.schema)
+		);
+	}
+
+	/** First problem with a staged schema as a human message, or null if valid. */
+	private validateDraft(schema: TrellisSchema): string | null {
+		const tags = schema.slots.filter((s) => s.role === "tag");
+		if (tags.length < 1) return t("adv.invalid.needTag");
+		if (schema.slots.filter((s) => s.role === "name").length > 1)
+			return t("adv.invalid.oneName");
+		const seen = new Set<string>();
+		for (const s of tags) {
+			const ns = (s.namespace ?? "").trim();
+			if (ns === "") return t("adv.invalid.nsEmpty");
+			if (!isValidNamespace(ns)) return t("adv.invalid.nsBad", { ns });
+			if (seen.has(ns)) return t("adv.invalid.nsDup", { ns });
+			seen.add(ns);
+		}
+		const need = Math.max(0, schema.slots.length - 1);
+		for (let i = 0; i < need; i++) {
+			if (!isValidSeparator(schema.separators[i] ?? ""))
+				return t("adv.invalid.sep", { n: i + 1 });
+		}
+		return null;
+	}
+
 	private renderSlotEditor(containerEl: HTMLElement) {
-		const schema = this.plugin.settings.schema;
-		const save = async () => {
+		const schema = this.draft();
+		// Re-render from the draft after a structural edit; nothing is saved until
+		// Apply. Text fields (namespace, gap separator) mutate the draft in place
+		// and are validated on Apply, so they don't re-render on every keystroke.
+		const refresh = () => {
 			this.ensureSeparators(schema);
-			await this.plugin.saveSettings();
-			this.plugin.rebuildTrees();
 			this.display();
 		};
 
@@ -1404,7 +1460,7 @@ class TrellisSettingTab extends PluginSettingTab {
 					.addOption("tag", t("adv.roleTag"))
 					.addOption("name", t("adv.roleName"))
 					.setValue(slot.role)
-					.onChange(async (v) => {
+					.onChange((v) => {
 						const role = v === "name" ? "name" : "tag";
 						if (role === slot.role) return;
 						if (role === "name") {
@@ -1424,7 +1480,7 @@ class TrellisSettingTab extends PluginSettingTab {
 							slot.role = "tag";
 							slot.namespace = slot.namespace || this.nextFreeNamespace(schema);
 						}
-						await save();
+						refresh();
 					})
 			);
 			if (slot.role === "tag") {
@@ -1432,27 +1488,9 @@ class TrellisSettingTab extends PluginSettingTab {
 					text
 						.setPlaceholder(t("adv.nsPh"))
 						.setValue(slot.namespace ?? "")
-						.onChange(async (v) => {
-							const ns = v.trim().replace(/^#/, "").replace(/\/$/, "");
-							if (ns === "") {
-								new Notice(t("notice.advNsEmpty"));
-								return;
-							}
-							if (!isValidNamespace(ns)) {
-								new Notice(t("notice.nsBadChar"));
-								return;
-							}
-							if (
-								schema.slots.some(
-									(s, j) => j !== i && s.role === "tag" && s.namespace === ns
-								)
-							) {
-								new Notice(t("notice.advNsDup"));
-								return;
-							}
-							slot.namespace = ns;
-							await this.plugin.saveSettings();
-							this.plugin.rebuildTrees();
+						.onChange((v) => {
+							// Staged raw; validated on Apply (no live save/re-render).
+							slot.namespace = v.trim().replace(/^#/, "").replace(/\/$/, "");
 						})
 				);
 			}
@@ -1461,10 +1499,10 @@ class TrellisSettingTab extends PluginSettingTab {
 					.setIcon("arrow-up")
 					.setTooltip(t("adv.moveUp"))
 					.setDisabled(i === 0)
-					.onClick(async () => {
+					.onClick(() => {
 						if (i === 0) return;
 						[schema.slots[i - 1], schema.slots[i]] = [schema.slots[i], schema.slots[i - 1]];
-						await save();
+						refresh();
 					})
 			);
 			row.addExtraButton((b) =>
@@ -1472,17 +1510,17 @@ class TrellisSettingTab extends PluginSettingTab {
 					.setIcon("arrow-down")
 					.setTooltip(t("adv.moveDown"))
 					.setDisabled(i === schema.slots.length - 1)
-					.onClick(async () => {
+					.onClick(() => {
 						if (i === schema.slots.length - 1) return;
 						[schema.slots[i], schema.slots[i + 1]] = [schema.slots[i + 1], schema.slots[i]];
-						await save();
+						refresh();
 					})
 			);
 			row.addExtraButton((b) =>
 				b
 					.setIcon("trash")
 					.setTooltip(t("adv.remove"))
-					.onClick(async () => {
+					.onClick(() => {
 						if (
 							slot.role === "tag" &&
 							schema.slots.filter((s) => s.role === "tag").length <= 1
@@ -1491,7 +1529,7 @@ class TrellisSettingTab extends PluginSettingTab {
 							return;
 						}
 						schema.slots.splice(i, 1);
-						await save();
+						refresh();
 					})
 			);
 			// The separator between this slot and the next (slots n → seps n-1).
@@ -1502,44 +1540,100 @@ class TrellisSettingTab extends PluginSettingTab {
 						text
 							.setPlaceholder("-")
 							.setValue(schema.separators[i] ?? "-")
-							.onChange(async (v) => {
-								if (v === "") {
-									new Notice(t("notice.sepEmpty"));
-									return;
-								}
-								if (/[A-Za-z0-9/\\:*?"<>|]/.test(v)) {
-									new Notice(t("notice.sepBadChar"));
-									return;
-								}
+							.onChange((v) => {
+								// Staged raw; validated on Apply.
 								schema.separators[i] = v;
-								await this.plugin.saveSettings();
 							})
 					);
 			}
 		});
 
-		new Setting(containerEl)
-			.addButton((b) =>
-				b.setButtonText(t("adv.addTag")).onClick(async () => {
-					schema.slots.push({
-						role: "tag",
-						namespace: this.nextFreeNamespace(schema),
-					});
-					await save();
-				})
-			)
-			.addButton((b) =>
-				b
-					.setButtonText(t("adv.addName"))
-					.setDisabled(schema.slots.some((s) => s.role === "name"))
-					.onClick(async () => {
-						if (schema.slots.some((s) => s.role === "name")) {
-							new Notice(t("notice.advOneName"));
-							return;
-						}
-						schema.slots.push({ role: "name" });
-						await save();
+		// One "Add slot" button: a new slot defaults to a tag role (the safe
+		// minimum) and the per-row role dropdown converts it to a name slot if
+		// wanted — replacing the old separate add-tag / add-name buttons.
+		new Setting(containerEl).addButton((b) =>
+			b.setButtonText(t("adv.addSlot")).onClick(() => {
+				schema.slots.push({
+					role: "tag",
+					namespace: this.nextFreeNamespace(schema),
+				});
+				refresh();
+			})
+		);
+
+		// Apply / Revert — the staged schema only reaches the engine here. Shown
+		// only when the draft differs from the live schema.
+		if (this.draftDirty()) {
+			new Setting(containerEl)
+				.setName(t("adv.pending"))
+				.addButton((b) =>
+					b
+						.setButtonText(t("adv.apply"))
+						.setCta()
+						.onClick(() => {
+							const err = this.validateDraft(schema);
+							if (err) {
+								new AlertModal(this.app, t("adv.invalidTitle"), err).open();
+								return;
+							}
+							const commit = async () => {
+								this.ensureSeparators(schema);
+								this.plugin.settings.schema = schema;
+								this.draftSchema = null;
+								await this.plugin.saveSettings();
+								this.plugin.rebuildTrees();
+								new Notice(t("notice.advApplied"));
+								this.display();
+							};
+							if (this.plugin.settings.suppressSchemaConfirm) {
+								void commit();
+								return;
+							}
+							new ConfirmModal(
+								this.app,
+								t("modal.applySchema.title"),
+								t("modal.applySchema.desc"),
+								(dontAsk) => {
+									if (dontAsk)
+										this.plugin.settings.suppressSchemaConfirm = true;
+									void commit();
+								}
+							).open();
+						})
+				)
+				.addButton((b) =>
+					b.setButtonText(t("adv.revert")).onClick(() => {
+						this.draftSchema = null;
+						this.display();
 					})
+				);
+		}
+	}
+
+	/** Read-only summary: how many notes carry a managed location tag, and which
+	 *  namespaces TRELLIS is currently managing. */
+	private renderStats(containerEl: HTMLElement) {
+		const namespaces = tagNamespaces(this.plugin.settings.schema);
+		const files = this.app.vault.getMarkdownFiles();
+		let managed = 0;
+		for (const f of files) {
+			const cache = this.app.metadataCache.getFileCache(f);
+			const tags = cache ? getAllTags(cache) ?? [] : [];
+			if (
+				tags.some((tag) =>
+					namespaces.some((ns) => tag === `#${ns}` || tag.startsWith(`#${ns}/`))
+				)
+			)
+				managed++;
+		}
+		new Setting(containerEl)
+			.setName(t("setting.statsName"))
+			.setDesc(
+				t("setting.statsDesc", {
+					managed,
+					total: files.length,
+					ns: namespaces.join(", ") || "—",
+				})
 			);
 	}
 
