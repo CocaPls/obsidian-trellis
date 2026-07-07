@@ -1621,7 +1621,7 @@ class TrellisSettingTab extends PluginSettingTab {
 			const tags = cache ? getAllTags(cache) ?? [] : [];
 			if (
 				tags.some((tag) =>
-					namespaces.some((ns) => tag === `#${ns}` || tag.startsWith(`#${ns}/`))
+					namespaces.some((ns) => tag.startsWith(`#${ns}/`))
 				)
 			)
 				managed++;

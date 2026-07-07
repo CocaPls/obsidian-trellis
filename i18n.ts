@@ -11,16 +11,23 @@ export type Lang = "en" | "ko";
 /** Settings value: "auto" follows Obsidian; "en"/"ko" force a language. */
 export type LangSetting = "auto" | "en" | "ko";
 
-/** Read Obsidian's UI language via the official getLanguage() API (1.8.7+).
- *  Guarded because our minAppVersion predates it — on older apps the export is
- *  absent and we fall back to the English default. */
+/** Read Obsidian's UI language. Prefers the official getLanguage() API (1.8.7+);
+ *  our minAppVersion predates it, so on older apps where the export is absent we
+ *  fall back to the persisted "language" localStorage key — the same signal
+ *  0.2.0 used — so Korean auto-detection still works there, then to English. */
 function detectObsidianLang(): Lang {
 	try {
-		if (typeof getLanguage === "function" && getLanguage().toLowerCase().startsWith("ko")) {
-			return "ko";
+		if (typeof getLanguage === "function") {
+			const lang = getLanguage();
+			if (typeof lang === "string") {
+				return lang.toLowerCase().startsWith("ko") ? "ko" : "en";
+			}
 		}
+		// pre-1.8.7 app without getLanguage() — read the persisted UI language.
+		const legacy = window.localStorage.getItem("language");
+		if (legacy && legacy.toLowerCase().startsWith("ko")) return "ko";
 	} catch {
-		/* pre-1.8.7 app without getLanguage() — fall through to default */
+		/* localStorage blocked or unexpected API shape — fall through to default */
 	}
 	return "en";
 }
