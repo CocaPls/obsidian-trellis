@@ -200,10 +200,15 @@ export class TrellisTreeView extends ItemView {
 			if (!this.cb.getShowRoot()) {
 				// Hide the root/namespace scaffolding layers: render their children
 				// in their place (recursively — a root and its slot namespace are
-				// both scaffolding).
+				// both scaffolding). A scaffolding node that CARRIES a note is kept
+				// visible — promoting it would drop that note from the tree.
 				const scaff = this.cb.getScaffolding();
 				const promote = (nodes: TagTreeNode[]): TagTreeNode[] =>
-					nodes.flatMap((n) => (scaff.has(n.path) ? promote(n.children) : [n]));
+					nodes.flatMap((n) =>
+						scaff.has(n.path) && n.notePaths.length === 0
+							? promote(n.children)
+							: [n]
+					);
 				tops = promote(tops);
 			}
 			if (tops.length === 0 && this.cb.getUntagged().length === 0) {
