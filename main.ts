@@ -25,7 +25,6 @@ import {
 	duplicateLocationGroups,
 	NoteTreeNode,
 	TagTreeNode,
-	tagToTagkey,
 	pickTagkey,
 	syncedBasename,
 	renameTagPath,
@@ -39,7 +38,7 @@ import {
 	parentTagPath,
 	extractTagkey,
 	tagkeyToTagPath,
-	assembleBasename,
+	assembleBasenameMulti,
 	separatorMigratedName,
 	isMultiKey,
 	syncedBasenameMulti,
@@ -285,6 +284,7 @@ export default class TrellisPlugin extends Plugin {
 							).open(),
 						onUndoBootstrap: () => void this.undoBootstrap(),
 						onUndoSeparator: () => void this.undoSeparatorChange(),
+						onUndoRoot: () => void this.undoRootChange(),
 					})
 			);
 		} catch (e) {
@@ -716,10 +716,28 @@ export default class TrellisPlugin extends Plugin {
 		this.openNewNoteModal(parent);
 	}
 
-	/** Direct-child segments already in use under a parent tag path. */
+	/** The index of the tag slot whose (root-aware) namespace path contains this
+	 *  tag path, or -1 when no slot owns it. Lets note creation and segment
+	 *  suggestion work on EVERY namespace branch the nested view renders, not
+	 *  just the primary one. */
+	private slotForTagPath(tagPath: string): number {
+		const s = this.settings.schema;
+		return s.slots.findIndex((sl) => {
+			if (sl.role !== "tag" || !sl.namespace) return false;
+			const full = nsPath(s, sl.namespace);
+			return tagPath === full || tagPath.startsWith(full + "/");
+		});
+	}
+
+	/** Direct-child segments already in use under a parent tag path. The
+	 *  namespace is derived from the parent itself (any slot), root-aware. */
 	private childSegmentsOf(parentTagPath: string): string[] {
 		const segs: string[] = [];
-		const full = primaryNsPath(this.settings.schema); // root-aware
+		const idx = this.slotForTagPath(parentTagPath);
+		const slot = idx >= 0 ? this.settings.schema.slots[idx] : null;
+		const full = slot?.namespace
+			? nsPath(this.settings.schema, slot.namespace)
+			: primaryNsPath(this.settings.schema);
 		const prefix = `#${full}/`;
 		const exact = `#${full}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
@@ -738,20 +756,35 @@ export default class TrellisPlugin extends Plugin {
 		return segs;
 	}
 
-	/** Create a new note as a child of parentTagPath with the given segment. */
+	/** Create a new note as a child of parentTagPath with the given segment.
+	 *  Works on any slot's namespace branch (the nested view offers "new here"
+	 *  everywhere): the owning slot is resolved from the parent path, and the
+	 *  filename is assembled with only that slot + the title filled in. */
 	private async createChildNote(
 		parentTagPath: string,
 		segment: string,
 		title: string
 	) {
+		const schema = this.settings.schema;
 		const tagPath = `${parentTagPath}/${segment}`;
-		const tagkey = tagToTagkey(`#${tagPath}`, this.settings.schema);
+		const idx = this.slotForTagPath(tagPath);
+		const slot = idx >= 0 ? schema.slots[idx] : null;
+		if (!slot?.namespace) {
+			new Notice(t("notice.noTagkey"));
+			return;
+		}
+		const full = nsPath(schema, slot.namespace);
+		const rest = tagPath === full ? "" : tagPath.slice(full.length + 1);
+		const tagkey = rest.split("/").join("");
 		if (!tagkey) {
 			new Notice(t("notice.noTagkey"));
 			return;
 		}
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
-		const base = assembleBasename(tagkey, safeTitle, this.settings.schema);
+		const values = schema.slots.map((s, i) =>
+			i === idx ? tagkey : s.role === "name" ? safeTitle : null
+		);
+		const base = assembleBasenameMulti(values, schema);
 
 		const path = normalizePath(`${base}.md`);
 		if (this.app.vault.getAbstractFileByPath(path)) {
@@ -822,12 +855,19 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
-	/** The note's location tag (namespace match, root-aware), without the '#'. */
+	/** The note's location tag (namespace match, root-aware), without the '#'.
+	 *  Matches the exact namespace-level tag too — a note tagged exactly
+	 *  #trellis/tree IS managed (it shows in the tree), so bootstrap must not
+	 *  offer to re-tag it and new-note-from-active must keep its context. */
 	private locationTagOf(file: TFile): string | null {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
-		const prefix = `#${primaryNsPath(this.settings.schema)}/`;
-		const tag = (getAllTags(cache) ?? []).find((t) => t.startsWith(prefix));
+		const full = primaryNsPath(this.settings.schema);
+		const prefix = `#${full}/`;
+		const exact = `#${full}`;
+		const tag = (getAllTags(cache) ?? []).find(
+			(t) => t === exact || t.startsWith(prefix)
+		);
 		return tag ? tag.replace(/^#/, "") : null;
 	}
 
@@ -1315,17 +1355,43 @@ export default class TrellisPlugin extends Plugin {
 		).open();
 	}
 
+	/** Rewrite one file's managed tags between root shapes. Returns true when
+	 *  the file was actually changed. Shared by the forward pass and rollback. */
+	private async migrateFileRoot(
+		file: TFile,
+		fromRoot: string,
+		toRoot: string,
+		slotNs: string[]
+	): Promise<boolean> {
+		let touched = false;
+		await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+			const tags = normalizeTagList(fm.tags);
+			if (tags.length === 0) return;
+			const next = tags.map((tg) => rootMigratedTag(tg, fromRoot, toRoot, slotNs) ?? tg);
+			if (next.some((tg, j) => tg !== tags[j])) {
+				fm.tags = next;
+				touched = true;
+			}
+		});
+		return touched;
+	}
+
 	/** Flip the schema's root, then rewrite every managed frontmatter tag to the
 	 *  new shape. The schema flips FIRST so already-migrated tags are managed
 	 *  (and sync-checked) under the new shape while not-yet-migrated ones are
-	 *  simply unmanaged-and-untouched — never mis-parsed. Undo is the symmetric
-	 *  migration back. */
+	 *  simply unmanaged-and-untouched — never mis-parsed. Cancel = clean
+	 *  rollback (separator-change parity): the files already rewritten are
+	 *  migrated back and the old root is restored, so no half-migrated state
+	 *  persists — a lingering half state would let bootstrap re-tag the
+	 *  untouched notes and create duplicate location tags. A completed pass is
+	 *  undoable via the symmetric migration back. */
 	private async applyRootChange(newRoot: string) {
 		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
 		const slotNs = tagNamespaces(this.settings.schema);
 		this.settings.schema.rootNamespace = newRoot;
 		await this.saveSettings();
 		let changed = 0;
+		const touchedPaths: string[] = [];
 		const failed: string[] = [];
 		const files = this.app.vault.getMarkdownFiles();
 		const progress = new BulkProgressModal(this.app, t("bulk.title.root"));
@@ -1333,22 +1399,13 @@ export default class TrellisPlugin extends Plugin {
 		this.bulkActive = true;
 		try {
 			for (let i = 0; i < files.length; i++) {
-				if (!(await progress.gate())) break; // cancelled — undo restores
+				if (!(await progress.gate())) break; // cancelled — rolled back below
 				const file = files[i];
 				try {
-					let touched = false;
-					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-						const tags = normalizeTagList(fm.tags);
-						if (tags.length === 0) return;
-						const next = tags.map(
-							(tg) => rootMigratedTag(tg, oldRoot, newRoot, slotNs) ?? tg
-						);
-						if (next.some((tg, j) => tg !== tags[j])) {
-							fm.tags = next;
-							touched = true;
-						}
-					});
-					if (touched) changed++;
+					if (await this.migrateFileRoot(file, oldRoot, newRoot, slotNs)) {
+						changed++;
+						touchedPaths.push(file.path);
+					}
 				} catch (e) {
 					failed.push(file.basename);
 					console.error("TRELLIS root change skipped (frontmatter error)", file.path, e);
@@ -1356,16 +1413,36 @@ export default class TrellisPlugin extends Plugin {
 				progress.report(i + 1, files.length, failed.length);
 			}
 		} finally {
-			this.bulkActive = false;
-			// Record even a partial pass — undo migrates whatever is in the new
-			// shape back, and files that never migrated are untouched by it.
-			this.settings.lastRootChange = { oldRoot, newRoot };
-			await this.saveSettings();
-			this.rebuildTrees();
-			progress.finish({ processed: changed, skipped: failed });
-			new Notice(
-				t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
-			);
+			if (progress.wasCancelled) {
+				// Roll back what was rewritten (schema still = newRoot while the
+				// reverted tags land, so nothing is mis-parsed mid-rollback), then
+				// restore the old root. Nothing to undo afterwards.
+				let reverted = 0;
+				for (const path of touchedPaths) {
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (!(file instanceof TFile)) continue;
+					try {
+						if (await this.migrateFileRoot(file, newRoot, oldRoot, slotNs)) reverted++;
+					} catch (e) {
+						console.error("TRELLIS root rollback skipped (frontmatter error)", path, e);
+					}
+				}
+				this.bulkActive = false;
+				this.settings.schema.rootNamespace = oldRoot;
+				this.settings.lastRootChange = undefined;
+				await this.saveSettings();
+				this.rebuildTrees();
+				progress.finish({ processed: reverted, skipped: failed });
+			} else {
+				this.bulkActive = false;
+				this.settings.lastRootChange = { oldRoot, newRoot };
+				await this.saveSettings();
+				this.rebuildTrees();
+				progress.finish({ processed: changed, skipped: failed });
+				new Notice(
+					t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
+				);
+			}
 		}
 	}
 
@@ -1403,11 +1480,17 @@ export default class TrellisPlugin extends Plugin {
 		else slot.scheme = scheme;
 	}
 
-	/** Suggested next segment under a parent, per the primary slot's scheme.
-	 *  null = no scheme (the modal stays fully manual, format-agnostic). */
+	/** Suggested next segment under a parent, per the OWNING slot's scheme
+	 *  (resolved from the parent path — nested mode offers creation on every
+	 *  namespace branch). null = no scheme (the modal stays fully manual). */
 	segmentSuggestionFor(parent: string): string | null {
-		const scheme = this.settings.schema.slots.find((s) => s.role === "tag")?.scheme;
-		if (!scheme || !parent) return null;
+		if (!parent) return null;
+		const idx = this.slotForTagPath(parent);
+		const scheme =
+			idx >= 0
+				? this.settings.schema.slots[idx].scheme
+				: this.settings.schema.slots.find((s) => s.role === "tag")?.scheme;
+		if (!scheme) return null;
 		const parentSeg = parent.split("/").pop() ?? "";
 		return suggestSegment(scheme, parentSeg, this.childSegmentsOf(parent), new Date());
 	}
