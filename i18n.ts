@@ -11,18 +11,10 @@ export type Lang = "en" | "ko";
 /** Settings value: "auto" follows Obsidian; "en"/"ko" force a language. */
 export type LangSetting = "auto" | "en" | "ko";
 
-/** Read Obsidian's UI language via the official getLanguage() API (1.8.7+).
- *  Guarded because our minAppVersion predates it — on older apps the export is
- *  absent and we fall back to the English default. */
+/** Read Obsidian's UI language via the official getLanguage() API (guaranteed by
+ *  our minAppVersion 1.8.7). Korean when it starts with "ko", else English. */
 function detectObsidianLang(): Lang {
-	try {
-		if (typeof getLanguage === "function" && getLanguage().toLowerCase().startsWith("ko")) {
-			return "ko";
-		}
-	} catch {
-		/* pre-1.8.7 app without getLanguage() — fall through to default */
-	}
-	return "en";
+	return getLanguage().toLowerCase().startsWith("ko") ? "ko" : "en";
 }
 
 export function resolveLang(setting: LangSetting): Lang {

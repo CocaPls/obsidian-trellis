@@ -18,12 +18,12 @@ import {
 	filterTagSuggestions,
 } from "./tagkey";
 
-/** Destructive-action button styling. setDestructive() shipped in 1.13.0; our
- *  minAppVersion predates it, so fall back to the deprecated setWarning() on
- *  older apps where the method is absent. */
-function setDestructiveCompat(b: ButtonComponent): ButtonComponent {
-	if (typeof b.setDestructive === "function") return b.setDestructive();
-	return b.setWarning();
+/** Style a button as destructive via a CSS class (styles.css). Avoids both the
+ *  deprecated setWarning() and the version-gated setDestructive(), so it works
+ *  on every supported Obsidian without a runtime guard. */
+function markDestructive(b: ButtonComponent): ButtonComponent {
+	b.buttonEl.addClass("trellis-destructive");
+	return b;
 }
 
 /** Two-field modal: which tag path to rename, and to what. */
@@ -637,7 +637,7 @@ export class BootstrapPreviewModal extends Modal {
 		const buttons = new Setting(contentEl);
 		if (this.assign.length) {
 			buttons.addButton((b) =>
-				setDestructiveCompat(
+				markDestructive(
 					b.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
 				).onClick(() => {
 					this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
@@ -732,7 +732,7 @@ export class SeparatorChangeModal extends Modal {
 
 		const buttons = new Setting(contentEl);
 		buttons.addButton((b) =>
-			setDestructiveCompat(
+			markDestructive(
 				b.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
 			).onClick(() => {
 				this.onApply();
@@ -797,7 +797,7 @@ export class BulkProgressModal extends Modal {
 				})
 			)
 			.addButton((b) =>
-				setDestructiveCompat(b.setButtonText(t("bulk.cancel"))).onClick(() => {
+				markDestructive(b.setButtonText(t("bulk.cancel"))).onClick(() => {
 					this.cancelled = true;
 					this.paused = false;
 					this.release();
