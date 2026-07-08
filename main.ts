@@ -805,9 +805,12 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.exists", { base }));
 			return;
 		}
-		const content = `---\ntags: [${tagPath}]\n---\n\n# ${safeTitle || tagkey}\n`;
+		const body = `# ${safeTitle || tagkey}\n`;
 		try {
-			const file = await this.app.vault.create(path, content);
+			const file = await this.app.vault.create(path, body);
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				fm.tags = [tagPath];
+			});
 			await this.app.workspace.getLeaf(false).openFile(file);
 		} catch (e) {
 			console.error("TRELLIS create failed", e);

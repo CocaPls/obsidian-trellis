@@ -1,12 +1,12 @@
-# TRELLIS
+# Trellis
 
 **English** | [한국어](README.ko.md)
 
-Tag-driven filename sync for [Obsidian](https://obsidian.md). Keep a hierarchical
-**location tag** as the single source of truth, and TRELLIS mirrors it into the
-**filename prefix** (the *tagkey*) automatically — link-safe.
+Trellis keeps a hierarchical **location tag** as the source of truth for a note,
+and mirrors it into the note's **filename prefix** — automatically, and without
+breaking any links.
 
-Move a note in the tag tree, and its filename prefix follows. No manual
+Move a note in the tag tree and its filename prefix follows. No manual
 batch-renaming, no broken wikilinks.
 
 ```
@@ -16,106 +16,110 @@ retag it     #trel/S88/B99     →  filename  S88B99-meeting-notes.md   (automat
 
 ![Sidebar tree view](screenshots/tree-view.png)
 
-## 🧩 How it works
+## How it works
 
-TRELLIS reads a filename as three parts — for example `S88B07-meeting-notes.md`:
+Trellis reads a filename as three parts. For `S88B07-meeting-notes.md`:
 
-- **`S88B07`** — the **tagkey**: the identifier built from the note's location
-  tag (`#trel/S88/B07` → `S88B07`). This is the only part TRELLIS controls.
-- **`-`** — the **separator** between the tagkey and the name (default `-`).
-- **`meeting-notes`** — the **namekey**: your title. TRELLIS never touches it.
+- `S88B07` is the **tagkey** — the prefix built from the note's location tag
+  (`#trel/S88/B07` becomes `S88B07`). This is the only part Trellis controls.
+- `-` is the **separator** between the tagkey and the title (default `-`).
+- `meeting-notes` is your **title**. Trellis never touches it.
 
-The tag is the source of truth: change the tag and the tagkey is rewritten to
-match; edit the tagkey by hand and it's restored from the tag.
+The tag is the source of truth. Change the tag and the tagkey is rewritten to
+match; edit the tagkey by hand and it's restored from the tag on the next sync.
 
-## ✨ Features
+## What it does
 
-- **One-directional sync** — when a note's location tag changes, its filename
-  prefix is rewritten to match, through Obsidian's link-safe rename API
-  (wikilinks update automatically). Edit the filename or title by hand and it's
-  restored from the tag. The tag is always the source of truth. Keep location
-  tags in frontmatter — that's what cascade and bootstrap read and rewrite.
-  One note = one location tag (extras are flagged with a notice).
-- **Cascade rename** — rename a tag and its whole subtree follows; inserting a
-  new parent level works too. Filenames and wikilinks follow along.
-- **Sidebar tree view** — see your location-tag hierarchy as a collapsible,
-  folder-like tree, built from tags rather than the folder structure.
-- **Bootstrap** — onboard an existing vault that already has filename prefixes
-  but no tags yet. Pick the scope with a checkbox tree (whole vault, folders, or
-  individual notes; drag to sweep-select, search, or show only untagged notes),
-  preview as a dry-run, watch live progress (pause / resume / cancel), and undo
-  in one step. Per-file errors are isolated so one bad note never stops the run.
-  Bootstrap splits a
-  prefix into tag segments at letter↔digit boundaries (`S88B07` → `S/88/B/07`,
-  `PROJ123` → `PROJ/123`), so it isn't tied to one naming scheme; prefixes with
-  no such boundary, or with characters a tag can't hold, are skipped and listed
-  in the dry-run.
-- **Duplicate location-tag cleanup** — when a note carries more than one location
-  tag in the same namespace, TRELLIS flags it and offers a cleanup command: pick
-  which tag to keep and the rest are removed. Batched for large vaults, with undo.
-- **Separator batch-change** — change the separator in settings and only the
-  tagkey-boundary separator is swapped across the whole vault (symbols inside
-  titles are preserved). Undo supported.
-- **Internationalization** — Korean / English UI, auto-detected from Obsidian's
-  language.
+- **Filename sync.** When a note's location tag changes, its filename prefix is
+  rewritten to match, through Obsidian's link-safe rename (so wikilinks update on
+  their own). Location tags live in frontmatter. A note has one location tag; if
+  it picks up a second, Trellis flags it.
+- **Cascade rename.** Rename a tag and its whole subtree follows — you can even
+  insert a new parent level. Filenames and wikilinks come along.
+- **Sidebar tree.** See your notes in a collapsible, folder-like tree built from
+  their location tags rather than from folders. It has two modes: *notes* (the
+  default — your notes under their tags) and *tags* (the tag hierarchy itself, so
+  you can browse the namespace and open notes from it).
+- **Bootstrap.** Onboard a vault that already has filename prefixes but no tags
+  yet. Choose the scope with a checkbox tree (the whole vault, some folders, or
+  individual notes — drag to sweep-select, search, or show only untagged notes),
+  preview it as a dry run, watch live progress with pause / resume / cancel, and
+  undo in one step. A bad note is skipped and listed rather than stopping the run.
+  Bootstrap splits a prefix at letter/digit boundaries (`S88B07` → `S/88/B/07`,
+  `PROJ123` → `PROJ/123`), so it isn't tied to one naming scheme.
+- **Duplicate cleanup.** If a note ends up with more than one location tag in the
+  same namespace, Trellis finds it and lets you pick which one to keep. Batched
+  for large vaults, with undo.
+- **Separator batch-change.** Change the separator in settings and only the
+  tagkey boundary is swapped across the vault — symbols inside titles are left
+  alone. Undo supported.
+- **Korean / English UI**, following Obsidian's language.
 
-## 📦 Installation
+Everything above stays on the single-key path by default. Two features are
+opt-in — see [Advanced](#advanced) below.
 
-**Community plugins:** In Obsidian, open **Settings → Community plugins → Browse**,
-search for **Trellis**, then install and enable it.
+## Install
 
-**Manual:**
+**From Obsidian:** Settings → Community plugins → Browse, search for *Trellis*,
+install, and enable.
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest
-   [release](../../releases).
-2. Put them in your vault's `.obsidian/plugins/trellis/` folder.
-3. Enable the plugin in **Settings → Community plugins**.
+**Manually:** download `main.js`, `manifest.json`, and `styles.css` from the
+[latest release](../../releases), drop them in
+`your-vault/.obsidian/plugins/trellis/`, and enable the plugin in Settings →
+Community plugins.
 
-## 🚀 Usage
+## Usage
 
-1. **Tag a note** — add a location tag in frontmatter (e.g. `tags: [trel/S88/B07]`)
-   and the filename prefix syncs to `S88B07` automatically.
-2. **Change a level** — run **"Rename location tag (cascade)"** from the command
-   palette or a note's right-click menu; filenames and wikilinks follow.
-3. **Tree view** — open the sidebar tree from the ribbon icon.
-4. **Onboard an existing vault** — run **"Bootstrap"** to derive tags from
-   filename prefixes (choose a scope, dry-run first, then apply).
-5. **Clean up duplicates** — run **"Check duplicate location tags"** to find notes
-   with more than one location tag and pick which to keep.
-6. **Change the separator** — change it in settings; after a confirmation, it's
-   applied vault-wide.
+- **Tag a note** — add a location tag in frontmatter (`tags: [trel/S88/B07]`) and
+  the filename prefix syncs to `S88B07`.
+- **Move a level** — run *Rename location tag (cascade)* from the command palette
+  or a note's right-click menu.
+- **Open the tree** — use the ribbon icon; switch between the notes and tags
+  modes from the header or settings.
+- **New note in place** — from the tree, create a note under a branch. Trellis
+  can suggest the next segment for you (see presets under Advanced).
+- **Onboard an existing vault** — run *Bootstrap*, pick a scope, dry-run, apply.
+- **Clean up duplicates** — run *Check duplicate location tags*.
+- **Change the separator** — set it in settings; it's applied vault-wide after a
+  confirmation.
 
-## 🧪 Advanced — multi-key schemes (experimental)
+## Advanced
 
-By default a filename is one tag-key prefix plus a free title. If your notes need
-**more than one identifier** — say a project code *and* a cross-cutting area code
-— turn on **Advanced — multi-key slots** in settings to define the filename as an
-ordered array of **slots**:
+Both of these are off by default. The single-key engine stays the default path.
 
-- one or more **tag-key** slots, each synced from its own tag namespace;
-- one **name** slot (your free title);
-- a separator between each pair of slots.
+**Multi-key slots.** By default a filename is one tagkey plus a title. If a note
+needs more than one identifier — say a project code *and* a cross-cutting area
+code — turn on *Multi-key slots* and define the filename as an ordered list of
+slots: one or more tagkey slots (each synced from its own tag namespace), a title
+slot, and a separator between them.
 
 ```
 #trel/AA/01  +  #key2/BB/02      →   AA01-my-note--BB02
 retag the second   #key2/BB/09    →   AA01-my-note--BB09   (automatic)
 ```
 
-This is **experimental and opt-in**: it is off by default, and the battle-tested
-single-key engine stays the default path. While multi-key is on, the tree view,
-bootstrap, cascade, and separator batch-change still operate on the first tag-key
-slot.
+The slot editor stages your edits — add or remove slots, set each namespace, and
+nothing changes until you press **Apply** and confirm. Existing files are
+re-synced only as their tags change, never renamed on the spot. Empty, duplicate,
+or illegal values are caught inline before they reach the vault. While multi-key
+is on, the tree, bootstrap, cascade, and separator change operate on the first
+tagkey slot.
 
-The slot editor **stages** your edits: add or remove slots, set each namespace,
-and nothing changes until you press **Apply** and confirm — existing files are
-re-synced only as their tags change, never renamed on the spot. Namespaces and
-separators are validated inline, so an empty, duplicate, or illegal value is
-caught before it can reach your vault.
+**Root namespace.** If you want the whole tag tree filed under a top-level root —
+everything under `zettel/`, say — turn on a root namespace. Tags become
+`#zettel/trel/S88/B07`; the filename prefix stays `S88B07`, since the root
+doesn't affect filenames. Turning it on (or changing it) migrates existing tags
+across the vault behind a confirmation, with a one-step undo.
 
-## 📸 Screenshots
+**Segment presets.** When you create a note from the tree, Trellis can propose
+the next segment: the next number in a sequence, a date, a Zettelkasten
+timestamp, or an alternating letter/number scheme. Set a preset per slot — you
+can always type your own segment instead.
 
-**Bootstrap — pick what to onboard.** Already-tagged notes are shown as done;
-untagged notes are selectable (whole vault, folders, or individual notes).
+## Screenshots
+
+**Bootstrap — pick what to onboard.** Already-tagged notes show as done; untagged
+notes are selectable (whole vault, folders, or individual notes).
 
 ![Bootstrap target picker](screenshots/bootstrap.png)
 
@@ -129,65 +133,56 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 ![Duplicate location-tag cleanup](screenshots/dedup.png)
 
-## ⚙️ Settings
+## Settings
 
 ![Settings tab](screenshots/settings.png)
 
-- **Location tag namespace** — which tags are the source of truth (e.g. `trel`);
-  staged and committed with an **Apply** button
-- **Separator** — the character(s) between the tagkey and the title (e.g. `-`);
-  validated as you type and applied vault-wide after a confirmation
-- **Key position** — prefix (start) or suffix (end) of the filename
-- **Advanced — multi-key slots** — off by default; opt-in slot editor for
-  multi-key schemes (experimental, see above)
-- **Sidebar tree view** — on / off
-- **Sidebar view name** — a custom title for the tree view's tab (blank = default)
-- **Tree sort** — tagkey / modified time / created time
-- **Sidebar header buttons** — show or hide each header action button individually
-- **Language** — auto / Korean / English
-- **Managed notes** — a read-only summary of how many notes carry a managed
-  location tag and which namespaces are active, so you can confirm your setup at
-  a glance
+- **Location tag namespace** — which tags are the source of truth (e.g. `trel`).
+  Staged and committed with an Apply button.
+- **Separator** — the character(s) between the tagkey and the title. Validated as
+  you type, applied vault-wide after a confirmation.
+- **Key position** — prefix (start) or suffix (end) of the filename.
+- **Tree view** — on / off, and which mode (notes or tags) it opens in.
+- **Sidebar view name** — a custom title for the tree tab (blank uses the
+  default).
+- **Tree sort** — by tagkey, modified time, or created time.
+- **Header buttons** — show or hide each tree header action individually.
+- **Multi-key slots** — off by default; the opt-in slot editor (see Advanced).
+- **Root namespace** — off by default; the opt-in top-level root (see Advanced).
+- **Language** — auto / Korean / English.
+- **Managed notes** — a read-only count of how many notes carry a managed
+  location tag and which namespaces are active, so you can check your setup at a
+  glance.
 
-## 🔧 Compatibility
+## Compatibility
 
-Requires Obsidian **1.8.7** or newer.
+Requires Obsidian **1.8.7** or newer. Desktop and mobile.
 
-## 🧱 Design (internals)
+## Under the hood
 
-Under the hood, a filename is a positional array of **slots** joined by
-**separators** — the default is a 2-slot `[tag slot, name slot]` layout, so
-multi-key schemes can grow without rewriting the core. The conversion logic
-lives in `tagkey.ts` (pure, unit-tested); `main.ts` is the Obsidian glue.
-The live sync is format-agnostic — it mirrors whatever the tag path is, so any
-scheme works. (Bootstrap, the reverse direction, splits a flat prefix at
-letter/digit boundaries — general across schemes, though it can't recover
-boundaries inside a run of the same character class.)
+A filename is a positional list of slots joined by separators — by default a
+two-slot `[tagkey, title]` layout, so multi-key schemes grow without rewriting
+the core. The conversion logic lives in `tagkey.ts` (pure and unit-tested);
+`main.ts` is the Obsidian glue. The live sync is format-agnostic — it mirrors
+whatever the tag path is. Bootstrap, the reverse direction, splits a flat prefix
+at letter/digit boundaries; it's general across schemes, though it can't recover
+a boundary inside a run of the same character class.
 
-## 🛠 Develop
+## Contributing
 
-```bash
-npm install
-npm run dev      # watch build
-npm run build    # typecheck + production build → main.js
-npm test         # unit tests for the conversion logic
-```
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for how to build, test, and submit changes.
 
-Create a throwaway vault to exercise the engine safely before pointing it at
-real notes.
-
-## 📄 License
+## License
 
 [MIT](LICENSE)
 
-## 💡 Why
+## Why I made this
 
-My vault leans on short ID prefixes in filenames — each note carries a code that
-says where it sits in my system. Keeping those prefixes right by hand was
-tedious and easy to get wrong, so TRELLIS drives them from a location tag: tag a
-note and its filename prefix follows, link-safe. Stable, predictable prefixes
-make the vault easy to scan and let me point a CLI AI tool at exactly the right
-files and folders by their IDs.
-
-The tag is the single source of truth; filenames (and wikilinks) follow on their
-own.
+My vault leans on short ID prefixes in filenames — each note carries a code for
+where it sits in my system. Keeping those prefixes right by hand was tedious and
+easy to get wrong, so Trellis drives them from a location tag instead: tag a note
+and its filename prefix follows, link-safe. Stable, predictable prefixes make the
+vault easy to scan, and let me point a CLI tool at exactly the right files by
+their IDs. The tag is the one source of truth; filenames and wikilinks follow on
+their own.

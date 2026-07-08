@@ -1,0 +1,35 @@
+# Contributing to Trellis
+
+Thanks for your interest in improving Trellis!
+
+## Development
+
+Requirements: Node.js 18+ (CI uses 20).
+
+```bash
+npm install     # install dependencies
+npm run dev     # watch build for development
+npm run build   # type-check + production build
+npm test        # run the unit test suite
+```
+
+Point a test vault's `.obsidian/plugins/trellis/` folder at your build output
+(or symlink it) to try changes live in Obsidian.
+
+## Pull requests
+
+- Keep changes focused — one topic per pull request.
+- Run `npm run build` and `npm test` before submitting; both must pass.
+- Match the existing code style: TypeScript, tab indentation, and no hardcoded
+  styling (use CSS classes and Obsidian's CSS variables in `styles.css`).
+- Explain what changed and why in the pull request description.
+
+## Reporting issues
+
+Open a GitHub issue with steps to reproduce, your Obsidian version, and — if
+relevant — a small example of the tags and filenames involved.
+
+## License
+
+By contributing you agree that your contributions are licensed under the
+[MIT License](LICENSE).

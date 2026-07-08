@@ -203,9 +203,8 @@
 /* Underline affordance (folder-note style): this tag row HAS a note — clicking
    opens it. Pure branch rows have no underline and only collapse/expand. */
 .trellis-tree .trellis-has-note {
-	text-decoration: underline;
-	text-decoration-color: var(--text-faint);
-	text-underline-offset: 2px;
+	border-bottom: 1px solid var(--text-faint);
+	padding-bottom: 1px;
 }
 
 /* Untagged-notes section: separated and muted so it reads as an appendix. */
