@@ -44,6 +44,8 @@ import {
 	syncedBasenameMulti,
 	isValidNamespace,
 	isValidSeparator,
+	isValidTagSegment,
+	isValidTagPath,
 	tagNamespaces,
 } from "./tagkey";
 import {
@@ -766,6 +768,18 @@ export default class TrellisPlugin extends Plugin {
 		title: string
 	) {
 		const schema = this.settings.schema;
+		// Validate BEFORE anything is assembled: the tag path is written into the
+		// new note's inline `tags: [...]` frontmatter and the segment lands in the
+		// filename, so YAML metacharacters or filename-illegal characters in a
+		// hand-typed parent/segment would corrupt the note being created.
+		if (!isValidTagSegment(segment)) {
+			new Notice(t("notice.segmentBadChar"));
+			return;
+		}
+		if (!isValidTagPath(parentTagPath)) {
+			new Notice(t("notice.parentBadChar"));
+			return;
+		}
 		const tagPath = `${parentTagPath}/${segment}`;
 		const idx = this.slotForTagPath(tagPath);
 		const slot = idx >= 0 ? schema.slots[idx] : null;
@@ -1387,6 +1401,11 @@ export default class TrellisPlugin extends Plugin {
 	 *  undoable via the symmetric migration back. */
 	private async applyRootChange(newRoot: string) {
 		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
+		// Whatever undo record exists NOW is valid for the pre-apply state — a
+		// cancelled pass rolls the vault back to exactly that state, so the record
+		// must be restored (not cleared): dropping it on a cancelled UNDO would
+		// lose the only way to retry the undo.
+		const prevRec = this.settings.lastRootChange;
 		const slotNs = tagNamespaces(this.settings.schema);
 		this.settings.schema.rootNamespace = newRoot;
 		await this.saveSettings();
@@ -1429,7 +1448,7 @@ export default class TrellisPlugin extends Plugin {
 				}
 				this.bulkActive = false;
 				this.settings.schema.rootNamespace = oldRoot;
-				this.settings.lastRootChange = undefined;
+				this.settings.lastRootChange = prevRec;
 				await this.saveSettings();
 				this.rebuildTrees();
 				progress.finish({ processed: reverted, skipped: failed });
@@ -1455,7 +1474,9 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.noRootChange"));
 			return;
 		}
-		this.settings.lastRootChange = undefined;
+		// Do NOT clear the record first: applyRootChange overwrites it in both
+		// outcomes (completed → the symmetric redo record; cancelled → restores
+		// what existed at entry, i.e. this record, so the undo can be retried).
 		await this.applyRootChange(rec.oldRoot);
 	}
 

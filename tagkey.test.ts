@@ -32,6 +32,8 @@ import {
 	syncedBasenameMulti,
 	isValidNamespace,
 	isValidSeparator,
+	isValidTagSegment,
+	isValidTagPath,
 } from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -825,4 +827,35 @@ test("tagkeyToTagPath with a zettel scheme accepts a single digit run", () => {
 test("suggestSegment spark: base-26 length-first max — Z vs AA never re-suggests AA", () => {
 	assert.equal(suggestSegment("spark", "88", ["Y", "Z", "AA"], NOW), "AB");
 	assert.equal(suggestSegment("spark", "88", ["Z", "AA", "AB"], NOW), "AC");
+});
+
+test("isValidTagSegment: unicode-friendly deny-list for one hierarchy level", () => {
+	assert.equal(isValidTagSegment("S88"), true);
+	assert.equal(isValidTagSegment("07"), true);
+	assert.equal(isValidTagSegment("my-note_v2"), true);
+	assert.equal(isValidTagSegment("한글"), true); // unicode segments stay legal
+	assert.equal(isValidTagSegment(""), false); // empty
+	assert.equal(isValidTagSegment("a b"), false); // whitespace
+	assert.equal(isValidTagSegment("a/b"), false); // '/' is the hierarchy sep
+	assert.equal(isValidTagSegment("a,b"), false); // YAML flow metacharacters
+	assert.equal(isValidTagSegment("a]b"), false);
+	assert.equal(isValidTagSegment("a{b"), false);
+	assert.equal(isValidTagSegment('a"b'), false);
+	assert.equal(isValidTagSegment("a'b"), false);
+	assert.equal(isValidTagSegment("a#b"), false); // tag-hostile
+	assert.equal(isValidTagSegment("a:b"), false); // filename-illegal
+	assert.equal(isValidTagSegment("a*b"), false);
+	assert.equal(isValidTagSegment("a\\b"), false);
+});
+
+test("isValidTagPath: slash-joined valid segments, no empty levels", () => {
+	assert.equal(isValidTagPath("trel/S/88/B/07"), true);
+	assert.equal(isValidTagPath("trellis/trel/S88"), true); // root-aware paths too
+	assert.equal(isValidTagPath("trel"), true); // single level
+	assert.equal(isValidTagPath(""), false);
+	assert.equal(isValidTagPath("/trel"), false); // leading slash = empty segment
+	assert.equal(isValidTagPath("trel/"), false); // trailing slash
+	assert.equal(isValidTagPath("trel//S88"), false); // empty middle level
+	assert.equal(isValidTagPath("trel/S 88"), false); // bad char in a segment
+	assert.equal(isValidTagPath("trel/S88]"), false);
 });

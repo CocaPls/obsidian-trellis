@@ -402,6 +402,28 @@ export function isValidSeparator(s: string): boolean {
 	return !/[A-Za-z0-9/\\:*?"<>|#^[\]]|\s/.test(s);
 }
 
+/**
+ * Whether a string is safe as ONE tag path segment (a single hierarchy level).
+ * Deny-list, not an ASCII allowlist, so unicode segments (e.g. Korean) stay
+ * legal: rejects whitespace/control chars, "/" (that's the hierarchy separator,
+ * not segment content), YAML flow/quote metacharacters (`, [ ] { } " ' # :`)
+ * that could break the inline `tags: [...]` a new note writes, and
+ * filename-illegal characters (`\ : * ? " < > |`) since the segment lands in
+ * the filename tagkey. Empty is invalid.
+ */
+export function isValidTagSegment(seg: string): boolean {
+	if (seg === "") return false;
+	return !/[\s/\\:*?"<>|#^[\],{}'`]/.test(seg);
+}
+
+/** Whether a string is safe as a full tag path: one or more valid segments
+ *  joined by single "/" (no empty segments, no leading/trailing slash). */
+export function isValidTagPath(path: string): boolean {
+	if (path === "") return false;
+	const segs = path.split("/");
+	return segs.every(isValidTagSegment);
+}
+
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
 export function tagToTagkeyNs(tag: string, namespace: string): string | null {
 	const prefix = `#${namespace}/`;

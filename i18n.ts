@@ -77,6 +77,10 @@ const EN: Record<string, string> = {
 	"notice.fillBoth": "fill in both fields",
 	"notice.parentRequired": "parent is required",
 	"notice.segmentRequired": "segment is required",
+	"notice.segmentBadChar":
+		"segment contains characters a tag can't hold (spaces, '/', or symbols like , [ ] # \" ')",
+	"notice.parentBadChar":
+		"parent contains characters a tag can't hold (spaces or symbols like , [ ] # \" ')",
 	"notice.nsEmpty": "namespace cannot be empty",
 	"notice.nsBadChar":
 		"namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
@@ -119,7 +123,7 @@ const EN: Record<string, string> = {
 	// new-note modal
 	"modal.newNote.title": "New note",
 	"modal.newNote.desc":
-		"Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself — TRELLIS does not guess the tagkey scheme.",
+		"Create a note under a location tag. The parent is prefilled from the active note (editable, autocompleted). You assign the segment yourself; when the slot has an ID scheme, a suggestion is prefilled — always editable.",
 	"modal.newNote.parentName": "Parent",
 	"modal.newNote.parentDesc":
 		"Existing location tag to create under — type to search, ↑↓ + Enter",
@@ -353,6 +357,10 @@ const KO: Record<string, string> = {
 	"notice.fillBoth": "두 칸 모두 입력하세요",
 	"notice.parentRequired": "부모가 필요합니다",
 	"notice.segmentRequired": "세그먼트가 필요합니다",
+	"notice.segmentBadChar":
+		"세그먼트에 태그로 쓸 수 없는 문자가 있습니다 (공백·'/'·, [ ] # \" ' 같은 기호)",
+	"notice.parentBadChar":
+		"부모에 태그로 쓸 수 없는 문자가 있습니다 (공백·, [ ] # \" ' 같은 기호)",
 	"notice.nsEmpty": "네임스페이스는 비울 수 없습니다",
 	"notice.nsBadChar":
 		"네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
@@ -395,7 +403,7 @@ const KO: Record<string, string> = {
 	// new-note modal
 	"modal.newNote.title": "새 노트",
 	"modal.newNote.desc":
-		"위치 태그 아래에 노트를 만듭니다. 부모는 현재 노트 기준으로 미리 채워집니다 (수정·자동완성 가능). 세그먼트는 직접 지정하세요 — TRELLIS는 태그키 스킴을 추측하지 않습니다.",
+		"위치 태그 아래에 노트를 만듭니다. 부모는 현재 노트 기준으로 미리 채워집니다 (수정·자동완성 가능). 세그먼트는 직접 지정하되, 슬롯에 ID 스킴이 있으면 제안값이 미리 채워집니다 — 언제든 수정 가능합니다.",
 	"modal.newNote.parentName": "부모",
 	"modal.newNote.parentDesc": "아래에 만들 기존 위치 태그 — 입력해 검색, ↑↓ + Enter",
 	"modal.newNote.segmentName": "세그먼트",
