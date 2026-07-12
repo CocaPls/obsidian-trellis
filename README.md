@@ -186,3 +186,7 @@ and its filename prefix follows, link-safe. Stable, predictable prefixes make th
 vault easy to scan, and let me point a CLI tool at exactly the right files by
 their IDs. The tag is the one source of truth; filenames and wikilinks follow on
 their own.
+
+## Part of
+
+Trellis is the identification piece of [everything-in-obsidian](https://github.com/CocaPls/everything-in-obsidian) — a personal hub of pluggable systems for running an Obsidian vault with a CLI AI. Trellis works fully on its own; the hub is just optional context on where it fits.

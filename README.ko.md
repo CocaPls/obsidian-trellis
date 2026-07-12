@@ -180,3 +180,7 @@ Obsidian **1.8.7** 이상이 필요합니다. 데스크톱·모바일 모두.
 태그를 달면 파일명 접두어가 링크 안전하게 따라옵니다. 안정적이고 예측 가능한
 접두어 덕에 볼트를 훑기 쉽고, CLI 도구를 ID로 정확한 파일에 겨눌 수 있습니다.
 태그가 유일한 원본이고, 파일명과 위키링크는 알아서 따라옵니다.
+
+## 함께 보기
+
+Trellis는 [everything-in-obsidian](https://github.com/CocaPls/everything-in-obsidian) — CLI형 AI로 옵시디언 볼트를 운영하기 위한 개인용 pluggable 시스템 허브 — 의 식별(identification) 조각입니다. Trellis는 단독으로도 완전히 동작하며, 허브는 이게 어디에 맞물리는지에 대한 선택적 맥락일 뿐입니다.
