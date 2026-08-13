@@ -152,9 +152,10 @@ location tag, pick the one to keep; the rest are removed (undoable).
 - **Sidebar view name** — a custom title for the tree tab (blank uses the
   default).
 - **Tree sort** — by tagkey, modified time, or created time.
-- **Tree actions** — New, view mode, and current-note navigation stay in the
-  header; sorting, collapse, import, subtree movement, and available undo
-  records share a native **More** menu. Each action can still be hidden.
+- **Tree actions** — New, view mode, current-note navigation, and collapse /
+  expand all stay in the header; sorting, import, subtree movement, and
+  available undo records share a native **More** menu. Each action can still be
+  hidden.
 - **Multi-key slots** — off by default; the opt-in slot editor (see Advanced).
 - **Root namespace** — off by default; the opt-in top-level root (see Advanced).
 - **Language** — auto / Korean / English.

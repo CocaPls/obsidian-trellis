@@ -159,6 +159,11 @@ export class TrellisTreeView extends ItemView {
 				this.revealActiveFile()
 			);
 		}
+		if (vis.collapseAll) {
+			this.addButton(buttons, "chevrons-down-up", t("tree.collapseAll"), () =>
+				this.toggleCollapseAll()
+			);
+		}
 		const undo = this.cb.getUndoAvailability();
 		const hasUndo =
 			undo.cascade > 0 ||
@@ -169,7 +174,6 @@ export class TrellisTreeView extends ItemView {
 			undo.root;
 		const hasMore =
 			(vis.sort && this.cb.getViewMode() !== "tags") ||
-			vis.collapseAll ||
 			vis.bootstrap ||
 			vis.cascade ||
 			(vis.undo && hasUndo);
@@ -234,7 +238,7 @@ export class TrellisTreeView extends ItemView {
 	}
 
 	/** Keep navigation controls calm: infrequent management actions live behind
-	 *  one native menu instead of competing with New/Mode/Current in the header. */
+	 *  one native menu instead of competing with the five direct header actions. */
 	private showMoreMenu(
 		event: MouseEvent,
 		vis: HeaderButtonVisibility,
@@ -251,15 +255,7 @@ export class TrellisTreeView extends ItemView {
 					.onClick(() => this.cb.onToggleSort())
 			);
 		}
-		if (vis.collapseAll) {
-			menu.addItem((item) =>
-				item
-					.setTitle(t("tree.collapseAll"))
-					.setIcon("chevrons-down-up")
-					.onClick(() => this.toggleCollapseAll())
-			);
-		}
-		if ((vis.sort && this.cb.getViewMode() !== "tags") || vis.collapseAll) {
+		if (vis.sort && this.cb.getViewMode() !== "tags") {
 			menu.addSeparator();
 		}
 		if (vis.bootstrap) {
