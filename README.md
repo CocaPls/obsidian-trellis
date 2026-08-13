@@ -50,9 +50,11 @@ match; edit the tagkey by hand and it's restored from the tag on the next sync.
 - **Duplicate cleanup.** If a note ends up with more than one location tag in the
   same namespace, Trellis finds it and lets you pick which one to keep. Batched
   for large vaults, with undo.
-- **Separator batch-change.** Change the separator in settings and only the
-  tagkey boundary is swapped across the vault — symbols inside titles are left
-  alone. Undo supported.
+- **Safe filename-format changes.** Choose the slot-boundary symbol, its spacing
+  (none / before / after / both), and how hierarchy levels appear inside each
+  tagkey (hidden / `.` / `-` / `_`). Trellis previews every affected filename,
+  applies through Obsidian's link-safe rename, and rolls the batch back on a
+  cancel or failure. One-step undo is retained after success.
 - **Korean / English UI**, following Obsidian's language.
 
 Everything above stays on the single-key path by default. Two features are
@@ -80,8 +82,8 @@ Community plugins.
   can suggest the next segment for you (see presets under Advanced).
 - **Onboard an existing vault** — run *Bootstrap*, pick a scope, dry-run, apply.
 - **Clean up duplicates** — run *Check duplicate location tags*.
-- **Change the separator** — set it in settings; it's applied vault-wide after a
-  confirmation.
+- **Change filename formatting** — set the boundary symbol, spacing, or visible
+  hierarchy separator; review the exact vault-wide preview before applying.
 
 ## Advanced
 
@@ -98,12 +100,12 @@ slot, and a separator between them.
 retag the second   #key2/BB/09    →   AA01-my-note--BB09   (automatic)
 ```
 
-The slot editor stages your edits — add or remove slots, set each namespace, and
-nothing changes until you press **Apply** and confirm. Existing files are
-re-synced only as their tags change, never renamed on the spot. Empty, duplicate,
-or illegal values are caught inline before they reach the vault. While multi-key
-is on, the tree, bootstrap, cascade, and separator change operate on the first
-tagkey slot.
+The slot editor stages your edits — add or remove slots, set each namespace,
+boundary symbol and spacing, and choose a visible hierarchy separator per tag
+slot. Nothing changes until you press **Apply** and review the exact rename
+preview. Empty, duplicate, illegal, or parse-ambiguous combinations are rejected
+before they reach the vault; apply is rollback-safe and undoable. While multi-key
+is on, the tree, bootstrap, and cascade still operate on the first tagkey slot.
 
 **Root namespace.** If you want the whole tag tree filed under a top-level root —
 everything under `zettel/`, say — turn on a root namespace. Tags become
@@ -139,8 +141,10 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 - **Location tag namespace** — which tags are the source of truth (e.g. `trel`).
   Staged and committed with an Apply button.
-- **Separator** — the character(s) between the tagkey and the title. Validated as
-  you type, applied vault-wide after a confirmation.
+- **Separator symbol / spacing** — the slot-boundary symbol and whether it has a
+  space on neither side, one side, or both sides.
+- **Tag hierarchy separator** — hidden (classic `S88B07`) or visibly joined with
+  `.`, `-`, or `_` (for example `S.88.B.07`).
 - **Key position** — prefix (start) or suffix (end) of the filename.
 - **Tree view** — on / off, and which mode (notes or tags) it opens in.
 - **Sidebar view name** — a custom title for the tree tab (blank uses the
@@ -163,10 +167,10 @@ Requires Obsidian **1.8.7** or newer. Desktop and mobile.
 A filename is a positional list of slots joined by separators — by default a
 two-slot `[tagkey, title]` layout, so multi-key schemes grow without rewriting
 the core. The conversion logic lives in `tagkey.ts` (pure and unit-tested);
-`main.ts` is the Obsidian glue. The live sync is format-agnostic — it mirrors
-whatever the tag path is. Bootstrap, the reverse direction, splits a flat prefix
-at letter/digit boundaries; it's general across schemes, though it can't recover
-a boundary inside a run of the same character class.
+`main.ts` is the Obsidian glue. The live sync mirrors whatever the tag path is.
+Bootstrap reverses a visible hierarchy separator exactly; in classic hidden mode
+it splits a flat prefix at letter/digit boundaries, which cannot recover a
+boundary inside a run of the same character class.
 
 ## Contributing
 
