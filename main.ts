@@ -27,6 +27,7 @@ import {
 	primarySeparator,
 	primarySeparatorSymbol,
 	separatorSpacingAt,
+	renderSeparator,
 	tagPosition,
 	duplicateLocationGroups,
 	NoteTreeNode,
@@ -2517,6 +2518,16 @@ class TrellisSettingTab extends PluginSettingTab {
 				let pendingSegment =
 					schema.slots.find((slot) => slot.role === "tag")?.segmentSeparator ?? "";
 				let customInput: HTMLInputElement | null = null;
+				let previewEl: HTMLElement | null = null;
+				const updatePreview = () => {
+					if (!previewEl) return;
+					const key = pendingSegment ? `S88${pendingSegment}A01` : "S88A01";
+					previewEl.setText(
+						t("setting.formatPreview", {
+							name: `${key}${renderSeparator(pendingSymbol, pendingSpacing)}Sample note`,
+						})
+					);
+				};
 				new Setting(containerEl)
 					.setName(t("setting.sepName"))
 					.setDesc(t("setting.sepDesc"))
@@ -2529,12 +2540,14 @@ class TrellisSettingTab extends PluginSettingTab {
 							.setValue(presetSymbols.includes(currentSymbol) ? currentSymbol : "custom")
 							.onChange((value) => {
 								if (value === "custom") {
+									pendingSymbol = customInput?.value ?? "";
 									customInput?.classList.remove("trellis-hidden");
 									customInput?.focus();
 								} else {
 									pendingSymbol = value;
 									customInput?.classList.add("trellis-hidden");
 								}
+								updatePreview();
 							})
 					)
 					.addText((text) => {
@@ -2542,7 +2555,10 @@ class TrellisSettingTab extends PluginSettingTab {
 						text
 							.setPlaceholder("~")
 							.setValue(presetSymbols.includes(currentSymbol) ? "" : currentSymbol)
-							.onChange((value) => (pendingSymbol = value));
+							.onChange((value) => {
+								pendingSymbol = value;
+								updatePreview();
+							});
 						text.inputEl.classList.toggle(
 							"trellis-hidden",
 							presetSymbols.includes(currentSymbol)
@@ -2559,6 +2575,7 @@ class TrellisSettingTab extends PluginSettingTab {
 							pendingSpacing = SEPARATOR_SPACING.includes(value as SeparatorSpacing)
 								? (value as SeparatorSpacing)
 								: "none";
+							updatePreview();
 						});
 					});
 
@@ -2573,8 +2590,15 @@ class TrellisSettingTab extends PluginSettingTab {
 							pendingSegment = SEGMENT_SEPARATORS.includes(value as SegmentSeparator)
 								? (value as SegmentSeparator)
 								: "";
+							updatePreview();
 						});
-					})
+					});
+
+				previewEl = containerEl.createDiv({ cls: "setting-item-description" });
+				updatePreview();
+				new Setting(containerEl)
+					.setName(t("setting.formatApplyName"))
+					.setDesc(t("setting.formatApplyDesc"))
 					.addButton((button) =>
 						button.setButtonText(t("setting.apply")).onClick(() => {
 							if (!isValidSeparator(pendingSymbol)) {

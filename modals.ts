@@ -848,6 +848,7 @@ export class BulkProgressModal extends Modal {
 	private waiters: (() => void)[] = [];
 	private startedAt = 0;
 	private barFill!: HTMLElement;
+	private barEl!: HTMLElement;
 	private countEl!: HTMLElement;
 	private metaEl!: HTMLElement;
 	private hintEl!: HTMLElement;
@@ -862,9 +863,19 @@ export class BulkProgressModal extends Modal {
 		contentEl.addClass("trellis-progress-modal");
 		contentEl.createEl("h3", { text: this.title });
 
-		const bar = contentEl.createDiv({ cls: "trellis-progress-bar" });
-		this.barFill = bar.createDiv({ cls: "trellis-progress-bar-fill" });
+		this.barEl = contentEl.createDiv({
+			cls: "trellis-progress-bar",
+			attr: {
+				role: "progressbar",
+				"aria-label": this.title,
+				"aria-valuemin": "0",
+				"aria-valuemax": "100",
+				"aria-valuenow": "0",
+			},
+		});
+		this.barFill = this.barEl.createDiv({ cls: "trellis-progress-bar-fill" });
 		this.countEl = contentEl.createDiv({ cls: "trellis-progress-count", text: "0 / 0" });
+		this.countEl.setAttribute("aria-live", "polite");
 		this.metaEl = contentEl.createDiv({ cls: "trellis-progress-meta" });
 		this.hintEl = contentEl.createDiv({ cls: "trellis-progress-hint" });
 
@@ -907,6 +918,8 @@ export class BulkProgressModal extends Modal {
 	report(done: number, total: number, failed: number) {
 		const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 		this.barFill.setCssStyles({ width: `${pct}%` });
+		this.barEl.setAttribute("aria-valuenow", String(pct));
+		this.barEl.setAttribute("aria-valuetext", t("bulk.progress", { done, total }));
 		this.countEl.setText(t("bulk.progress", { done, total }));
 		const sec = Math.round((Date.now() - this.startedAt) / 1000);
 		let meta = t("bulk.elapsed", { sec });

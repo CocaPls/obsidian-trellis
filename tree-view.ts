@@ -274,10 +274,30 @@ export class TrellisTreeView extends ItemView {
 	) {
 		const btn = parent.createDiv({
 			cls: "clickable-icon nav-action-button",
-			attr: { "aria-label": label },
+			attr: { "aria-label": label, role: "button", tabindex: "0" },
 		});
 		setIcon(btn, icon);
 		btn.addEventListener("click", onClick);
+		btn.addEventListener("keydown", (event) => {
+			if (event.key !== "Enter" && event.key !== " ") return;
+			event.preventDefault();
+			btn.click();
+		});
+	}
+
+	private makeRowKeyboardClickable(
+		row: HTMLElement,
+		onActivate: () => void,
+		expanded?: boolean
+	) {
+		row.setAttribute("role", "button");
+		row.tabIndex = 0;
+		if (expanded !== undefined) row.setAttribute("aria-expanded", String(expanded));
+		row.addEventListener("keydown", (event) => {
+			if (event.key !== "Enter" && event.key !== " ") return;
+			event.preventDefault();
+			onActivate();
+		});
 	}
 
 	private renderNode(
@@ -319,6 +339,11 @@ export class TrellisTreeView extends ItemView {
 		});
 		inner.setText(this.basename(node.notePath));
 		self.addEventListener("click", () => this.openNote(node.notePath));
+		this.makeRowKeyboardClickable(
+			self,
+			() => this.openNote(node.notePath),
+			hasChildren ? !isCollapsed : undefined
+		);
 
 		// Right-click → create a child note under this node's tagkey.
 		self.addEventListener("contextmenu", (e) => {
@@ -407,8 +432,14 @@ export class TrellisTreeView extends ItemView {
 			// Underline affordance: this tag HAS a note — clicking goes somewhere.
 			inner.addClass("trellis-has-note");
 			self.addEventListener("click", () => this.openNote(ownNote));
+			this.makeRowKeyboardClickable(
+				self,
+				() => this.openNote(ownNote),
+				hasKids ? !isCollapsed : undefined
+			);
 		} else {
 			self.addEventListener("click", toggle);
+			this.makeRowKeyboardClickable(self, toggle, hasKids ? !isCollapsed : undefined);
 		}
 
 		// Right-click → create a child note under this tag path.
@@ -453,6 +484,7 @@ export class TrellisTreeView extends ItemView {
 			.createDiv({ cls: "tree-item-inner nav-file-title-content" })
 			.setText(this.basename(notePath));
 		self.addEventListener("click", () => this.openNote(notePath));
+		this.makeRowKeyboardClickable(self, () => this.openNote(notePath));
 	}
 
 	/** Collapse key for the untagged section (not a real tag path). */
@@ -483,6 +515,15 @@ export class TrellisTreeView extends ItemView {
 			else this.collapsed.add(key);
 			this.render();
 		});
+		this.makeRowKeyboardClickable(
+			self,
+			() => {
+				if (this.collapsed.has(key)) this.collapsed.delete(key);
+				else this.collapsed.add(key);
+				this.render();
+			},
+			!isCollapsed
+		);
 
 		if (!isCollapsed) {
 			const wrap = item.createDiv({

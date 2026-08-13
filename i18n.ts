@@ -100,6 +100,10 @@ const EN: Record<string, string> = {
 	"setting.section.general": "General",
 	"setting.section.scheme": "Filename scheme",
 	"setting.section.tree": "Sidebar tree view",
+	"setting.formatPreview": "Preview: {name}",
+	"setting.formatApplyName": "Apply filename formatting",
+	"setting.formatApplyDesc":
+		"Reviews all affected filenames before committing the three formatting options above.",
 	"notice.sepEmpty": "separator cannot be empty",
 	"notice.sepBadChar":
 		"separator cannot contain letters, digits, '/', or filename-illegal characters (\\ : * ? \" < > |)",
@@ -422,6 +426,10 @@ const KO: Record<string, string> = {
 	"setting.section.general": "일반",
 	"setting.section.scheme": "파일명 규칙",
 	"setting.section.tree": "사이드바 트리 뷰",
+	"setting.formatPreview": "미리보기: {name}",
+	"setting.formatApplyName": "파일명 형식 적용",
+	"setting.formatApplyDesc":
+		"위의 세 형식 옵션이 바꾸는 파일명을 검토한 뒤 한 번에 적용합니다.",
 	"notice.sepEmpty": "구분자는 비울 수 없습니다",
 	"notice.sepBadChar":
 		"구분자에 영문·숫자·'/'·파일명 금지문자(\\ : * ? \" < > |)는 쓸 수 없습니다",
