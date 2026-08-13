@@ -280,6 +280,9 @@ export default class TrellisPlugin extends Plugin {
 	/** Infinite-loop guard: paths we are currently renaming, to ignore the
 	 *  metadata/vault events our own rename triggers. */
 	private renaming = new Set<string>();
+	/** Suppress metadata-triggered live sync while guarded automation owns a
+	 * note's frontmatter + filename transaction. */
+	private automationApplying = new Set<string>();
 	/** Files already warned about carrying multiple location tags (one note =
 	 *  one location). Cleared when a file returns to a single location tag. */
 	private multiWarned = new Set<string>();
@@ -681,6 +684,9 @@ export default class TrellisPlugin extends Plugin {
 			}
 		}
 
+		const guardedPaths = [verifiedPlan.expected.path, verifiedPlan.next.path];
+		for (const path of guardedPaths) this.automationApplying.add(path);
+		try {
 		if (verifiedPlan.changes.frontmatter) {
 			try {
 				await this.app.fileManager.processFrontMatter(
@@ -729,21 +735,27 @@ export default class TrellisPlugin extends Plugin {
 				};
 			}
 		}
-		this.rebuildTrees();
-		return {
-			ok: true,
-			value: {
-				status: "applied",
-				previousPath: verifiedPlan.expected.path,
-				path: verifiedPlan.next.path,
-				changes: verifiedPlan.changes,
-			},
-		};
+			this.rebuildTrees();
+			return {
+				ok: true,
+				value: {
+					status: "applied",
+					previousPath: verifiedPlan.expected.path,
+					path: verifiedPlan.next.path,
+					changes: verifiedPlan.changes,
+				},
+			};
+		} finally {
+			window.setTimeout(() => {
+				for (const path of guardedPaths) this.automationApplying.delete(path);
+			}, 200);
+		}
 	}
 
 	/** Sync one file's location tag into its filename tagkey (one direction). */
 	private async syncFile(file: TFile) {
 		if (this.separatorMigrationRunning) return;
+		if (this.automationApplying.has(file.path)) return;
 		if (this.renaming.has(file.path)) return; // guard: our own rename echo
 
 		const cache = this.app.metadataCache.getFileCache(file);
