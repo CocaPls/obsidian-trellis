@@ -93,6 +93,7 @@ export interface TrellisChangePlan {
 		basename: string;
 		mtime: number;
 		frontmatterTags: string[];
+		schemaFingerprint: string;
 	};
 	next: {
 		path: string;
@@ -104,6 +105,13 @@ export interface TrellisChangePlan {
 		rename: boolean;
 	};
 	status: "ready" | "noop";
+}
+
+export interface TrellisApplyResult {
+	status: "applied" | "noop";
+	previousPath: string;
+	path: string;
+	changes: TrellisChangePlan["changes"];
 }
 
 function withoutHash(tag: string): string {
@@ -273,9 +281,8 @@ export function planNoteChange(
 				};
 			}
 		}
-		const conflictingInline = inlineTags.filter(
-			(tag) =>
-				pathInNamespace(tag, fullNamespace) && tag !== change.tagPath
+		const conflictingInline = inlineTags.filter((tag) =>
+			pathInNamespace(tag, fullNamespace)
 		);
 		if (conflictingInline.length > 0) {
 			return {
@@ -330,6 +337,7 @@ export function planNoteChange(
 				basename: state.basename,
 				mtime: state.mtime,
 				frontmatterTags: [...state.frontmatterTags],
+				schemaFingerprint: JSON.stringify(schema),
 			},
 			next: {
 				path: nextPath,
@@ -340,4 +348,27 @@ export function planNoteChange(
 			status: frontmatterChanged || renameChanged ? "ready" : "noop",
 		},
 	};
+}
+
+/** Optimistic-concurrency guard shared by the live apply method and tests. */
+export function validatePlanSnapshot(
+	state: TrellisNoteState,
+	schema: TrellisSchema,
+	plan: TrellisChangePlan
+): AutomationResult<true> {
+	const stale =
+		state.path !== plan.expected.path ||
+		state.basename !== plan.expected.basename ||
+		state.mtime !== plan.expected.mtime ||
+		!sameStrings(state.frontmatterTags, plan.expected.frontmatterTags) ||
+		JSON.stringify(schema) !== plan.expected.schemaFingerprint;
+	return stale
+		? {
+				ok: false,
+				error: {
+					code: "stale-plan",
+					message: "The note or Trellis schema changed after this plan was created.",
+				},
+			}
+		: { ok: true, value: true };
 }

@@ -63,7 +63,9 @@ import { t, setLang, LangSetting } from "./i18n";
 import {
 	inspectNoteState,
 	planNoteChange,
+	validatePlanSnapshot,
 	type AutomationResult,
+	type TrellisApplyResult,
 	type TrellisChangePlan,
 	type TrellisChangeRequest,
 	type TrellisNoteInspection,
@@ -269,6 +271,7 @@ export default class TrellisPlugin extends Plugin {
 	readonly automation = Object.freeze({
 		inspectNote: (path: string) => this.inspectNote(path),
 		planChange: (request: TrellisChangeRequest) => this.planChange(request),
+		applyChange: (plan: TrellisChangePlan) => this.applyChange(plan),
 	});
 
 	/** Ribbon button for the tree view, kept so we can show/hide it on toggle. */
@@ -612,6 +615,130 @@ export default class TrellisPlugin extends Plugin {
 		return state.ok
 			? planNoteChange(state.value, this.settings.schema, request)
 			: state;
+	}
+
+	/** Apply exactly one previously reviewed plan. Re-checks path, basename,
+	 * mtime, frontmatter tags and schema before writing. If the rename fails,
+	 * frontmatter is restored; if that rollback fails too, the structured error
+	 * reports both failures instead of pretending the operation was atomic. */
+	async applyChange(
+		plan: TrellisChangePlan
+	): Promise<AutomationResult<TrellisApplyResult>> {
+		const stateResult = this.noteState(plan.expected.path);
+		if (!stateResult.ok) return stateResult;
+		const snapshot = validatePlanSnapshot(
+			stateResult.value,
+			this.settings.schema,
+			plan
+		);
+		if (!snapshot.ok) return snapshot;
+		// Never trust caller-supplied `next` fields. Recompute the plan from the
+		// validated request and current state, then require byte-for-byte parity.
+		const recomputed = planNoteChange(
+			stateResult.value,
+			this.settings.schema,
+			plan.request
+		);
+		if (!recomputed.ok) return recomputed;
+		if (JSON.stringify(recomputed.value) !== JSON.stringify(plan)) {
+			return {
+				ok: false,
+				error: {
+					code: "stale-plan",
+					message: "The supplied plan does not match a fresh dry-run of its request.",
+				},
+			};
+		}
+		const verifiedPlan = recomputed.value;
+		if (verifiedPlan.status === "noop") {
+			return {
+				ok: true,
+				value: {
+					status: "noop",
+					previousPath: verifiedPlan.expected.path,
+					path: verifiedPlan.expected.path,
+					changes: verifiedPlan.changes,
+				},
+			};
+		}
+		const file = this.app.vault.getAbstractFileByPath(verifiedPlan.expected.path);
+		if (!(file instanceof TFile)) {
+			return {
+				ok: false,
+				error: { code: "note-not-found", message: "The planned note no longer exists." },
+			};
+		}
+		if (verifiedPlan.changes.rename) {
+			const target = this.app.vault.getAbstractFileByPath(verifiedPlan.next.path);
+			if (target && target !== file) {
+				return {
+					ok: false,
+					error: {
+						code: "target-exists",
+						message: `A vault item already exists at '${verifiedPlan.next.path}'.`,
+					},
+				};
+			}
+		}
+
+		if (verifiedPlan.changes.frontmatter) {
+			try {
+				await this.app.fileManager.processFrontMatter(
+					file,
+					(frontmatter: TrellisFrontmatter) => {
+						frontmatter.tags = [...verifiedPlan.next.frontmatterTags];
+					}
+				);
+			} catch (error) {
+				return {
+					ok: false,
+					error: {
+						code: "frontmatter-write-failed",
+						message: "Obsidian could not write the planned frontmatter tags.",
+						details: { error: String(error) },
+					},
+				};
+			}
+		}
+
+		if (verifiedPlan.changes.rename) {
+			const renamed = await this.renameGuarded(file, verifiedPlan.next.path);
+			if (!renamed) {
+				let rollbackError: string | undefined;
+				if (verifiedPlan.changes.frontmatter) {
+					try {
+						await this.app.fileManager.processFrontMatter(
+							file,
+							(frontmatter: TrellisFrontmatter) => {
+								frontmatter.tags = [...verifiedPlan.expected.frontmatterTags];
+							}
+						);
+					} catch (error) {
+						rollbackError = String(error);
+					}
+				}
+				return {
+					ok: false,
+					error: {
+						code: "rename-failed",
+						message: rollbackError
+							? "The rename failed and frontmatter rollback also failed."
+							: "The rename failed; any frontmatter change was rolled back.",
+						details: rollbackError ? { rollbackError } : undefined,
+					},
+				};
+			}
+		}
+		this.rebuildTrees();
+		return {
+			ok: true,
+			value: {
+				status: "applied",
+				previousPath: verifiedPlan.expected.path,
+				path: verifiedPlan.next.path,
+				changes: verifiedPlan.changes,
+			},
+		};
 	}
 
 	/** Sync one file's location tag into its filename tagkey (one direction). */

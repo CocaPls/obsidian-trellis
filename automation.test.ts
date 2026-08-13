@@ -4,6 +4,7 @@ import type { TrellisSchema } from "./tagkey.ts";
 import {
 	inspectNoteState,
 	planNoteChange,
+	validatePlanSnapshot,
 	type TrellisNoteState,
 } from "./automation.ts";
 
@@ -97,4 +98,17 @@ test("plan blocks a frontmatter change that conflicts with an inline managed tag
 		}
 	);
 	assert.equal(result.ok ? "ok" : result.error.code, "inline-tag-conflict");
+});
+
+test("plan snapshot becomes stale after a note or schema change", () => {
+	const planned = planNoteChange(state, schema, { path: state.path, nameChange: "배" });
+	assert.equal(planned.ok, true);
+	if (!planned.ok) return;
+	assert.equal(validatePlanSnapshot(state, schema, planned.value).ok, true);
+	const changedState = { ...state, mtime: state.mtime + 1 };
+	const staleNote = validatePlanSnapshot(changedState, schema, planned.value);
+	assert.equal(staleNote.ok ? "ok" : staleNote.error.code, "stale-plan");
+	const changedSchema = { ...schema, separators: ["_"] };
+	const staleSchema = validatePlanSnapshot(state, changedSchema, planned.value);
+	assert.equal(staleSchema.ok ? "ok" : staleSchema.error.code, "stale-plan");
 });
