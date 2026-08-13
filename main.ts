@@ -792,7 +792,7 @@ export default class TrellisPlugin extends Plugin {
 		}
 		const full = nsPath(schema, slot.namespace);
 		const rest = tagPath === full ? "" : tagPath.slice(full.length + 1);
-		const tagkey = rest.split("/").join("");
+		const tagkey = rest.split("/").join(slot.segmentSeparator ?? "");
 		if (!tagkey) {
 			new Notice(t("notice.noTagkey"));
 			return;

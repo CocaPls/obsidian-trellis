@@ -33,7 +33,12 @@ import {
 	isValidNamespace,
 	isValidSeparator,
 	isValidTagSegment,
+	isValidTagSegmentForSlot,
 	isValidTagPath,
+	renderSeparator,
+	boundarySeparator,
+	primarySeparatorSymbol,
+	separatorConflicts,
 } from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -410,6 +415,82 @@ test("schemaFromLegacy maps keyPosition onto slot ORDER", () => {
 	assert.deepEqual(schemaFromLegacy("trel", "-", "prefix").slots.map((s) => s.role), ["tag", "name"]);
 	assert.deepEqual(schemaFromLegacy("trel", "-", "suffix").slots.map((s) => s.role), ["name", "tag"]);
 	assert.deepEqual(schemaFromLegacy("trel", "-", "prefix").separators, ["-"]);
+	assert.equal(schemaFromLegacy("trel", "-", "prefix").separatorSpacing, undefined);
+});
+
+test("boundary symbol and spacing are stored and rendered independently", () => {
+	assert.equal(renderSeparator("-", "none"), "-");
+	assert.equal(renderSeparator("-", "before"), " -");
+	assert.equal(renderSeparator("-", "after"), "- ");
+	assert.equal(renderSeparator("-", "both"), " - ");
+	const schema: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "trel" }, { role: "name" }],
+		separators: ["-"],
+		separatorSpacing: ["both"],
+	};
+	assert.equal(primarySeparatorSymbol(schema), "-");
+	assert.equal(boundarySeparator(schema, 0), " - ");
+	assert.equal(assembleBasename("S88", "사과", schema), "S88 - 사과");
+	assert.equal(extractTitle("S88 - 사과", "S88", schema), "사과");
+	assert.equal(syncedBasename("S99 - 사과", "S88", schema), "S88 - 사과");
+	assert.equal(
+		separatorMigratedName("S88-사과", "S88", cfg, schema),
+		"S88 - 사과"
+	);
+});
+
+test("tag-slot segment separators preserve hierarchy visibly and Bootstrap reverses it", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel", segmentSeparator: "." },
+			{ role: "name" },
+		],
+		separators: ["-"],
+	};
+	assert.equal(tagToTagkey("#trel/S/88/B/07", schema), "S.88.B.07");
+	assert.equal(tagkeyToTagPath("S.88.B.07", schema), "trel/S/88/B/07");
+	assert.equal(tagkeyToTagPath("S..88", schema), null);
+	assert.equal(tagkeyToTagPath("S88", schema), "trel/S88");
+});
+
+test("each tag slot uses its own internal segment separator", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel", segmentSeparator: "." },
+			{ role: "name" },
+			{ role: "tag", namespace: "proj", segmentSeparator: "_" },
+		],
+		separators: ["-", "-"],
+	};
+	assert.deepEqual(slotTagkeys(["#trel/S/88", "#proj/P/02"], schema), [
+		"S.88",
+		null,
+		"P_02",
+	]);
+	assert.equal(
+		syncedBasenameMulti("old", ["#trel/S/88", "#proj/P/02"], schema),
+		"S.88-old-P_02"
+	);
+});
+
+test("an internal separator cannot be ambiguous with an adjacent unspaced boundary", () => {
+	const conflicting: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel", segmentSeparator: "-" },
+			{ role: "name" },
+		],
+		separators: ["-"],
+	};
+	assert.deepEqual(separatorConflicts(conflicting), [{ slotIndex: 0, gapIndex: 0 }]);
+	assert.deepEqual(
+		separatorConflicts({ ...conflicting, separatorSpacing: ["after"] }),
+		[]
+	);
+	assert.equal(
+		isValidTagSegmentForSlot("A-B", conflicting.slots[0]),
+		false
+	);
+	assert.equal(isValidTagSegmentForSlot("AB", conflicting.slots[0]), true);
 });
 
 test("namespace/separator/position are read from the slot array (custom schema)", () => {

@@ -17,6 +17,8 @@
 
 /** The role of a filename slot. */
 export type KeyRole = "tag" | "name";
+export type SegmentSeparator = "" | "." | "-" | "_";
+export type SeparatorSpacing = "none" | "before" | "after" | "both";
 
 /**
  * ID scheme preset for a tag slot (0.3.0, experimental). Absent = the classic
@@ -43,6 +45,8 @@ export interface KeySlot {
 	namespace?: string;
 	/** Optional ID scheme preset (0.3.0). Absent = format-agnostic. */
 	scheme?: SchemeId;
+	/** Visible joiner for hierarchy segments in this tagkey. Absent = hidden. */
+	segmentSeparator?: SegmentSeparator;
 }
 
 /**
@@ -67,6 +71,31 @@ export interface TrellisSchema {
 	rootNamespace?: string;
 	slots: KeySlot[];
 	separators: string[];
+	/** Whitespace rendered around each separator symbol. Absent = no spaces. */
+	separatorSpacing?: SeparatorSpacing[];
+}
+
+/** Render a stored boundary symbol with its independently configured spacing. */
+export function renderSeparator(
+	symbol: string,
+	spacing: SeparatorSpacing = "none"
+): string {
+	const before = spacing === "before" || spacing === "both" ? " " : "";
+	const after = spacing === "after" || spacing === "both" ? " " : "";
+	return before + symbol + after;
+}
+
+/** Spacing mode of one gap; missing legacy values mean no spaces. */
+export function separatorSpacingAt(
+	schema: TrellisSchema,
+	index: number
+): SeparatorSpacing {
+	return schema.separatorSpacing?.[index] ?? "none";
+}
+
+/** The actual boundary text emitted into a filename for one schema gap. */
+export function boundarySeparator(schema: TrellisSchema, index: number): string {
+	return renderSeparator(schema.separators[index] ?? "", separatorSpacingAt(schema, index));
 }
 
 /**
@@ -172,8 +201,13 @@ export function duplicateLocationGroups(
 	return groups;
 }
 
-/** The primary (first) separator, e.g. "-". */
+/** The primary rendered boundary separator, e.g. "-" or " - ". */
 export function primarySeparator(schema: TrellisSchema): string {
+	return boundarySeparator(schema, 0);
+}
+
+/** The primary stored separator symbol without surrounding spaces. */
+export function primarySeparatorSymbol(schema: TrellisSchema): string {
 	return schema.separators[0] ?? "";
 }
 
@@ -195,7 +229,8 @@ export function tagToTagkey(tag: string, schema: TrellisSchema): string | null {
 	if (!tag.startsWith(prefix)) return null;
 	const path = tag.slice(prefix.length);
 	if (path.length === 0) return null;
-	return path.split("/").join("");
+	const slot = schema.slots.find((s) => s.role === "tag");
+	return path.split("/").join(slot?.segmentSeparator ?? "");
 }
 
 /**
@@ -229,6 +264,18 @@ export function parentTagPath(tagPath: string): string {
  *    tag that would silently rename the file later.
  */
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
+	const slot = schema.slots.find((s) => s.role === "tag");
+	const segmentSeparator = slot?.segmentSeparator ?? "";
+	if (segmentSeparator) {
+		const segs = tagkey.split(segmentSeparator);
+		if (
+			segs.some((segment) => !isValidTagSegment(segment)) ||
+			segs.join(segmentSeparator) !== tagkey
+		) {
+			return null;
+		}
+		return `${primaryNsPath(schema)}/${segs.join("/")}`;
+	}
 	// A scheme on the primary slot parses first (it may accept single-run IDs
 	// the generic guard rejects — a Zettel timestamp is ONE digit run); when the
 	// scheme doesn't recognise the tagkey, fall back to the generic run split so
@@ -402,6 +449,40 @@ export function isValidSeparator(s: string): boolean {
 	return !/[A-Za-z0-9/\\:*?"<>|#^[\]]|\s/.test(s);
 }
 
+/** A segment is reversibly encodable for this tag slot. The configured joiner
+ * cannot also occur inside a segment, or Bootstrap could not tell content from
+ * hierarchy later. Existing tags still sync deterministically; creation and
+ * configuration UIs can use this guard to prevent new ambiguity. */
+export function isValidTagSegmentForSlot(seg: string, slot: KeySlot): boolean {
+	return isValidTagSegment(seg) && !(slot.segmentSeparator && seg.includes(slot.segmentSeparator));
+}
+
+export interface SeparatorConflict {
+	slotIndex: number;
+	gapIndex: number;
+}
+
+/** Adjacent tag-segment and slot-boundary separators that render identically
+ * without spaces make the filename schema ambiguous to parse. */
+export function separatorConflicts(schema: TrellisSchema): SeparatorConflict[] {
+	const conflicts: SeparatorConflict[] = [];
+	for (let slotIndex = 0; slotIndex < schema.slots.length; slotIndex++) {
+		const slot = schema.slots[slotIndex];
+		if (slot.role !== "tag" || !slot.segmentSeparator) continue;
+		for (const gapIndex of [slotIndex - 1, slotIndex]) {
+			if (
+				gapIndex >= 0 &&
+				gapIndex < schema.separators.length &&
+				separatorSpacingAt(schema, gapIndex) === "none" &&
+				schema.separators[gapIndex] === slot.segmentSeparator
+			) {
+				conflicts.push({ slotIndex, gapIndex });
+			}
+		}
+	}
+	return conflicts;
+}
+
 /**
  * Whether a string is safe as ONE tag path segment (a single hierarchy level).
  * Deny-list, not an ASCII allowlist, so unicode segments (e.g. Korean) stay
@@ -425,18 +506,26 @@ export function isValidTagPath(path: string): boolean {
 }
 
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
-export function tagToTagkeyNs(tag: string, namespace: string): string | null {
+export function tagToTagkeyNs(
+	tag: string,
+	namespace: string,
+	segmentSeparator: SegmentSeparator = ""
+): string | null {
 	const prefix = `#${namespace}/`;
 	if (!tag.startsWith(prefix)) return null;
 	const path = tag.slice(prefix.length);
 	if (path.length === 0) return null;
-	return path.split("/").join("");
+	return path.split("/").join(segmentSeparator);
 }
 
 /** First location tag under a namespace → its tagkey, or null. */
-export function pickTagkeyNs(tags: string[], namespace: string): string | null {
+export function pickTagkeyNs(
+	tags: string[],
+	namespace: string,
+	segmentSeparator: SegmentSeparator = ""
+): string | null {
 	for (const t of tags) {
-		const k = tagToTagkeyNs(t, namespace);
+		const k = tagToTagkeyNs(t, namespace, segmentSeparator);
 		if (k !== null) return k;
 	}
 	return null;
@@ -454,7 +543,7 @@ export function slotTagkeys(
 ): (string | null)[] {
 	return schema.slots.map((s) =>
 		s.role === "tag" && s.namespace
-			? pickTagkeyNs(tags, nsPath(schema, s.namespace))
+			? pickTagkeyNs(tags, nsPath(schema, s.namespace), s.segmentSeparator)
 			: null
 	);
 }
@@ -473,7 +562,7 @@ export function assembleBasenameMulti(
 	for (let i = 0; i < schema.slots.length; i++) {
 		const v = values[i];
 		if (v === null || v === undefined || v === "") continue;
-		if (any) out += schema.separators[i - 1] ?? primarySeparator(schema);
+		if (any) out += boundarySeparator(schema, i - 1) || primarySeparator(schema);
 		out += v;
 		any = true;
 	}
@@ -485,7 +574,9 @@ export function assembleBasenameMulti(
  *  Matching shortest-first is what let an omitted name slot's longer gap
  *  separator be half-consumed, duplicating a tagkey into the name. */
 function sepsLongestFirst(schema: TrellisSchema): string[] {
-	return [...new Set(schema.separators.filter(Boolean))].sort(
+	return [
+		...new Set(schema.separators.map((_, i) => boundarySeparator(schema, i)).filter(Boolean)),
+	].sort(
 		(a, b) => b.length - a.length
 	);
 }
@@ -545,7 +636,7 @@ export function extractNameMulti(
 		}
 		if (consumed) continue;
 		// Damaged tag slot: fall back to the declared positional separator.
-		const sepAfter = schema.separators[i] ?? "";
+		const sepAfter = boundarySeparator(schema, i);
 		const j = sepAfter ? rest.indexOf(sepAfter) : -1;
 		if (j !== -1) rest = stripOneLeadingSep(rest.slice(j), schema);
 	}
@@ -570,7 +661,7 @@ export function extractNameMulti(
 			}
 		}
 		if (consumed) continue;
-		const sepBefore = schema.separators[i - 1] ?? "";
+		const sepBefore = boundarySeparator(schema, i - 1);
 		const j = sepBefore ? rest.lastIndexOf(sepBefore) : -1;
 		if (j !== -1) rest = rest.slice(0, j);
 	}
