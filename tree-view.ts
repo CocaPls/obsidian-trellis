@@ -210,12 +210,17 @@ export class TrellisTreeView extends ItemView {
 				// both scaffolding). A scaffolding node that CARRIES a note is kept
 				// visible — promoting it would drop that note from the tree.
 				const scaff: Set<string> = this.cb.getScaffolding();
-				const promote = (nodes: TagTreeNode[]): TagTreeNode[] =>
-					nodes.flatMap((n: TagTreeNode): TagTreeNode[] =>
-						scaff.has(n.path) && n.notePaths.length === 0
-							? promote(n.children)
-							: [n]
-					);
+				const promote = (nodes: TagTreeNode[]): TagTreeNode[] => {
+					const promoted: TagTreeNode[] = [];
+					for (const node of nodes) {
+						if (scaff.has(node.path) && node.notePaths.length === 0) {
+							promoted.push(...promote(node.children));
+						} else {
+							promoted.push(node);
+						}
+					}
+					return promoted;
+				};
 				tops = promote(tops);
 			}
 			if (tops.length === 0 && this.cb.getUntagged().length === 0) {

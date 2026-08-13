@@ -41,6 +41,8 @@ export interface DedupDecision {
 /** Max notes shown in one cleanup pass — large batches are split so the modal
  *  stays usable. The user applies, then re-runs the check for the next batch. */
 const DEDUP_BATCH_LIMIT = 50;
+const TAG_PATH_PLACEHOLDER = "trel/S88";
+const NEXT_TAG_PATH_PLACEHOLDER = "trel/S99";
 
 /** Resolve notes carrying duplicate location tags: the user picks which tag to
  *  keep per namespace, then applies (removes the rest, undoable) or defers.
@@ -153,7 +155,7 @@ export class CascadeRenameModal extends Modal {
 			.setDesc(t("modal.cascade.fromDesc"))
 			.addText((input) => {
 				input
-					.setPlaceholder("trel/S88")
+					.setPlaceholder(TAG_PATH_PLACEHOLDER)
 					.setValue(this.from)
 					.onChange((v) => (this.from = v.trim()));
 				new TagPathSuggest(this.app, input.inputEl, (v) => (this.from = v));
@@ -162,7 +164,9 @@ export class CascadeRenameModal extends Modal {
 			.setName(t("modal.cascade.toName"))
 			.setDesc(t("modal.cascade.toDesc"))
 			.addText((input) => {
-				input.setPlaceholder("trel/S99").onChange((v) => (this.to = v.trim()));
+				input
+					.setPlaceholder(NEXT_TAG_PATH_PLACEHOLDER)
+					.onChange((v) => (this.to = v.trim()));
 				new TagPathSuggest(this.app, input.inputEl, (v) => (this.to = v));
 			});
 
@@ -240,7 +244,7 @@ export class NewChildNoteModal extends Modal {
 			.setDesc(t("modal.newNote.parentDesc"))
 			.addText((input) => {
 				input
-					.setPlaceholder("trel/S88")
+					.setPlaceholder(TAG_PATH_PLACEHOLDER)
 					.setValue(this.parent)
 					.onChange((v) => {
 						this.parent = v.trim();

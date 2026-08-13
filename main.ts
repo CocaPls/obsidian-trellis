@@ -70,6 +70,9 @@ import {
 	ConfirmModal,
 } from "./modals";
 
+const DEFAULT_NAMESPACE_PLACEHOLDER = "trel";
+const ROOT_NAMESPACE_PLACEHOLDER = "trellis";
+
 type SortKey = "tagkey" | "mtime" | "ctime";
 
 type PlainObject = Record<string, unknown>;
@@ -808,7 +811,7 @@ export default class TrellisPlugin extends Plugin {
 		const body = `# ${safeTitle || tagkey}\n`;
 		try {
 			const file = await this.app.vault.create(path, body);
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				fm.tags = [tagPath];
 			});
 			await this.app.workspace.getLeaf(false).openFile(file);
@@ -1579,7 +1582,7 @@ class TrellisSettingTab extends PluginSettingTab {
 					.setDesc(t("setting.nsDesc"))
 					.addText((text) =>
 						text
-							.setPlaceholder("trel")
+							.setPlaceholder(DEFAULT_NAMESPACE_PLACEHOLDER)
 							.setValue(pending)
 							.onChange((v) => (pending = v))
 					)
@@ -1678,7 +1681,7 @@ class TrellisSettingTab extends PluginSettingTab {
 				.setDesc(t("setting.rootDesc"))
 				.addText((text) =>
 					text
-						.setPlaceholder("trellis")
+						.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
 						.setValue(pending)
 						.onChange((v) => (pending = v))
 				)
