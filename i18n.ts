@@ -264,12 +264,13 @@ const EN: Record<string, string> = {
 	"bulk.unexpectedFailure": "Unexpected migration failure",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "Done",
+	"bulk.rolledBack": "Rolled back",
 	"bulk.cancelledLabel": "Cancelled",
 	"bulk.ok": "OK",
 	"bulk.summary": "{done} processed · {skipped} skipped",
 	"bulk.skippedTitle": "Skipped notes ({n})",
 	"bulk.skippedDesc":
-		"Skipped due to a frontmatter parse error (e.g. duplicate YAML keys). Fix these by hand, then run it again.",
+		"Not applied because the note changed, its target name collided, or its frontmatter could not be read. Review these notes, then run it again.",
 	"notice.bootstrapCancelled":
 		'bootstrap cancelled — {n} file(s) already tagged (undo via "Undo last bootstrap")',
 	"notice.sepCancelled":
@@ -588,12 +589,13 @@ const KO: Record<string, string> = {
 	"bulk.unexpectedFailure": "예기치 않은 마이그레이션 실패",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "완료",
+	"bulk.rolledBack": "롤백됨",
 	"bulk.cancelledLabel": "중단됨",
 	"bulk.ok": "확인",
 	"bulk.summary": "{done}개 처리 · {skipped}개 건너뜀",
 	"bulk.skippedTitle": "건너뛴 노트 ({n})",
 	"bulk.skippedDesc":
-		"frontmatter 파싱 오류(예: 중복 YAML 키)로 건너뜀. 직접 고친 뒤 다시 실행하세요.",
+		"노트 상태 변경, 대상 파일명 충돌 또는 frontmatter 읽기 실패로 적용하지 않았습니다. 아래 노트를 확인한 뒤 다시 실행하세요.",
 	"notice.bootstrapCancelled":
 		'부트스트랩 중단 — {n}개 파일은 이미 태그됨 ("마지막 부트스트랩 되돌리기"로 취소 가능)',
 	"notice.sepCancelled":

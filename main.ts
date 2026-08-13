@@ -1488,7 +1488,10 @@ export default class TrellisPlugin extends Plugin {
 						record.currentPath = abstract.path;
 					}
 				} catch (error) {
-					console.error("TRELLIS cascade apply failed", row.path, error);
+					// A stale preview or target collision is an expected guarded abort:
+					// the completed prefix is rolled back below, so do not report it as
+					// an uncaught plugin error in Obsidian's developer console.
+					console.warn("TRELLIS cascade apply aborted", row.path, error);
 					failed.push(row.path);
 					break;
 				} finally {
@@ -1504,7 +1507,11 @@ export default class TrellisPlugin extends Plugin {
 				this.settings.lastCascade = remaining.length > 0 ? remaining : previousUndo;
 				await this.saveSettings();
 				this.rebuildTrees();
-				progress.finish({ processed: restored, skipped: failed });
+				progress.finish({
+					processed: restored,
+					skipped: failed,
+					outcome: "rolled-back",
+				});
 				return;
 			}
 
@@ -1652,6 +1659,7 @@ export default class TrellisPlugin extends Plugin {
 				progress?.finish({
 					processed: restored,
 					skipped: [...failed, ...remaining.map((record) => record.currentPath)],
+					outcome: "rolled-back",
 				});
 				return;
 			}
@@ -1956,7 +1964,11 @@ export default class TrellisPlugin extends Plugin {
 							: undefined;
 					await this.saveSettings();
 					this.rebuildTrees();
-					progress?.finish({ processed: undone, skipped: failedNames });
+					progress?.finish({
+						processed: undone,
+						skipped: failedNames,
+						outcome: "rolled-back",
+					});
 				} else {
 					this.settings.schema = cloneSchema(newSchema);
 					this.settings.lastSeparatorChange =
@@ -2358,7 +2370,11 @@ export default class TrellisPlugin extends Plugin {
 				this.settings.lastRootChange = prevRec;
 				await this.saveSettings();
 				this.rebuildTrees();
-				progress.finish({ processed: reverted, skipped: failed });
+				progress.finish({
+					processed: reverted,
+					skipped: failed,
+					outcome: "rolled-back",
+				});
 			} else {
 				this.settings.lastRootChange = { oldRoot, newRoot };
 				await this.saveSettings();

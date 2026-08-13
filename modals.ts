@@ -928,24 +928,44 @@ export class BulkProgressModal extends Modal {
 		this.hintEl.setText(sec > 10 ? t("bulk.slowHint") : "");
 	}
 
-	/** Swap to the summary state: a done/cancelled heading, the processed count,
+	/** Swap to the summary state: a done/cancelled/rolled-back heading, the processed count,
 	 *  a collapsible list of skipped notes, and an OK button that closes. */
-	finish(opts: { processed: number; skipped: string[] }) {
+	finish(opts: {
+		processed: number;
+		skipped: string[];
+		outcome?: "done" | "rolled-back";
+	}) {
 		this.finished = true;
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("trellis-progress-modal");
+		const outcomeLabel = this.cancelled
+			? t("bulk.cancelledLabel")
+			: opts.outcome === "rolled-back"
+				? t("bulk.rolledBack")
+				: t("bulk.done");
 		contentEl.createEl("h3", {
-			text: `${this.title} — ${this.cancelled ? t("bulk.cancelledLabel") : t("bulk.done")}`,
+			text: `${this.title} — ${outcomeLabel}`,
 		});
-		const bar = contentEl.createDiv({ cls: "trellis-progress-bar" });
+		const bar = contentEl.createDiv({
+			cls: "trellis-progress-bar",
+			attr: {
+				role: "progressbar",
+				"aria-label": this.title,
+				"aria-valuemin": "0",
+				"aria-valuemax": "100",
+				"aria-valuenow": "100",
+				"aria-valuetext": outcomeLabel,
+			},
+		});
 		const fill = bar.createDiv({ cls: "trellis-progress-bar-fill is-full" });
 		if (this.cancelled) fill.addClass("is-cancelled");
 
-		contentEl.createDiv({
+		const summary = contentEl.createDiv({
 			cls: "trellis-progress-count",
 			text: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
 		});
+		summary.setAttribute("aria-live", "polite");
 
 		if (opts.skipped.length) {
 			const details = contentEl.createEl("details", { cls: "trellis-progress-skipped" });
