@@ -61,6 +61,15 @@ import {
 } from "./tree-view";
 import { t, setLang, LangSetting } from "./i18n";
 import {
+	inspectNoteState,
+	planNoteChange,
+	type AutomationResult,
+	type TrellisChangePlan,
+	type TrellisChangeRequest,
+	type TrellisNoteInspection,
+	type TrellisNoteState,
+} from "./automation";
+import {
 	DuplicateNote,
 	DedupDecision,
 	DuplicateTagsModal,
@@ -254,6 +263,13 @@ function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
 
 export default class TrellisPlugin extends Plugin {
 	settings: TrellisSettings = { ...DEFAULT_SETTINGS };
+
+	/** Guarded in-process automation surface. No network, URI, REST, or MCP
+	 * endpoint is opened; callers must already hold this plugin instance. */
+	readonly automation = Object.freeze({
+		inspectNote: (path: string) => this.inspectNote(path),
+		planChange: (request: TrellisChangeRequest) => this.planChange(request),
+	});
 
 	/** Ribbon button for the tree view, kept so we can show/hide it on toggle. */
 	private ribbonEl: HTMLElement | null = null;
@@ -533,6 +549,69 @@ export default class TrellisPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private noteState(path: string): AutomationResult<TrellisNoteState> {
+		const normalized = normalizePath(path);
+		const abstract = this.app.vault.getAbstractFileByPath(normalized);
+		if (!abstract) {
+			return {
+				ok: false,
+				error: {
+					code: "note-not-found",
+					message: `No vault file exists at '${normalized}'.`,
+				},
+			};
+		}
+		if (!(abstract instanceof TFile) || abstract.extension !== "md") {
+			return {
+				ok: false,
+				error: {
+					code: "not-a-markdown-file",
+					message: `'${normalized}' is not a Markdown note.`,
+				},
+			};
+		}
+		const cache = this.app.metadataCache.getFileCache(abstract);
+		if (!cache) {
+			return {
+				ok: false,
+				error: {
+					code: "metadata-unavailable",
+					message: `Metadata is not ready for '${normalized}'.`,
+				},
+			};
+		}
+		const frontmatter = isPlainObject(cache.frontmatter) ? cache.frontmatter : {};
+		return {
+			ok: true,
+			value: {
+				path: abstract.path,
+				basename: abstract.basename,
+				extension: abstract.extension,
+				mtime: abstract.stat.mtime,
+				allTags: getAllTags(cache) ?? [],
+				frontmatterTags: normalizeTagList(frontmatter.tags).map((tag) =>
+					tag.replace(/^#/, "")
+				),
+			},
+		};
+	}
+
+	/** Read-only, structured note inspection for internal automation. */
+	inspectNote(path: string): AutomationResult<TrellisNoteInspection> {
+		const state = this.noteState(path);
+		return state.ok
+			? { ok: true, value: inspectNoteState(state.value, this.settings.schema) }
+			: state;
+	}
+
+	/** Read-only dry-run with an optimistic-concurrency snapshot. */
+	planChange(request: TrellisChangeRequest): AutomationResult<TrellisChangePlan> {
+		const state = this.noteState(request.path);
+		return state.ok
+			? planNoteChange(state.value, this.settings.schema, request)
+			: state;
 	}
 
 	/** Sync one file's location tag into its filename tagkey (one direction). */
