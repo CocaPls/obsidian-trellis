@@ -84,7 +84,6 @@ import {
 	NewChildNoteModal,
 	BootstrapSelectModal,
 	BootstrapPreviewModal,
-	BootstrapErrorsModal,
 	SeparatorChangeModal,
 	BulkProgressModal,
 	AlertModal,
