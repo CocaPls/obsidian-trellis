@@ -2,12 +2,14 @@ import {
 	Plugin,
 	TFile,
 	getAllTags,
+	getFrontMatterInfo,
 	Notice,
 	Setting,
 	PluginSettingTab,
 	App,
 	debounce,
 	normalizePath,
+	parseYaml,
 	type WorkspaceLeaf,
 } from "obsidian";
 import {
@@ -341,6 +343,12 @@ export default class TrellisPlugin extends Plugin {
 		200,
 		true
 	);
+	/** Persist user-driven path repairs without writing data.json on every rename event. */
+	private readonly scheduleUndoPathSave = debounce(
+		() => void this.saveSettings(),
+		500,
+		true
+	);
 
 	async onload() {
 		await this.loadSettings();
@@ -435,6 +443,14 @@ export default class TrellisPlugin extends Plugin {
 				this.multiWarned.delete(oldPath); // stale warning key at the old path
 				this.collisionWarned.delete(oldPath);
 				if (file instanceof TFile && file.extension === "md") {
+					// Bulk/AI transactions own and record their own final paths. Ordinary
+					// user renames (including the live-sync correction they trigger) must
+					// carry saved undo records forward to the final file path.
+					if (!this.bulkActive && this.automationApplying.size === 0) {
+						if (this.updateUndoPaths(oldPath, file.path)) {
+							this.scheduleUndoPathSave();
+						}
+					}
 					void this.syncFile(file);
 				}
 				this.scheduleTreeRefresh();
@@ -604,6 +620,44 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	/** Keep every path-bearing undo journal attached to a user-renamed note. */
+	private updateUndoPaths(oldPath: string, newPath: string): boolean {
+		let changed = false;
+		const replace = (value: string): string => {
+			if (value !== oldPath) return value;
+			changed = true;
+			return newPath;
+		};
+		for (const record of this.settings.lastBootstrap ?? []) {
+			record.path = replace(record.path);
+		}
+		for (const record of this.settings.lastDedup ?? []) {
+			record.path = replace(record.path);
+		}
+		for (const record of this.settings.lastSeparatorChange?.renames ?? []) {
+			record.path = replace(record.path);
+		}
+		for (const record of this.settings.lastCascade ?? []) {
+			record.currentPath = replace(record.currentPath);
+		}
+		for (const record of this.settings.lastNamespaceChange?.changes ?? []) {
+			record.currentPath = replace(record.currentPath);
+		}
+		return changed;
+	}
+
+	/** Read the file text directly instead of trusting metadataCache. This is the
+	 * final optimistic-concurrency check used by the AI apply surface. */
+	private async freshFrontmatterTags(file: TFile): Promise<string[]> {
+		const content = await this.app.vault.read(file);
+		const info = getFrontMatterInfo(content);
+		if (!info.exists) return [];
+		const parsed: unknown = parseYaml(info.frontmatter);
+		return normalizeTagList(isPlainObject(parsed) ? parsed.tags : undefined).map(
+			(tag) => tag.replace(/^#/, "")
+		);
+	}
+
 	/** Only one vault-wide mutation may run at a time. This prevents two command
 	 * palette actions from interleaving their writes and overwriting undo state. */
 	private beginBulkOperation(label: string): boolean {
@@ -723,6 +777,35 @@ export default class TrellisPlugin extends Plugin {
 			};
 		}
 		const verifiedPlan = recomputed.value;
+		const file = this.app.vault.getAbstractFileByPath(verifiedPlan.expected.path);
+		if (!(file instanceof TFile)) {
+			return {
+				ok: false,
+				error: { code: "note-not-found", message: "The planned note no longer exists." },
+			};
+		}
+		let freshTags: string[];
+		try {
+			freshTags = await this.freshFrontmatterTags(file);
+		} catch (error) {
+			return {
+				ok: false,
+				error: {
+					code: "stale-plan",
+					message: "The note could not be re-read before apply.",
+					details: { error: String(error) },
+				},
+			};
+		}
+		if (!sameStrings(freshTags, verifiedPlan.expected.frontmatterTags)) {
+			return {
+				ok: false,
+				error: {
+					code: "stale-plan",
+					message: "The note's frontmatter changed after the dry-run.",
+				},
+			};
+		}
 		if (verifiedPlan.status === "noop") {
 			return {
 				ok: true,
@@ -732,13 +815,6 @@ export default class TrellisPlugin extends Plugin {
 					path: verifiedPlan.expected.path,
 					changes: verifiedPlan.changes,
 				},
-			};
-		}
-		const file = this.app.vault.getAbstractFileByPath(verifiedPlan.expected.path);
-		if (!(file instanceof TFile)) {
-			return {
-				ok: false,
-				error: { code: "note-not-found", message: "The planned note no longer exists." },
 			};
 		}
 		if (verifiedPlan.changes.rename) {
@@ -758,13 +834,30 @@ export default class TrellisPlugin extends Plugin {
 		for (const path of guardedPaths) this.automationApplying.add(path);
 		try {
 		if (verifiedPlan.changes.frontmatter) {
+			let stale = false;
 			try {
 				await this.app.fileManager.processFrontMatter(
 					file,
 					(frontmatter: TrellisFrontmatter) => {
+						const current = normalizeTagList(frontmatter.tags).map((tag) =>
+							tag.replace(/^#/, "")
+						);
+						if (!sameStrings(current, verifiedPlan.expected.frontmatterTags)) {
+							stale = true;
+							return;
+						}
 						frontmatter.tags = [...verifiedPlan.next.frontmatterTags];
 					}
 				);
+				if (stale) {
+					return {
+						ok: false,
+						error: {
+							code: "stale-plan",
+							message: "The note's frontmatter changed while apply was starting.",
+						},
+					};
+				}
 			} catch (error) {
 				return {
 					ok: false,
