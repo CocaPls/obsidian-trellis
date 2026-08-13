@@ -138,6 +138,8 @@ const EN: Record<string, string> = {
 	"modal.bootstrap.title": "Bootstrap — dry-run preview",
 	"modal.bootstrap.summary":
 		"{assign} file(s) would get a tag · {already} already tagged (skipped) · {none} have no recognizable tagkey (skipped). Nothing is written.",
+	"modal.bootstrap.segmentWarning":
+		"A visible hierarchy separator is active. Bootstrap treats every occurrence inside the tagkey as a level boundary; review names whose original segment may have contained that symbol.",
 	"modal.bootstrap.willAssign": "Will assign ({n})",
 	"modal.bootstrap.noTagkey": "No tagkey — skipped, check manually ({n})",
 	"modal.bootstrap.apply": "Apply — tag {n} file(s)",
@@ -149,7 +151,7 @@ const EN: Record<string, string> = {
 	// separator-change modal
 	"modal.sep.title": "Change separator",
 	"modal.sep.desc":
-		"'{from}' → '{to}'. Only the tagkey boundary separator is rewritten on location-tagged files; symbols inside the title are preserved.",
+		"Filename formatting {from} → {to}. Only location-tagged files are included; free titles are preserved.",
 	"modal.sep.count": "{n} file(s) will be renamed.",
 	"modal.sep.none": "No files need renaming — the change applies to the setting only.",
 	"modal.sep.showList": "Show affected files",
@@ -159,9 +161,20 @@ const EN: Record<string, string> = {
 	"setting.nsName": "Location tag namespace",
 	"setting.nsDesc":
 		"Tags under this namespace are the source of truth. Put them in frontmatter — cascade rewrites frontmatter tags. e.g. 'trel' → #trel/S88/B07",
-	"setting.sepName": "Separator",
+	"setting.sepName": "Separator symbol",
 	"setting.sepDesc":
-		"Character(s) between the tagkey and the title — e.g. '-'. No letters, digits, or '/'. One symbol is recommended. Changing it triggers a vault-wide batch rename (with confirmation).",
+		"Symbol between filename key slots. Choose a preset or a custom parse-safe symbol; spaces are configured separately.",
+	"setting.sepCustom": "Custom…",
+	"setting.sepSpacingName": "Separator spacing",
+	"setting.sepSpacingDesc": "Spaces rendered around the slot-boundary symbol.",
+	"spacing.none": "None (BP-title)",
+	"spacing.before": "Before (BP -title)",
+	"spacing.after": "After (BP- title)",
+	"spacing.both": "Both (BP - title)",
+	"setting.segmentSepName": "Tag hierarchy separator",
+	"setting.segmentSepDesc":
+		"How tag path levels appear inside the tag-key slot. Hidden keeps the classic S88B07 form.",
+	"segmentSep.hidden": "Hidden (S88B07)",
 	"setting.posName": "Key position",
 	"setting.posDesc": "Where the tagkey sits in the filename.",
 	"setting.posPrefix": "Prefix — start of filename (S88B07-title)",
@@ -223,6 +236,7 @@ const EN: Record<string, string> = {
 		"Slow? Usually many targets or slow file I/O (e.g. a cloud-synced vault).",
 	"bulk.title.bootstrap": "Applying bootstrap",
 	"bulk.title.separator": "Changing separator",
+	"bulk.unexpectedFailure": "Unexpected migration failure",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "Done",
 	"bulk.cancelledLabel": "Cancelled",
@@ -238,7 +252,7 @@ const EN: Record<string, string> = {
 	// advanced multi-key slot editor (0.2.0, experimental)
 	"setting.advName": "Advanced — multi-key slots (experimental)",
 	"setting.advDesc":
-		"Edit the filename as an array of key slots. Each extra tag-key slot syncs from its own tag namespace; the name slot stays free. Tree view, bootstrap, cascade and separator migration still follow tag slot 1. Files adopt the new schema on their next tag change — no batch rename happens here.",
+		"Edit the filename as an array of key slots. Each tag-key slot syncs from its own namespace; the name slot stays free. Applying shows an exact rename preview and runs as one undoable batch.",
 	"setting.advSlots": "Slots",
 	"adv.slot": "Slot {n}",
 	"adv.roleTag": "Tag key",
@@ -261,6 +275,9 @@ const EN: Record<string, string> = {
 	"adv.invalid.nsBad": "Namespace '{ns}' has illegal characters — use letters, digits, '-' or '_'.",
 	"adv.invalid.nsDup": "Namespace '{ns}' is used by more than one tag slot.",
 	"adv.invalid.sep": "Separator {n} is empty or contains an illegal character.",
+	"adv.invalid.spacing": "Separator {n} has an invalid spacing mode.",
+	"adv.invalid.conflict":
+		"A tag hierarchy separator matches an adjacent boundary symbol with no spacing. Change one of them or add boundary spacing.",
 	"notice.advApplied": "schema applied",
 	"modal.ok": "OK",
 	"modal.confirm.dontAsk": "Don't ask again",
@@ -268,6 +285,8 @@ const EN: Record<string, string> = {
 	"modal.confirm.cancel": "Cancel",
 	"modal.badSep.title": "Invalid separator",
 	"modal.badSep.desc": "A separator cannot be empty and cannot contain letters, digits, spaces, or characters illegal in filenames. Try a symbol like -, _, . or ~.",
+	"modal.badSep.conflict":
+		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
 	"modal.applySchema.title": "Apply schema changes?",
 	"modal.applySchema.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
 	"setting.statsName": "Managed notes",
@@ -417,6 +436,8 @@ const KO: Record<string, string> = {
 	"modal.bootstrap.title": "부트스트랩 — 드라이런 미리보기",
 	"modal.bootstrap.summary":
 		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 태그키 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
+	"modal.bootstrap.segmentWarning":
+		"표시형 계층 구분자가 켜져 있습니다. 부트스트랩은 태그키 안의 해당 기호를 모두 계층 경계로 해석하므로, 원래 세그먼트 자체에 그 기호가 있었을 수 있는 이름은 직접 검토하세요.",
 	"modal.bootstrap.willAssign": "부여 예정 ({n})",
 	"modal.bootstrap.noTagkey": "태그키 없음 — 건너뜀, 수동 확인 ({n})",
 	"modal.bootstrap.apply": "적용 — {n}개 파일 태그",
@@ -428,7 +449,7 @@ const KO: Record<string, string> = {
 	// separator-change modal
 	"modal.sep.title": "구분자 변경",
 	"modal.sep.desc":
-		"'{from}' → '{to}'. 위치 태그가 붙은 파일의 태그키 경계 구분자만 바뀝니다. 제목 속 기호는 그대로 보존됩니다.",
+		"파일명 형식 {from} → {to}. 위치 태그가 붙은 파일만 대상으로 하며 자유 제목은 보존됩니다.",
 	"modal.sep.count": "{n}개 파일의 이름이 바뀝니다.",
 	"modal.sep.none": "이름이 바뀔 파일은 없습니다 — 설정값만 변경됩니다.",
 	"modal.sep.showList": "바뀔 파일 보기",
@@ -438,9 +459,20 @@ const KO: Record<string, string> = {
 	"setting.nsName": "위치 태그 네임스페이스",
 	"setting.nsDesc":
 		"이 네임스페이스 아래 태그가 진실원입니다. frontmatter에 두세요 — cascade는 frontmatter 태그를 갱신합니다. 예: 'trel' → #trel/S88/B07",
-	"setting.sepName": "구분자",
+	"setting.sepName": "구분자 기호",
 	"setting.sepDesc":
-		"태그키와 제목 사이 기호 — 예: '-'. 영문·숫자·'/' 불가. 한 글자 권장. 바꾸면 볼트 전체 일괄 변경(확인창)이 실행됩니다.",
+		"파일명 키 슬롯 사이의 기호입니다. 프리셋이나 안전한 사용자 기호를 고르며 공백은 별도로 설정합니다.",
+	"setting.sepCustom": "사용자 지정…",
+	"setting.sepSpacingName": "구분자 공백",
+	"setting.sepSpacingDesc": "슬롯 경계 기호 양옆에 표시할 공백입니다.",
+	"spacing.none": "없음 (BP-제목)",
+	"spacing.before": "왼쪽 (BP -제목)",
+	"spacing.after": "오른쪽 (BP- 제목)",
+	"spacing.both": "양쪽 (BP - 제목)",
+	"setting.segmentSepName": "태그 계층 구분자",
+	"setting.segmentSepDesc":
+		"태그 경로의 각 계층을 태그키 슬롯 안에서 표시하는 방식입니다. 숨김은 기존 S88B07 형식을 유지합니다.",
+	"segmentSep.hidden": "숨김 (S88B07)",
 	"setting.posName": "키 위치",
 	"setting.posDesc": "파일명에서 태그키가 놓이는 위치.",
 	"setting.posPrefix": "접두 — 파일명 앞 (S88B07-제목)",
@@ -501,6 +533,7 @@ const KO: Record<string, string> = {
 		"느린가요? 보통 대상 수가 많거나 파일 I/O가 느린 경우입니다 (예: 클라우드 동기화 볼트).",
 	"bulk.title.bootstrap": "부트스트랩 적용 중",
 	"bulk.title.separator": "구분자 변경 중",
+	"bulk.unexpectedFailure": "예기치 않은 마이그레이션 실패",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "완료",
 	"bulk.cancelledLabel": "중단됨",
@@ -516,7 +549,7 @@ const KO: Record<string, string> = {
 	// advanced multi-key slot editor (0.2.0, experimental)
 	"setting.advName": "고급 — 멀티키 슬롯 (시험 기능)",
 	"setting.advDesc":
-		"파일명을 키 슬롯 배열로 편집합니다. 추가한 태그키 슬롯은 각자의 태그 네임스페이스에서 동기화되고, 네임키 슬롯은 자유 제목으로 남습니다. 트리 뷰·부트스트랩·cascade·구분자 일괄변경은 여전히 1번 태그키 기준입니다. 기존 파일은 다음 태그 변경 때 새 스키마로 맞춰집니다 — 여기서 일괄 변경은 일어나지 않습니다.",
+		"파일명을 키 슬롯 배열로 편집합니다. 각 태그키 슬롯은 자기 네임스페이스에서 동기화되고 네임키는 자유 제목으로 남습니다. 적용 전 정확한 이름 변경 목록을 보여주고 한 번에 실행하며 되돌릴 수 있습니다.",
 	"setting.advSlots": "슬롯",
 	"adv.slot": "슬롯 {n}",
 	"adv.roleTag": "태그키",
@@ -539,6 +572,9 @@ const KO: Record<string, string> = {
 	"adv.invalid.nsBad": "네임스페이스 '{ns}' 에 사용할 수 없는 문자가 있습니다 — 영문·숫자·'-'·'_'만 됩니다.",
 	"adv.invalid.nsDup": "네임스페이스 '{ns}' 가 둘 이상의 태그 슬롯에서 쓰입니다.",
 	"adv.invalid.sep": "구분자 {n} 이 비어 있거나 사용할 수 없는 문자를 포함합니다.",
+	"adv.invalid.spacing": "구분자 {n} 의 공백 설정이 올바르지 않습니다.",
+	"adv.invalid.conflict":
+		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같습니다. 둘 중 하나를 바꾸거나 경계 공백을 추가하세요.",
 	"notice.advApplied": "스키마를 적용했습니다",
 	"modal.ok": "확인",
 	"modal.confirm.dontAsk": "다시 묻지 않기",
@@ -546,6 +582,8 @@ const KO: Record<string, string> = {
 	"modal.confirm.cancel": "취소",
 	"modal.badSep.title": "잘못된 구분자",
 	"modal.badSep.desc": "구분자는 비울 수 없고, 영문·숫자·공백이나 파일명에 쓸 수 없는 기호는 넣을 수 없습니다. -, _, ., ~ 같은 기호를 쓰세요.",
+	"modal.badSep.conflict":
+		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
 	"modal.applySchema.title": "스키마 변경을 적용할까요?",
 	"modal.applySchema.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
 	"setting.statsName": "관리 중인 노트",

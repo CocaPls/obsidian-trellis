@@ -39,6 +39,7 @@ import {
 	boundarySeparator,
 	primarySeparatorSymbol,
 	separatorConflicts,
+	schemaMigratedName,
 } from "./tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -491,6 +492,26 @@ test("an internal separator cannot be ambiguous with an adjacent unspaced bounda
 		false
 	);
 	assert.equal(isValidTagSegmentForSlot("AB", conflicting.slots[0]), true);
+});
+
+test("schema migration changes boundary formatting and internal joiner in one dry-run", () => {
+	const next: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel", segmentSeparator: "." },
+			{ role: "name" },
+		],
+		separators: ["-"],
+		separatorSpacing: ["both"],
+	};
+	assert.equal(
+		schemaMigratedName("S88B07-사과", ["#trel/S/88/B/07"], cfg, next),
+		"S.88.B.07 - 사과"
+	);
+	assert.equal(
+		schemaMigratedName("S88B07", ["#trel/S/88/B/07"], cfg, next),
+		"S.88.B.07"
+	);
+	assert.equal(schemaMigratedName("사과", ["#other/A/1"], cfg, next), null);
 });
 
 test("namespace/separator/position are read from the slot array (custom schema)", () => {

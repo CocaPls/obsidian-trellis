@@ -689,6 +689,51 @@ export function syncedBasenameMulti(
 	return rebuilt === basename ? null : rebuilt;
 }
 
+/** Rebuild one managed basename under a new filename schema while preserving
+ * its free name slot. Used by settings dry-runs for boundary formatting,
+ * internal segment joiners, and advanced slot edits. Tags remain the source of
+ * truth; a file with no tag resolved by the new schema is left untouched. */
+export function schemaMigratedName(
+	basename: string,
+	tags: string[],
+	oldSchema: TrellisSchema,
+	newSchema: TrellisSchema
+): string | null {
+	const newKeys = slotTagkeys(tags, newSchema);
+	const hasNewTag = newSchema.slots.some((slot, i) => slot.role === "tag" && newKeys[i]);
+	if (!hasNewTag) return null;
+
+	const oldKeys = slotTagkeys(tags, oldSchema);
+	const oldTagCount = oldSchema.slots.filter((slot) => slot.role === "tag").length;
+	const newTagCount = newSchema.slots.filter((slot) => slot.role === "tag").length;
+	let name: string;
+	if (
+		oldSchema.slots.length === 2 &&
+		newSchema.slots.length === 2 &&
+		oldTagCount === 1 &&
+		newTagCount === 1
+	) {
+		const oldKey = oldKeys.find((value) => value !== null);
+		if (oldKey) {
+			name = extractTitleForSeparatorMigration(
+				basename,
+				oldKey,
+				oldSchema,
+				newSchema
+			);
+		} else {
+			name = basename;
+		}
+	} else {
+		name = extractNameMulti(basename, oldKeys, oldSchema);
+	}
+	const values = newSchema.slots.map((slot, i) =>
+		slot.role === "name" ? name : newKeys[i]
+	);
+	const rebuilt = assembleBasenameMulti(values, newSchema);
+	return rebuilt && rebuilt !== basename ? rebuilt : null;
+}
+
 /**
  * Extract the title for a separator migration. This path knows both the old and
  * new boundary separators, so it can repair a partial/mixed boundary like

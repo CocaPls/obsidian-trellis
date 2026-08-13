@@ -229,3 +229,6 @@ button.trellis-destructive {
 button.trellis-destructive:hover {
 	background-color: var(--background-modifier-error-hover);
 }
+.trellis-hidden {
+	display: none;
+}

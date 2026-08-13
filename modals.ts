@@ -598,7 +598,8 @@ export class BootstrapPreviewModal extends Modal {
 		private readonly assign: { name: string; path: string; tag: string }[],
 		private readonly alreadyTagged: string[],
 		private readonly noTagkey: string[],
-		private readonly onApply: (rows: { path: string; tag: string }[]) => void
+		private readonly onApply: (rows: { path: string; tag: string }[]) => void,
+		private readonly visibleSegmentSeparator = false
 	) {
 		super(app);
 	}
@@ -614,6 +615,12 @@ export class BootstrapPreviewModal extends Modal {
 				none: this.noTagkey.length,
 			}),
 		});
+		if (this.visibleSegmentSeparator) {
+			contentEl.createEl("p", {
+				cls: "setting-item-description",
+				text: t("modal.bootstrap.segmentWarning"),
+			});
+		}
 
 		if (this.assign.length) {
 			contentEl.createEl("h4", {

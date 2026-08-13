@@ -13,6 +13,8 @@ import {
 import {
 	TrellisSchema,
 	KeySlot,
+	SegmentSeparator,
+	SeparatorSpacing,
 	SchemeId,
 	SCHEME_IDS,
 	defaultSchema,
@@ -21,6 +23,8 @@ import {
 	primaryNsPath,
 	nsPath,
 	primarySeparator,
+	primarySeparatorSymbol,
+	separatorSpacingAt,
 	tagPosition,
 	duplicateLocationGroups,
 	NoteTreeNode,
@@ -39,14 +43,15 @@ import {
 	extractTagkey,
 	tagkeyToTagPath,
 	assembleBasenameMulti,
-	separatorMigratedName,
 	isMultiKey,
 	syncedBasenameMulti,
 	isValidNamespace,
 	isValidSeparator,
-	isValidTagSegment,
+	isValidTagSegmentForSlot,
 	isValidTagPath,
 	tagNamespaces,
+	separatorConflicts,
+	schemaMigratedName,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -72,6 +77,8 @@ import {
 
 const DEFAULT_NAMESPACE_PLACEHOLDER = "trel";
 const ROOT_NAMESPACE_PLACEHOLDER = "trellis";
+const SEGMENT_SEPARATORS: SegmentSeparator[] = ["", ".", "-", "_"];
+const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
 
 type SortKey = "tagkey" | "mtime" | "ctime";
 
@@ -113,8 +120,11 @@ interface SeparatorRename {
 /** The last separator-change pass: the renames plus the separators it moved
  *  between, so undo restores both the filenames and the setting. */
 interface SeparatorChangeRecord {
-	oldSep: string;
-	newSep: string;
+	/** Full schemas are present on new records. Scalar fields keep old data.json undoable. */
+	oldSchema?: TrellisSchema;
+	newSchema?: TrellisSchema;
+	oldSep?: string;
+	newSep?: string;
 	renames: SeparatorRename[];
 }
 
@@ -202,6 +212,44 @@ interface LegacyConfig {
 	namespace?: string;
 	separator?: string;
 	keyPosition?: "prefix" | "suffix";
+}
+
+function cloneSchema(schema: TrellisSchema): TrellisSchema {
+	return {
+		rootNamespace: schema.rootNamespace,
+		slots: schema.slots.map((slot) => ({ ...slot })),
+		separators: [...schema.separators],
+		separatorSpacing: schema.separatorSpacing
+			? [...schema.separatorSpacing]
+			: undefined,
+	};
+}
+
+/** Normalize old/manual data without changing its rendered filenames. */
+function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
+	const normalized = cloneSchema(schema);
+	normalized.slots = normalized.slots.map((slot) => {
+		if (
+			slot.role === "tag" &&
+			slot.segmentSeparator !== undefined &&
+			!SEGMENT_SEPARATORS.includes(slot.segmentSeparator)
+		) {
+			return { ...slot, segmentSeparator: "" };
+		}
+		return slot;
+	});
+	normalized.separatorSpacing = normalized.separators.map((raw, i) => {
+		const saved = normalized.separatorSpacing?.[i];
+		const before = /^\s/.test(raw);
+		const after = /\s$/.test(raw);
+		normalized.separators[i] = raw.trim();
+		if (saved && SEPARATOR_SPACING.includes(saved)) return saved;
+		if (before && after) return "both";
+		if (before) return "before";
+		if (after) return "after";
+		return "none";
+	});
+	return normalized;
 }
 
 export default class TrellisPlugin extends Plugin {
@@ -446,6 +494,7 @@ export default class TrellisPlugin extends Plugin {
 			delete s.separator;
 			delete s.keyPosition;
 		}
+		this.settings.schema = normalizeSchemaFormatting(this.settings.schema);
 		// Own copy of headerButtons so a toggle never mutates the shared default;
 		// missing keys (older saved data) fall back to visible.
 		this.settings.headerButtons = {
@@ -470,11 +519,6 @@ export default class TrellisPlugin extends Plugin {
 
 	setPrimaryNamespace(ns: string) {
 		this.firstTagSlot().namespace = ns;
-	}
-
-	setPrimarySeparator(sep: string) {
-		if (this.settings.schema.separators.length === 0) this.settings.schema.separators = [sep];
-		else this.settings.schema.separators[0] = sep;
 	}
 
 	setKeyPosition(pos: "prefix" | "suffix") {
@@ -775,10 +819,6 @@ export default class TrellisPlugin extends Plugin {
 		// new note's inline `tags: [...]` frontmatter and the segment lands in the
 		// filename, so YAML metacharacters or filename-illegal characters in a
 		// hand-typed parent/segment would corrupt the note being created.
-		if (!isValidTagSegment(segment)) {
-			new Notice(t("notice.segmentBadChar"));
-			return;
-		}
 		if (!isValidTagPath(parentTagPath)) {
 			new Notice(t("notice.parentBadChar"));
 			return;
@@ -788,6 +828,10 @@ export default class TrellisPlugin extends Plugin {
 		const slot = idx >= 0 ? schema.slots[idx] : null;
 		if (!slot?.namespace) {
 			new Notice(t("notice.noTagkey"));
+			return;
+		}
+		if (!isValidTagSegmentForSlot(segment, slot)) {
+			new Notice(t("notice.segmentBadChar"));
 			return;
 		}
 		const full = nsPath(schema, slot.namespace);
@@ -955,8 +999,16 @@ export default class TrellisPlugin extends Plugin {
 			if (tagPath) assign.push({ name: file.basename, path: file.path, tag: tagPath });
 			else noTagkey.push(file.basename);
 		}
-		new BootstrapPreviewModal(this.app, assign, alreadyTagged, noTagkey, (rows) =>
-			void this.applyBootstrap(rows)
+		new BootstrapPreviewModal(
+			this.app,
+			assign,
+			alreadyTagged,
+			noTagkey,
+			(rows) => void this.applyBootstrap(rows),
+			Boolean(
+				this.settings.schema.slots.find((slot) => slot.role === "tag")
+					?.segmentSeparator
+			)
 		).open();
 	}
 
@@ -1022,62 +1074,96 @@ export default class TrellisPlugin extends Plugin {
 	// boundary separator to match (title-internal symbols preserved), behind a
 	// confirm dialog with a dry-run preview and a one-step undo.
 
-	/** A clone of the current schema with a different primary separator, for
-	 *  computing the migrated names without mutating live settings. */
-	private schemaWithSeparator(sep: string): TrellisSchema {
-		const slots = this.settings.schema.slots.map((s) => ({ ...s }));
-		const separators = [...this.settings.schema.separators];
-		if (separators.length === 0) separators.push(sep);
-		else separators[0] = sep;
-		// Carry the root too — the clone must stay a faithful schema (dropping it
-		// would make any namespace-matching on the clone silently rootless).
-		return { rootNamespace: this.settings.schema.rootNamespace, slots, separators };
+	/** Build a staged simple-mode formatting schema without mutating settings. */
+	private schemaWithPrimaryFormatting(
+		symbol: string,
+		spacing: SeparatorSpacing,
+		segmentSeparator: SegmentSeparator
+	): TrellisSchema {
+		const schema = cloneSchema(this.settings.schema);
+		if (schema.separators.length === 0) schema.separators.push(symbol);
+		else schema.separators[0] = symbol;
+		if (!schema.separatorSpacing) schema.separatorSpacing = [];
+		schema.separatorSpacing[0] = spacing;
+		const slot = schema.slots.find((candidate) => candidate.role === "tag");
+		if (slot) slot.segmentSeparator = segmentSeparator;
+		return schema;
 	}
 
-	/** Dry-run: which tagged files a switch to `newSep` would rename. The tag is
-	 *  the source of truth (tagkey from the tag, separator-agnostic), so untagged
-	 *  files are never touched — bootstrap onboards those first. */
-	private previewSeparatorChange(
-		newSep: string
+	/** Dry-run all filename changes produced by a staged schema. */
+	private previewSchemaChange(
+		newSchema: TrellisSchema
 	): { path: string; oldName: string; newName: string }[] {
 		const oldSchema = this.settings.schema;
-		const newSchema = this.schemaWithSeparator(newSep);
 		const out: { path: string; oldName: string; newName: string }[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tagkey = pickTagkey(getAllTags(cache) ?? [], oldSchema);
-			if (tagkey === null) continue;
-			const newName = separatorMigratedName(file.basename, tagkey, oldSchema, newSchema);
+			const tags = getAllTags(cache) ?? [];
+			const newName = schemaMigratedName(file.basename, tags, oldSchema, newSchema);
 			if (newName !== null) out.push({ path: file.path, oldName: file.basename, newName });
 		}
 		return out;
 	}
 
-	/** Open the confirm dialog for a separator change (called from settings). */
-	requestSeparatorChange(newSep: string, onDone: () => void) {
-		const oldSep = primarySeparator(this.settings.schema);
-		if (newSep === oldSep) {
+	requestPrimaryFormattingChange(
+		symbol: string,
+		spacing: SeparatorSpacing,
+		segmentSeparator: SegmentSeparator,
+		onDone: () => void
+	) {
+		const schema = this.schemaWithPrimaryFormatting(symbol, spacing, segmentSeparator);
+		if (separatorConflicts(schema).length > 0) {
+			new AlertModal(
+				this.app,
+				t("modal.badSep.title"),
+				t("modal.badSep.conflict")
+			).open();
+			return;
+		}
+		this.requestSchemaChange(schema, onDone);
+	}
+
+	/** Preview and confirm a schema edit before any setting or filename changes. */
+	requestSchemaChange(newSchema: TrellisSchema, onDone: () => void) {
+		const oldSchema = this.settings.schema;
+		if (JSON.stringify(newSchema) === JSON.stringify(oldSchema)) {
 			onDone();
 			return;
 		}
-		const rows = this.previewSeparatorChange(newSep);
+		const rows = this.previewSchemaChange(newSchema);
 		if (rows.length === 0) {
-			void this.applySeparatorChange(newSep, rows).finally(onDone);
+			void this.applySchemaChange(newSchema, rows).finally(onDone);
 			return;
 		}
-		new SeparatorChangeModal(this.app, oldSep, newSep, rows, onDone, () =>
-			void this.applySeparatorChange(newSep, rows)
+		const label = (schema: TrellisSchema) => {
+			const segment = schema.slots.find((slot) => slot.role === "tag")
+				?.segmentSeparator;
+			return `${segment || "∅"} / ${JSON.stringify(primarySeparator(schema))}`;
+		};
+		let applied = false;
+		new SeparatorChangeModal(
+			this.app,
+			label(oldSchema),
+			label(newSchema),
+			rows,
+			() => {
+				if (!applied) onDone();
+			},
+			() => {
+				applied = true;
+				void this.applySchemaChange(newSchema, rows).finally(onDone);
+			}
 		).open();
 	}
 
-	/** Apply: flip the setting, then rename every affected file (link-safe),
-	 *  recording the renames so the whole pass can be undone. */
-	private async applySeparatorChange(
-		newSep: string,
+	/** Apply staged names link-safely. Cancel or any failure rolls the completed
+	 * portion back and leaves the live schema unchanged. */
+	private async applySchemaChange(
+		newSchema: TrellisSchema,
 		rows: { path: string; oldName: string; newName: string }[]
 	) {
-		const oldSep = primarySeparator(this.settings.schema);
+		const oldSchema = cloneSchema(this.settings.schema);
 		const renames: SeparatorRename[] = [];
 		const failedNames: string[] = [];
 		const total = rows.length;
@@ -1086,6 +1172,7 @@ export default class TrellisPlugin extends Plugin {
 		progress?.open();
 		this.separatorMigrationRunning = true;
 		this.bulkActive = true;
+		let fatal = false;
 		try {
 			for (let i = 0; i < rows.length; i++) {
 				if (progress && !(await progress.gate())) break; // cancelled — keep renames so far
@@ -1102,28 +1189,48 @@ export default class TrellisPlugin extends Plugin {
 				}
 				progress?.report(i + 1, total, failedNames.length);
 			}
+		} catch (error) {
+			fatal = true;
+			console.error("TRELLIS schema migration failed", error);
+			failedNames.push(t("bulk.unexpectedFailure"));
 		} finally {
 			this.bulkActive = false;
-			if (progress?.wasCancelled) {
-				// Cancel = clean rollback: undo the renames done so far and DON'T
-				// commit the new separator, so the vault + setting stay consistent
-				// (no old/new filenames coexisting under a half-applied setting).
-				const { undone, failed: revertFailed } = await this.revertSeparatorRenames(renames);
+			if (fatal || progress?.wasCancelled || failedNames.length > 0) {
+				const { undone, remaining } = await this.revertSeparatorRenames(renames);
 				this.separatorMigrationRunning = false;
 				this.settings.lastSeparatorChange =
-					revertFailed > 0 ? { oldSep, newSep, renames } : undefined;
+					remaining.length > 0
+						? {
+								oldSchema,
+								newSchema: cloneSchema(newSchema),
+								renames: remaining,
+							}
+						: undefined;
 				await this.saveSettings();
 				this.rebuildTrees();
-				progress.finish({ processed: undone, skipped: failedNames });
+				progress?.finish({ processed: undone, skipped: failedNames });
 			} else {
 				this.separatorMigrationRunning = false;
-				this.setPrimarySeparator(newSep);
+				this.settings.schema = cloneSchema(newSchema);
 				this.settings.lastSeparatorChange =
-					renames.length > 0 ? { oldSep, newSep, renames } : undefined;
+					renames.length > 0
+						? {
+								oldSchema,
+								newSchema: cloneSchema(newSchema),
+								renames,
+							}
+						: undefined;
 				await this.saveSettings();
 				this.rebuildTrees();
 				if (progress) progress.finish({ processed: renames.length, skipped: failedNames });
-				else new Notice(t("notice.sepChanged", { n: renames.length, from: oldSep, to: newSep }));
+				else
+					new Notice(
+						t("notice.sepChanged", {
+							n: renames.length,
+							from: primarySeparator(oldSchema),
+							to: primarySeparator(newSchema),
+						})
+					);
 			}
 		}
 	}
@@ -1133,21 +1240,21 @@ export default class TrellisPlugin extends Plugin {
 	 *  and how many failed, so callers can decide whether to keep the record. */
 	private async revertSeparatorRenames(
 		renames: SeparatorRename[]
-	): Promise<{ undone: number; failed: number }> {
+	): Promise<{ undone: number; remaining: SeparatorRename[] }> {
 		let undone = 0;
-		let failed = 0;
+		const remaining: SeparatorRename[] = [];
 		for (const r of renames) {
 			const file = this.app.vault.getAbstractFileByPath(r.path);
 			if (!(file instanceof TFile)) {
-				failed++;
+				remaining.push(r);
 				continue;
 			}
 			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 			const newPath = normalizePath(`${dir}${r.oldBasename}.${file.extension}`);
 			if (await this.renameGuarded(file, newPath)) undone++;
-			else failed++;
+			else remaining.push(r);
 		}
-		return { undone, failed };
+		return { undone, remaining };
 	}
 
 	/** Undo the last separator change: restore the setting AND each filename.
@@ -1159,11 +1266,19 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.noSepChange"));
 			return;
 		}
-		this.setPrimarySeparator(rec.oldSep);
+		const oldSchema = rec.oldSchema
+			? cloneSchema(rec.oldSchema)
+			: (() => {
+					const schema = cloneSchema(this.settings.schema);
+					if (rec.oldSep !== undefined) schema.separators[0] = rec.oldSep;
+					return schema;
+				})();
+		this.settings.schema = oldSchema;
 		this.separatorMigrationRunning = true;
-		const { undone, failed } = await this.revertSeparatorRenames(rec.renames);
+		const { undone, remaining } = await this.revertSeparatorRenames(rec.renames);
 		this.separatorMigrationRunning = false;
-		this.settings.lastSeparatorChange = failed > 0 ? rec : undefined;
+		this.settings.lastSeparatorChange =
+			remaining.length > 0 ? { ...rec, renames: remaining } : undefined;
 		await this.saveSettings();
 		this.rebuildTrees();
 		new Notice(t("notice.sepReverted", { n: undone }));
@@ -1606,27 +1721,78 @@ class TrellisSettingTab extends PluginSettingTab {
 					);
 			}
 
-			// Separator: staged in the field; Apply opens the confirm dialog +
-			// vault-wide batch rename (one-directional, like the tag engine).
+			// Filename formatting is staged as one transaction: boundary symbol,
+			// boundary spacing, and the tag hierarchy's visible segment joiner.
 			{
-				let pending = primarySeparator(this.plugin.settings.schema);
+				const schema = this.plugin.settings.schema;
+				const currentSymbol = primarySeparatorSymbol(schema);
+				const presetSymbols = ["-", "_", "."];
+				let pendingSymbol = currentSymbol;
+				let pendingSpacing = separatorSpacingAt(schema, 0);
+				let pendingSegment =
+					schema.slots.find((slot) => slot.role === "tag")?.segmentSeparator ?? "";
+				let customInput: HTMLInputElement | null = null;
 				new Setting(containerEl)
 					.setName(t("setting.sepName"))
 					.setDesc(t("setting.sepDesc"))
-					.addText((text) =>
-						text
-							.setPlaceholder("-")
-							.setValue(pending)
-							.onChange((v) => (pending = v))
+					.addDropdown((dropdown) =>
+						dropdown
+							.addOption("-", "-")
+							.addOption("_", "_")
+							.addOption(".", ".")
+							.addOption("custom", t("setting.sepCustom"))
+							.setValue(presetSymbols.includes(currentSymbol) ? currentSymbol : "custom")
+							.onChange((value) => {
+								if (value === "custom") {
+									customInput?.classList.remove("trellis-hidden");
+									customInput?.focus();
+								} else {
+									pendingSymbol = value;
+									customInput?.classList.add("trellis-hidden");
+								}
+							})
 					)
-					.addButton((b) =>
-						b.setButtonText(t("setting.apply")).onClick(() => {
-							const v = pending;
-							if (v === primarySeparator(this.plugin.settings.schema)) return;
-							// A separator goes into the filename: reject empty, letters,
-							// digits, and filename/wikilink-illegal characters. Shown as a
-							// dialog (not a corner Notice) so it isn't missed.
-							if (!isValidSeparator(v)) {
+					.addText((text) => {
+						customInput = text.inputEl;
+						text
+							.setPlaceholder("~")
+							.setValue(presetSymbols.includes(currentSymbol) ? "" : currentSymbol)
+							.onChange((value) => (pendingSymbol = value));
+						text.inputEl.classList.toggle(
+							"trellis-hidden",
+							presetSymbols.includes(currentSymbol)
+						);
+					});
+
+				new Setting(containerEl)
+					.setName(t("setting.sepSpacingName"))
+					.setDesc(t("setting.sepSpacingDesc"))
+					.addDropdown((dropdown) => {
+						for (const spacing of SEPARATOR_SPACING)
+							dropdown.addOption(spacing, t(`spacing.${spacing}`));
+						dropdown.setValue(pendingSpacing).onChange((value) => {
+							pendingSpacing = SEPARATOR_SPACING.includes(value as SeparatorSpacing)
+								? (value as SeparatorSpacing)
+								: "none";
+						});
+					});
+
+				new Setting(containerEl)
+					.setName(t("setting.segmentSepName"))
+					.setDesc(t("setting.segmentSepDesc"))
+					.addDropdown((dropdown) => {
+						dropdown.addOption("", t("segmentSep.hidden"));
+						for (const separator of SEGMENT_SEPARATORS.slice(1))
+							dropdown.addOption(separator, separator);
+						dropdown.setValue(pendingSegment).onChange((value) => {
+							pendingSegment = SEGMENT_SEPARATORS.includes(value as SegmentSeparator)
+								? (value as SegmentSeparator)
+								: "";
+						});
+					})
+					.addButton((button) =>
+						button.setButtonText(t("setting.apply")).onClick(() => {
+							if (!isValidSeparator(pendingSymbol)) {
 								new AlertModal(
 									this.app,
 									t("modal.badSep.title"),
@@ -1634,8 +1800,12 @@ class TrellisSettingTab extends PluginSettingTab {
 								).open();
 								return;
 							}
-							// Re-render on close so the field reflects the final value.
-							this.plugin.requestSeparatorChange(v, () => this.render());
+							this.plugin.requestPrimaryFormattingChange(
+								pendingSymbol,
+								pendingSpacing,
+								pendingSegment,
+								() => this.render()
+							);
 						})
 					);
 			}
@@ -1648,9 +1818,15 @@ class TrellisSettingTab extends PluginSettingTab {
 						.addOption("prefix", t("setting.posPrefix"))
 						.addOption("suffix", t("setting.posSuffix"))
 						.setValue(tagPosition(this.plugin.settings.schema))
-						.onChange(async (value) => {
-							this.plugin.setKeyPosition(value === "suffix" ? "suffix" : "prefix");
-							await this.plugin.saveSettings();
+						.onChange((value) => {
+							const staged = cloneSchema(this.plugin.settings.schema);
+							const tag = staged.slots.find((slot) => slot.role === "tag");
+							const name = staged.slots.find((slot) => slot.role === "name");
+							if (!tag) return;
+							staged.slots = (
+								value === "suffix" ? [name, tag] : [tag, name]
+							).filter((slot): slot is KeySlot => slot !== undefined);
+							this.plugin.requestSchemaChange(staged, () => this.render());
 						})
 				);
 
@@ -1903,7 +2079,10 @@ class TrellisSettingTab extends PluginSettingTab {
 		for (let i = 0; i < need; i++) {
 			if (!isValidSeparator(schema.separators[i] ?? ""))
 				return t("adv.invalid.sep", { n: i + 1 });
+			if (!SEPARATOR_SPACING.includes(separatorSpacingAt(schema, i)))
+				return t("adv.invalid.spacing", { n: i + 1 });
 		}
+		if (separatorConflicts(schema).length > 0) return t("adv.invalid.conflict");
 		return null;
 	}
 
@@ -1942,6 +2121,8 @@ class TrellisSettingTab extends PluginSettingTab {
 							}
 							slot.role = "name";
 							delete slot.namespace;
+							delete slot.scheme;
+							delete slot.segmentSeparator;
 						} else {
 							slot.role = "tag";
 							slot.namespace = slot.namespace || this.nextFreeNamespace(schema);
@@ -1966,6 +2147,18 @@ class TrellisSettingTab extends PluginSettingTab {
 					dd.setValue(slot.scheme ?? "").onChange((v) => {
 						if ((SCHEME_IDS as string[]).includes(v)) slot.scheme = v as SchemeId;
 						else delete slot.scheme;
+					});
+				});
+				row.addDropdown((dropdown) => {
+					dropdown.addOption("", t("segmentSep.hidden"));
+					for (const separator of SEGMENT_SEPARATORS.slice(1))
+						dropdown.addOption(separator, separator);
+					dropdown.setValue(slot.segmentSeparator ?? "").onChange((value) => {
+						slot.segmentSeparator = SEGMENT_SEPARATORS.includes(
+							value as SegmentSeparator
+						)
+							? (value as SegmentSeparator)
+							: "";
 					});
 				});
 			}
@@ -2009,17 +2202,48 @@ class TrellisSettingTab extends PluginSettingTab {
 			);
 			// The separator between this slot and the next (slots n → seps n-1).
 			if (i < schema.slots.length - 1) {
+				const current = schema.separators[i] ?? "-";
+				const presets = ["-", "_", "."];
+				let customInput: HTMLInputElement | null = null;
 				new Setting(containerEl)
 					.setName(t("adv.sep", { n: i + 1, a: i + 1, b: i + 2 }))
-					.addText((text) =>
-						text
-							.setPlaceholder("-")
-							.setValue(schema.separators[i] ?? "-")
-							.onChange((v) => {
-								// Staged raw; validated on Apply.
-								schema.separators[i] = v;
+					.addDropdown((dropdown) =>
+						dropdown
+							.addOption("-", "-")
+							.addOption("_", "_")
+							.addOption(".", ".")
+							.addOption("custom", t("setting.sepCustom"))
+							.setValue(presets.includes(current) ? current : "custom")
+							.onChange((value) => {
+								if (value === "custom") {
+									customInput?.classList.remove("trellis-hidden");
+									customInput?.focus();
+								} else {
+									schema.separators[i] = value;
+									customInput?.classList.add("trellis-hidden");
+								}
 							})
-					);
+					)
+					.addText((text) => {
+						customInput = text.inputEl;
+						text
+							.setPlaceholder("~")
+							.setValue(presets.includes(current) ? "" : current)
+							.onChange((value) => (schema.separators[i] = value));
+						text.inputEl.classList.toggle("trellis-hidden", presets.includes(current));
+					})
+					.addDropdown((dropdown) => {
+						for (const spacing of SEPARATOR_SPACING)
+							dropdown.addOption(spacing, t(`spacing.${spacing}`));
+						dropdown.setValue(separatorSpacingAt(schema, i)).onChange((value) => {
+							if (!schema.separatorSpacing) schema.separatorSpacing = [];
+							schema.separatorSpacing[i] = SEPARATOR_SPACING.includes(
+								value as SeparatorSpacing
+							)
+								? (value as SeparatorSpacing)
+								: "none";
+						});
+					});
 			}
 		});
 
@@ -2051,34 +2275,19 @@ class TrellisSettingTab extends PluginSettingTab {
 								new AlertModal(this.app, t("adv.invalidTitle"), err).open();
 								return;
 							}
-							const commit = async () => {
-								this.ensureSeparators(schema);
-								// The root is edited OUTSIDE the draft (its own Apply runs a
-								// vault migration). Always take the LIVE root: a stale draft
-								// copy would otherwise revert a migrated root with no
-								// migration, orphaning every managed tag.
-								schema.rootNamespace = this.plugin.settings.schema.rootNamespace;
-								this.plugin.settings.schema = schema;
-								this.draftSchema = null;
-								await this.plugin.saveSettings();
-								this.plugin.rebuildTrees();
-								new Notice(t("notice.advApplied"));
-								this.render();
-							};
-							if (this.plugin.settings.suppressSchemaConfirm) {
-								void commit();
-								return;
-							}
-							new ConfirmModal(
-								this.app,
-								t("modal.applySchema.title"),
-								t("modal.applySchema.desc"),
-								(dontAsk) => {
-									if (dontAsk)
-										this.plugin.settings.suppressSchemaConfirm = true;
-									void commit();
+							this.ensureSeparators(schema);
+							schema.rootNamespace = this.plugin.settings.schema.rootNamespace;
+							const staged = cloneSchema(schema);
+							this.plugin.requestSchemaChange(staged, () => {
+								if (
+									JSON.stringify(this.plugin.settings.schema) ===
+									JSON.stringify(staged)
+								) {
+									this.draftSchema = null;
+									new Notice(t("notice.advApplied"));
 								}
-							).open();
+								this.render();
+							});
 						})
 				)
 				.addButton((b) =>
@@ -2124,6 +2333,10 @@ class TrellisSettingTab extends PluginSettingTab {
 		const fill = schema.separators[schema.separators.length - 1] || "-";
 		while (schema.separators.length < need) schema.separators.push(fill);
 		schema.separators.length = need;
+		if (!schema.separatorSpacing) schema.separatorSpacing = [];
+		while (schema.separatorSpacing.length < need)
+			schema.separatorSpacing.push("none");
+		schema.separatorSpacing.length = need;
 	}
 
 	/** A namespace not yet used by any tag slot, for a freshly added slot. */
