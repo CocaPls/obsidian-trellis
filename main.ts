@@ -166,6 +166,13 @@ interface RootChangeRecord {
 	newRoot: string;
 }
 
+/** Exact state needed to reverse a primary namespace migration safely. */
+interface NamespaceChangeRecord {
+	oldSchema: TrellisSchema;
+	newSchema: TrellisSchema;
+	changes: CascadeRecord[];
+}
+
 /** How the sidebar renders (0.3.0, experimental): "notes" = real notes only,
  *  segment layers transparent (classic); "tags" = the full nested tag
  *  hierarchy, folder-style, like the core tag pane. */
@@ -208,6 +215,8 @@ interface TrellisSettings {
 	lastCascade?: CascadeRecord[];
 	/** The last root-namespace change (for undo). */
 	lastRootChange?: RootChangeRecord;
+	/** The last primary-namespace migration (for undo). */
+	lastNamespaceChange?: NamespaceChangeRecord;
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
@@ -380,6 +389,7 @@ export default class TrellisPlugin extends Plugin {
 						onUndoSeparator: () => void this.undoSeparatorChange(),
 						onUndoRoot: () => void this.undoRootChange(),
 						onUndoCascade: () => void this.undoCascade(),
+						onUndoNamespace: () => void this.undoPrimaryNamespaceChange(),
 					})
 			);
 		} catch (e) {
@@ -490,6 +500,11 @@ export default class TrellisPlugin extends Plugin {
 			name: t("cmd.cascadeUndo"),
 			callback: () => void this.undoCascade(),
 		});
+		this.addCommand({
+			id: "namespace-change-undo",
+			name: t("cmd.namespaceUndo"),
+			callback: () => void this.undoPrimaryNamespaceChange(),
+		});
 		this.registerRootCommands();
 
 		// Right-click a note → cascade-rename its location tag (From prefilled).
@@ -564,8 +579,15 @@ export default class TrellisPlugin extends Plugin {
 		return this.settings.schema.slots.find((s) => s.role === "tag")!;
 	}
 
-	setPrimaryNamespace(ns: string) {
-		this.firstTagSlot().namespace = ns;
+	/** Count notes carrying a real descendant tag under one full namespace. */
+	private managedNoteCountForNamespace(namespace: string): number {
+		let count = 0;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const tags = normalizeTagList(cache?.frontmatter?.tags);
+			if (tags.some((tag) => tag.startsWith(`${namespace}/`))) count++;
+		}
+		return count;
 	}
 
 	setKeyPosition(pos: "prefix" | "suffix") {
@@ -1422,6 +1444,169 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
+	/** Rename the simple-mode namespace together with every managed frontmatter
+	 * tag. A setting-only flip would make the existing tags invisible to TRELLIS. */
+	requestPrimaryNamespaceChange(newNamespace: string, onDone: () => void) {
+		const oldSchema = cloneSchema(this.settings.schema);
+		const oldNamespace = primaryNamespace(oldSchema);
+		if (newNamespace === oldNamespace) {
+			onDone();
+			return;
+		}
+		const newSchema = cloneSchema(oldSchema);
+		const primary = newSchema.slots.find((slot) => slot.role === "tag");
+		if (!primary) return;
+		primary.namespace = newNamespace;
+		const from = primaryNsPath(oldSchema);
+		const to = primaryNsPath(newSchema);
+		const rows = this.previewCascade(from, to);
+		if (rows.length === 0) {
+			void this.applyNamespaceMigration(oldSchema, newSchema, rows, false).finally(
+				onDone
+			);
+			return;
+		}
+		new CascadePreviewModal(this.app, from, to, rows, () => {
+			void this.applyNamespaceMigration(oldSchema, newSchema, rows, false).finally(
+				onDone
+			);
+		}).open();
+	}
+
+	/** Apply or undo an exact primary-namespace migration. The target schema is
+	 * active during writes so every completed note remains managed; cancel or a
+	 * stale/error row restores both completed notes and the source schema. */
+	private async applyNamespaceMigration(
+		sourceSchema: TrellisSchema,
+		targetSchema: TrellisSchema,
+		rows: CascadePreviewRow[],
+		undoing: boolean
+	) {
+		const operation = t(
+			undoing ? "bulk.title.namespaceUndo" : "bulk.title.namespace"
+		);
+		if (!this.beginBulkOperation(operation)) return;
+		const previousUndo = this.settings.lastNamespaceChange;
+		const records: CascadeRecord[] = [];
+		const failed: string[] = [];
+		const progress =
+			rows.length > 0 ? new BulkProgressModal(this.app, operation) : null;
+		progress?.open();
+		try {
+			this.settings.schema = cloneSchema(targetSchema);
+			await this.saveSettings();
+			for (let i = 0; i < rows.length; i++) {
+				if (progress && !(await progress.gate())) break;
+				const row = rows[i];
+				const file = this.app.vault.getAbstractFileByPath(row.path);
+				if (!(file instanceof TFile)) {
+					failed.push(row.path);
+					break;
+				}
+				const record: CascadeRecord = {
+					originalPath: file.path,
+					currentPath: file.path,
+					beforeTags: [...row.beforeTags],
+					afterTags: [...row.afterTags],
+				};
+				const guarded = new Set([file.path]);
+				this.bulkApplying.add(file.path);
+				let stale = false;
+				try {
+					await this.app.fileManager.processFrontMatter(
+						file,
+						(frontmatter: TrellisFrontmatter) => {
+							const current = normalizeTagList(frontmatter.tags);
+							if (!sameStrings(current, row.beforeTags)) {
+								stale = true;
+								return;
+							}
+							frontmatter.tags = [...row.afterTags];
+						}
+					);
+					if (stale) throw new Error("namespace preview became stale");
+					records.push(record);
+					const nextPath = this.syncedPathForTags(
+						file,
+						row.afterTags.map((tag) => `#${tag}`)
+					);
+					if (nextPath !== null) {
+						guarded.add(nextPath);
+						this.bulkApplying.add(nextPath);
+						if (!(await this.renameGuarded(file, nextPath))) {
+							throw new Error("namespace filename rename failed");
+						}
+						record.currentPath = file.path;
+					}
+				} catch (error) {
+					console.error("TRELLIS namespace migration failed", row.path, error);
+					failed.push(row.path);
+					break;
+				} finally {
+					window.setTimeout(() => {
+						for (const path of guarded) this.bulkApplying.delete(path);
+					}, 200);
+				}
+				progress?.report(i + 1, rows.length, failed.length);
+			}
+
+			if (progress?.wasCancelled || failed.length > 0) {
+				const { restored, remaining } = await this.revertCascadeRecords(records);
+				this.settings.schema = cloneSchema(sourceSchema);
+				this.settings.lastNamespaceChange = previousUndo;
+				await this.saveSettings();
+				this.rebuildTrees();
+				progress?.finish({
+					processed: restored,
+					skipped: [...failed, ...remaining.map((record) => record.currentPath)],
+				});
+				return;
+			}
+
+			this.settings.lastNamespaceChange = undoing
+				? undefined
+				: {
+						oldSchema: cloneSchema(sourceSchema),
+						newSchema: cloneSchema(targetSchema),
+						changes: records,
+					};
+			await this.saveSettings();
+			this.rebuildTrees();
+			progress?.finish({ processed: records.length, skipped: [] });
+			new Notice(
+				t(undoing ? "notice.namespaceUndone" : "notice.nsApplied", {
+					n: records.length,
+					ns: primaryNamespace(targetSchema),
+				})
+			);
+		} finally {
+			this.endBulkOperation(operation);
+		}
+	}
+
+	private async undoPrimaryNamespaceChange() {
+		const record = this.settings.lastNamespaceChange;
+		if (!record) {
+			new Notice(t("notice.noNamespaceChange"));
+			return;
+		}
+		if (JSON.stringify(this.settings.schema) !== JSON.stringify(record.newSchema)) {
+			new Notice(t("notice.namespaceUndoStale"));
+			return;
+		}
+		const rows = record.changes.map((change) => ({
+			path: change.currentPath,
+			beforeTags: [...change.afterTags],
+			afterTags: [...change.beforeTags],
+		}));
+		await this.applyNamespaceMigration(
+			record.newSchema,
+			record.oldSchema,
+			rows,
+			true
+		);
+	}
+
 	/** Bootstrap dry-run: scan the chosen markdown files (or the whole vault when
 	 *  scopePaths is omitted), propose a location tag from each filename's tagkey
 	 *  prefix, and show a preview. Writes nothing — the user reviews before any
@@ -1574,6 +1759,30 @@ export default class TrellisPlugin extends Plugin {
 	requestSchemaChange(newSchema: TrellisSchema, onDone: () => void) {
 		const oldSchema = this.settings.schema;
 		if (JSON.stringify(newSchema) === JSON.stringify(oldSchema)) {
+			onDone();
+			return;
+		}
+		const oldNamespaces = tagNamespaces(oldSchema).map((ns) => nsPath(oldSchema, ns));
+		const newNamespaces = new Set(
+			tagNamespaces(newSchema).map((ns) => nsPath(newSchema, ns))
+		);
+		const orphaned = oldNamespaces
+			.filter((namespace) => !newNamespaces.has(namespace))
+			.map((namespace) => ({
+				namespace,
+				count: this.managedNoteCountForNamespace(namespace),
+			}))
+			.filter(({ count }) => count > 0);
+		if (orphaned.length > 0) {
+			new AlertModal(
+				this.app,
+				t("modal.namespaceBlocked.title"),
+				t("modal.namespaceBlocked.desc", {
+					items: orphaned
+						.map(({ namespace, count }) => `#${namespace} (${count})`)
+						.join(", "),
+				})
+			).open();
 			onDone();
 			return;
 		}
@@ -2188,7 +2397,7 @@ class TrellisSettingTab extends PluginSettingTab {
 							.onChange((v) => (pending = v))
 					)
 					.addButton((b) =>
-						b.setButtonText(t("setting.apply")).onClick(async () => {
+						b.setButtonText(t("setting.apply")).onClick(() => {
 							const v = pending.trim().replace(/^#/, "").replace(/\/$/, "");
 							if (v === "") {
 								new Notice(t("notice.nsEmpty"));
@@ -2199,10 +2408,7 @@ class TrellisSettingTab extends PluginSettingTab {
 								return;
 							}
 							if (v === primaryNamespace(this.plugin.settings.schema)) return;
-							this.plugin.setPrimaryNamespace(v);
-							await this.plugin.saveSettings();
-							this.plugin.rebuildTrees();
-							new Notice(t("notice.nsApplied", { ns: v }));
+							this.plugin.requestPrimaryNamespaceChange(v, () => this.render());
 						})
 					);
 			}
@@ -2367,9 +2573,14 @@ class TrellisSettingTab extends PluginSettingTab {
 				toggle
 					.setValue(this.plugin.settings.advancedMode)
 					.onChange(async (value) => {
-						this.plugin.settings.advancedMode = value;
 						this.draftSchema = null; // drop any staged (unapplied) edits
-						if (!value && isMultiKey(this.plugin.settings.schema)) {
+						if (value) {
+							this.plugin.settings.advancedMode = true;
+							await this.plugin.saveSettings();
+							this.render();
+							return;
+						}
+						if (isMultiKey(this.plugin.settings.schema)) {
 							// Simple mode keeps the single-key invariant: collapse to
 							// the primary tag slot + a name slot, primary separator.
 							// Root + primary scheme survive the collapse — losing the
@@ -2383,9 +2594,20 @@ class TrellisSettingTab extends PluginSettingTab {
 							next.rootNamespace = old.rootNamespace;
 							const tagSlot = next.slots.find((s) => s.role === "tag");
 							if (tagSlot && scheme) tagSlot.scheme = scheme;
-							this.plugin.settings.schema = next;
-							new Notice(t("notice.advReset"));
+							this.plugin.requestSchemaChange(next, () => {
+								if (
+									JSON.stringify(this.plugin.settings.schema) ===
+									JSON.stringify(next)
+								) {
+									this.plugin.settings.advancedMode = false;
+									void this.plugin.saveSettings();
+									new Notice(t("notice.advReset"));
+								}
+								this.render();
+							});
+							return;
 						}
+						this.plugin.settings.advancedMode = false;
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
 						this.render();

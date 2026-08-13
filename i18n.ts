@@ -50,6 +50,7 @@ const EN: Record<string, string> = {
 	"cmd.newNote": "New note (under active note's location)",
 	"cmd.cascade": "Rename location tag (cascade)",
 	"cmd.cascadeUndo": "Undo last location-tag rename",
+	"cmd.namespaceUndo": "Undo last namespace change",
 	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
 	"cmd.sepUndo": "Undo last separator change",
@@ -71,6 +72,10 @@ const EN: Record<string, string> = {
 	"notice.cascadeOutside": "cascade is limited to children of the managed namespace '{ns}'",
 	"notice.noCascade": "no location-tag rename to undo",
 	"notice.cascadeUndone": "restored the previous tags and filenames on {n} note(s)",
+	"notice.noNamespaceChange": "no namespace change to undo",
+	"notice.namespaceUndone": "restored the previous namespace on {n} note(s)",
+	"notice.namespaceUndoStale":
+		"the schema changed after this namespace migration; restore that schema before undoing",
 	"notice.bulkBusy": "finish the current bulk operation first: {active}",
 	"notice.bootstrapped":
 		'bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
@@ -121,6 +126,9 @@ const EN: Record<string, string> = {
 	"modal.cascade.title": "Rename location tag (cascade)",
 	"modal.cascade.desc":
 		"Rewrites this tag and everything under it across the vault. Filenames follow automatically.",
+	"modal.namespaceBlocked.title": "Namespace is still in use",
+	"modal.namespaceBlocked.desc":
+		"This schema would stop managing these namespaces: {items}. Migrate or remove those tags first; nothing was changed.",
 	"modal.cascade.fromName": "From",
 	"modal.cascade.fromDesc": "Existing tag — type to search, ↑↓ + Enter to pick",
 	"modal.cascade.toName": "To",
@@ -247,6 +255,8 @@ const EN: Record<string, string> = {
 		"Slow? Usually many targets or slow file I/O (e.g. a cloud-synced vault).",
 	"bulk.title.bootstrap": "Applying bootstrap",
 	"bulk.title.separator": "Changing separator",
+	"bulk.title.namespace": "Changing namespace",
+	"bulk.title.namespaceUndo": "Undoing namespace change",
 	"bulk.unexpectedFailure": "Unexpected migration failure",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "Done",
@@ -362,6 +372,7 @@ const KO: Record<string, string> = {
 	"cmd.newNote": "새 노트 (현재 노트 위치 아래)",
 	"cmd.cascade": "위치 태그 이름 변경 (하위 전체)",
 	"cmd.cascadeUndo": "마지막 위치 태그 이름 변경 되돌리기",
+	"cmd.namespaceUndo": "마지막 네임스페이스 변경 되돌리기",
 	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
 	"cmd.sepUndo": "마지막 구분자 변경 되돌리기",
@@ -383,6 +394,10 @@ const KO: Record<string, string> = {
 	"notice.cascadeOutside": "하위 전체 변경은 관리 네임스페이스 '{ns}' 안에서만 가능합니다",
 	"notice.noCascade": "되돌릴 위치 태그 이름 변경이 없습니다",
 	"notice.cascadeUndone": "{n}개 노트의 이전 태그와 파일명을 복원했습니다",
+	"notice.noNamespaceChange": "되돌릴 네임스페이스 변경이 없습니다",
+	"notice.namespaceUndone": "{n}개 노트를 이전 네임스페이스로 복원했습니다",
+	"notice.namespaceUndoStale":
+		"네임스페이스 변경 뒤 스키마가 달라졌습니다. 해당 스키마를 먼저 복원하세요",
 	"notice.bulkBusy": "현재 일괄 작업을 먼저 끝내세요: {active}",
 	"notice.bootstrapped":
 		'{n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
@@ -433,6 +448,9 @@ const KO: Record<string, string> = {
 	"modal.cascade.title": "위치 태그 이름 변경 (하위 전체)",
 	"modal.cascade.desc":
 		"이 태그와 그 하위 전체를 볼트에서 다시 씁니다. 파일명은 자동으로 따라갑니다.",
+	"modal.namespaceBlocked.title": "사용 중인 네임스페이스입니다",
+	"modal.namespaceBlocked.desc":
+		"이 스키마를 적용하면 다음 네임스페이스가 관리 밖으로 빠집니다: {items}. 먼저 해당 태그를 이관하거나 제거하세요. 변경된 내용은 없습니다.",
 	"modal.cascade.fromName": "변경 전",
 	"modal.cascade.fromDesc": "기존 태그 — 입력해 검색, ↑↓ + Enter로 선택",
 	"modal.cascade.toName": "변경 후",
@@ -557,6 +575,8 @@ const KO: Record<string, string> = {
 		"느린가요? 보통 대상 수가 많거나 파일 I/O가 느린 경우입니다 (예: 클라우드 동기화 볼트).",
 	"bulk.title.bootstrap": "부트스트랩 적용 중",
 	"bulk.title.separator": "구분자 변경 중",
+	"bulk.title.namespace": "네임스페이스 변경 중",
+	"bulk.title.namespaceUndo": "네임스페이스 변경 되돌리는 중",
 	"bulk.unexpectedFailure": "예기치 않은 마이그레이션 실패",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "완료",
