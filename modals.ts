@@ -190,6 +190,75 @@ export class CascadeRenameModal extends Modal {
 	}
 }
 
+export interface CascadePreviewRow {
+	path: string;
+	beforeTags: string[];
+	afterTags: string[];
+}
+
+/** Exact dry-run for a managed cascade. No write occurs until the user reviews
+ * the affected-note list and presses the destructive confirmation button. */
+export class CascadePreviewModal extends Modal {
+	constructor(
+		app: App,
+		private readonly from: string,
+		private readonly to: string,
+		private readonly rows: CascadePreviewRow[],
+		private readonly onApply: () => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: t("modal.cascadePreview.title") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t("modal.cascadePreview.desc", {
+				from: this.from,
+				to: this.to,
+				n: this.rows.length,
+			}),
+		});
+		const details = contentEl.createEl("details");
+		details.createEl("summary", {
+			text: t("modal.cascadePreview.showList", { n: this.rows.length }),
+		});
+		const list = details.createDiv({ cls: "trellis-bootstrap-list" });
+		for (const row of this.rows) {
+			const item = list.createDiv({ cls: "trellis-bootstrap-row" });
+			item.createDiv({ cls: "trellis-bootstrap-name", text: row.path });
+			const before = row.beforeTags.filter(
+				(tag, index) => tag !== row.afterTags[index]
+			);
+			const after = row.afterTags.filter(
+				(tag, index) => tag !== row.beforeTags[index]
+			);
+			item.createDiv({
+				cls: "trellis-bootstrap-tag",
+				text: `${before.join(", ")} → ${after.join(", ")}`,
+			});
+		}
+
+		new Setting(contentEl)
+			.addButton((button) =>
+				markDestructive(
+					button.setButtonText(t("modal.cascadePreview.apply", { n: this.rows.length }))
+				).onClick(() => {
+					this.close();
+					this.onApply();
+				})
+			)
+			.addButton((button) =>
+				button.setButtonText(t("modal.confirm.cancel")).onClick(() => this.close())
+			);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 /** New-note modal. Parent: prefilled by the caller (clicked node, or the active
  *  note's location for the header button) and editable WITH tag autocomplete —
  *  it picks an existing location, so completing it is safe. Segment: the user

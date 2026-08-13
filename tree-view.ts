@@ -46,6 +46,7 @@ export interface TrellisTreeCallbacks {
 	onUndoBootstrap: () => void;
 	onUndoSeparator: () => void;
 	onUndoRoot: () => void;
+	onUndoCascade: () => void;
 	// Nested tag mode (0.3.0 experimental, B24)
 	getViewMode: () => "notes" | "tags";
 	onToggleViewMode: () => void;
@@ -176,6 +177,12 @@ export class TrellisTreeView extends ItemView {
 		if (vis.undo) {
 			this.addButton(buttons, "undo-2", t("tree.undo"), (e) => {
 				const menu = new Menu();
+				menu.addItem((i) =>
+					i
+						.setTitle(t("cmd.cascadeUndo"))
+						.setIcon("rotate-ccw")
+						.onClick(() => this.cb.onUndoCascade())
+				);
 				menu.addItem((i) =>
 					i
 						.setTitle(t("cmd.bootstrapUndo"))

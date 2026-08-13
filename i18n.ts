@@ -49,6 +49,7 @@ const EN: Record<string, string> = {
 	"cmd.openTree": "Open tree view",
 	"cmd.newNote": "New note (under active note's location)",
 	"cmd.cascade": "Rename location tag (cascade)",
+	"cmd.cascadeUndo": "Undo last location-tag rename",
 	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
 	"cmd.sepUndo": "Undo last separator change",
@@ -66,6 +67,11 @@ const EN: Record<string, string> = {
 	"notice.createFailed": 'failed to create "{base}"',
 	"notice.retagged": "retagged {n} file(s) {from} → {to}",
 	"notice.noFilesTagged": "no files tagged {from}",
+	"notice.cascadeBadPath": "enter valid tag paths without spaces or reserved symbols",
+	"notice.cascadeOutside": "cascade is limited to children of the managed namespace '{ns}'",
+	"notice.noCascade": "no location-tag rename to undo",
+	"notice.cascadeUndone": "restored the previous tags and filenames on {n} note(s)",
+	"notice.bulkBusy": "finish the current bulk operation first: {active}",
 	"notice.bootstrapped":
 		'bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
 	"notice.bootstrapProgress": "bootstrapping… {done}/{total}",
@@ -120,6 +126,11 @@ const EN: Record<string, string> = {
 	"modal.cascade.toName": "To",
 	"modal.cascade.toDesc": "New tag path (free text)",
 	"modal.cascade.submit": "Rename",
+	"modal.cascadePreview.title": "Review location-tag rename",
+	"modal.cascadePreview.desc":
+		"{n} note(s) will change from {from} to {to}. Any failure or cancellation rolls the completed part back.",
+	"modal.cascadePreview.showList": "Show affected notes ({n})",
+	"modal.cascadePreview.apply": "Rename — {n} note(s)",
 	// new-note modal
 	"modal.newNote.title": "New note",
 	"modal.newNote.desc":
@@ -310,6 +321,8 @@ const EN: Record<string, string> = {
 	"notice.rootBadChar":
 		"root namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
 	"bulk.title.root": "Changing root namespace",
+	"bulk.title.cascade": "Renaming location tags",
+	"bulk.title.cascadeUndo": "Undoing location-tag rename",
 	// ID scheme presets (0.3.0 experimental, B26)
 	"setting.schemeName": "ID scheme (experimental)",
 	"setting.schemeDesc":
@@ -348,6 +361,7 @@ const KO: Record<string, string> = {
 	"cmd.openTree": "트리 뷰 열기",
 	"cmd.newNote": "새 노트 (현재 노트 위치 아래)",
 	"cmd.cascade": "위치 태그 이름 변경 (하위 전체)",
+	"cmd.cascadeUndo": "마지막 위치 태그 이름 변경 되돌리기",
 	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
 	"cmd.sepUndo": "마지막 구분자 변경 되돌리기",
@@ -365,6 +379,11 @@ const KO: Record<string, string> = {
 	"notice.createFailed": '"{base}" 생성 실패',
 	"notice.retagged": "{n}개 파일 재태그 {from} → {to}",
 	"notice.noFilesTagged": "{from} 태그가 붙은 파일 없음",
+	"notice.cascadeBadPath": "공백이나 예약 문자가 없는 올바른 태그 경로를 입력하세요",
+	"notice.cascadeOutside": "하위 전체 변경은 관리 네임스페이스 '{ns}' 안에서만 가능합니다",
+	"notice.noCascade": "되돌릴 위치 태그 이름 변경이 없습니다",
+	"notice.cascadeUndone": "{n}개 노트의 이전 태그와 파일명을 복원했습니다",
+	"notice.bulkBusy": "현재 일괄 작업을 먼저 끝내세요: {active}",
 	"notice.bootstrapped":
 		'{n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
 	"notice.bootstrapProgress": "부트스트랩 중… {done}/{total}",
@@ -419,6 +438,11 @@ const KO: Record<string, string> = {
 	"modal.cascade.toName": "변경 후",
 	"modal.cascade.toDesc": "새 태그 경로 (자유 입력)",
 	"modal.cascade.submit": "이름 변경",
+	"modal.cascadePreview.title": "위치 태그 이름 변경 검토",
+	"modal.cascadePreview.desc":
+		"{n}개 노트가 {from}에서 {to}(으)로 바뀝니다. 실패하거나 취소하면 완료된 부분을 되돌립니다.",
+	"modal.cascadePreview.showList": "영향받는 노트 보기 ({n})",
+	"modal.cascadePreview.apply": "이름 변경 — {n}개 노트",
 	// new-note modal
 	"modal.newNote.title": "새 노트",
 	"modal.newNote.desc":
@@ -607,6 +631,8 @@ const KO: Record<string, string> = {
 	"notice.rootBadChar":
 		"루트 네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
 	"bulk.title.root": "루트 네임스페이스 변경 중",
+	"bulk.title.cascade": "위치 태그 이름 변경 중",
+	"bulk.title.cascadeUndo": "위치 태그 이름 변경 되돌리는 중",
 	// ID scheme presets (0.3.0 experimental, B26)
 	"setting.schemeName": "ID 스킴 (시험 기능)",
 	"setting.schemeDesc":
