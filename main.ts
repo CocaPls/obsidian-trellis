@@ -2445,6 +2445,8 @@ export default class TrellisPlugin extends Plugin {
 /** Settings: namespace, separator, key position. */
 class TrellisSettingTab extends PluginSettingTab {
 	private readonly plugin: TrellisPlugin;
+	/** Keep the experimental disclosure open across our own settings re-renders. */
+	private experimentalOpen = false;
 
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
@@ -2654,9 +2656,28 @@ class TrellisSettingTab extends PluginSettingTab {
 						})
 				);
 
-			// ID scheme preset for the primary tag slot (0.3.0, experimental). In
-			// advanced mode the per-slot dropdown in the editor covers this.
-			new Setting(containerEl)
+		}
+
+		// Optional schema features stay physically out of the primary path. Keeping
+		// them available but collapsed prevents a single-key setup from reading like
+		// a schema editor. The disclosure remembers its state during local re-renders.
+		const experimental = containerEl.createEl("details", {
+			cls: "trellis-settings-disclosure",
+		});
+		experimental.open = this.experimentalOpen || this.plugin.settings.advancedMode;
+		experimental.addEventListener("toggle", () => {
+			this.experimentalOpen = experimental.open;
+		});
+		experimental.createEl("summary", { text: t("setting.experimentalName") });
+		experimental.createEl("p", {
+			cls: "setting-item-description trellis-settings-disclosure-desc",
+			text: t("setting.experimentalDesc"),
+		});
+
+		// ID scheme preset for the primary tag slot (0.3.0, experimental). In
+		// advanced mode the per-slot dropdown in the editor covers this.
+		if (!this.plugin.settings.advancedMode) {
+			new Setting(experimental)
 				.setName(t("setting.schemeName"))
 				.setDesc(t("setting.schemeDesc"))
 				.addDropdown((dd) => {
@@ -2676,7 +2697,7 @@ class TrellisSettingTab extends PluginSettingTab {
 		// runs a vault-wide tag migration behind a confirm (undoable).
 		{
 			let pending = (this.plugin.settings.schema.rootNamespace ?? "").trim();
-			new Setting(containerEl)
+			new Setting(experimental)
 				.setName(t("setting.rootName"))
 				.setDesc(t("setting.rootDesc"))
 				.addText((text) =>
@@ -2698,7 +2719,7 @@ class TrellisSettingTab extends PluginSettingTab {
 		}
 
 		// Advanced mode (0.2.0, experimental): the multi-key slot editor.
-		new Setting(containerEl)
+		new Setting(experimental)
 			.setName(t("setting.advName"))
 			.setDesc(t("setting.advDesc"))
 			.addToggle((toggle) =>
@@ -2745,7 +2766,7 @@ class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 			);
-		if (this.plugin.settings.advancedMode) this.renderSlotEditor(containerEl);
+		if (this.plugin.settings.advancedMode) this.renderSlotEditor(experimental);
 
 		// ── Sidebar tree view ────────────────────────────────────────────────
 		new Setting(containerEl).setName(t("setting.section.tree")).setHeading();
@@ -2940,6 +2961,7 @@ class TrellisSettingTab extends PluginSettingTab {
 
 		schema.slots.forEach((slot, i) => {
 			const row = new Setting(containerEl).setName(t("adv.slot", { n: i + 1 }));
+			row.settingEl.addClass("trellis-slot-row");
 			row.addDropdown((dd) =>
 				dd
 					.addOption("tag", t("adv.roleTag"))
@@ -3045,7 +3067,7 @@ class TrellisSettingTab extends PluginSettingTab {
 				const current = schema.separators[i] ?? "-";
 				const presets = ["-", "_", "."];
 				let customInput: HTMLInputElement | null = null;
-				new Setting(containerEl)
+				const separatorRow = new Setting(containerEl)
 					.setName(t("adv.sep", { n: i + 1, a: i + 1, b: i + 2 }))
 					.addDropdown((dropdown) =>
 						dropdown
@@ -3084,6 +3106,7 @@ class TrellisSettingTab extends PluginSettingTab {
 								: "none";
 						});
 					});
+				separatorRow.settingEl.addClass("trellis-slot-row");
 			}
 		});
 

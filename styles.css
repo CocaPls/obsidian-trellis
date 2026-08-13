@@ -232,3 +232,47 @@ button.trellis-destructive:hover {
 .trellis-hidden {
 	display: none;
 }
+
+/* Optional schema tools are useful for unusual vaults, but they should not
+   compete with the primary single-key setup. Match Obsidian's native details
+   affordance and keep the content visually subordinate. */
+.trellis-settings-disclosure {
+	margin: var(--size-4-3) 0 var(--size-4-5);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.trellis-settings-disclosure > summary {
+	cursor: pointer;
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.trellis-settings-disclosure-desc {
+	margin: var(--size-4-2) 0;
+}
+
+/* Advanced slot rows can contain several controls. Obsidian settings windows
+   and mobile sheets are intentionally narrow, so wrap the control side rather
+   than widening the whole settings pane and creating horizontal scrolling. */
+.trellis-slot-row {
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.trellis-slot-row .setting-item-info {
+	min-width: 8rem;
+	flex: 1 1 10rem;
+}
+
+.trellis-slot-row .setting-item-control {
+	min-width: 0;
+	flex: 1 1 20rem;
+	flex-wrap: wrap;
+}
+
+.trellis-slot-row .setting-item-control input[type="text"] {
+	min-width: 7rem;
+	max-width: 12rem;
+}
