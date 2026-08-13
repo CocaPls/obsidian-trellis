@@ -242,9 +242,10 @@ export class CascadePreviewModal extends Modal {
 
 		new Setting(contentEl)
 			.addButton((button) =>
-				markDestructive(
-					button.setButtonText(t("modal.cascadePreview.apply", { n: this.rows.length }))
-				).onClick(() => {
+				button
+					.setButtonText(t("modal.cascadePreview.apply", { n: this.rows.length }))
+					.setCta()
+					.onClick(() => {
 					this.close();
 					this.onApply();
 				})
@@ -717,9 +718,10 @@ export class BootstrapPreviewModal extends Modal {
 		const buttons = new Setting(contentEl);
 		if (this.assign.length) {
 			buttons.addButton((b) =>
-				markDestructive(
-					b.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
-				).onClick(() => {
+				b
+					.setButtonText(t("modal.bootstrap.apply", { n: this.assign.length }))
+					.setCta()
+					.onClick(() => {
 					this.onApply(this.assign.map((r) => ({ path: r.path, tag: r.tag })));
 					this.close();
 				})
@@ -812,9 +814,10 @@ export class SeparatorChangeModal extends Modal {
 
 		const buttons = new Setting(contentEl);
 		buttons.addButton((b) =>
-			markDestructive(
-				b.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
-			).onClick(() => {
+			b
+				.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
+				.setCta()
+				.onClick(() => {
 				this.onApply();
 				this.close();
 			})

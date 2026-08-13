@@ -48,10 +48,10 @@ const EN: Record<string, string> = {
 	// commands
 	"cmd.openTree": "Open tree view",
 	"cmd.newNote": "New note (under active note's location)",
-	"cmd.cascade": "Rename location tag (cascade)",
+	"cmd.cascade": "Move location and descendants",
 	"cmd.cascadeUndo": "Undo last location-tag rename",
 	"cmd.namespaceUndo": "Undo last namespace change",
-	"cmd.bootstrapPreview": "Bootstrap: preview tag assignment (dry-run)",
+	"cmd.bootstrapPreview": "Import existing filenames (preview)",
 	"cmd.bootstrapUndo": "Undo last bootstrap",
 	"cmd.sepUndo": "Undo last separator change",
 	"cmd.checkDuplicates": "Check for duplicate location tags",
@@ -63,7 +63,7 @@ const EN: Record<string, string> = {
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "rename failed for {name}",
 	"notice.renameCollision": "skipped {name}: target \"{target}\" already exists",
-	"notice.noTagkey": "could not derive tagkey (check namespace)",
+	"notice.noTagkey": "could not derive a filename code (check the location tag)",
 	"notice.exists": '"{base}" already exists',
 	"notice.createFailed": 'failed to create "{base}"',
 	"notice.retagged": "retagged {n} file(s) {from} → {to}",
@@ -98,7 +98,7 @@ const EN: Record<string, string> = {
 	"notice.nsApplied": "namespace set to '{ns}'",
 	"setting.apply": "Apply",
 	"setting.section.general": "General",
-	"setting.section.scheme": "Filename scheme",
+	"setting.section.scheme": "Filename",
 	"setting.section.tree": "Sidebar tree view",
 	"setting.formatPreview": "Preview: {name}",
 	"setting.formatApplyName": "Apply filename formatting",
@@ -127,9 +127,9 @@ const EN: Record<string, string> = {
 	// menu
 	"menu.newHere": "New note here",
 	// cascade modal
-	"modal.cascade.title": "Rename location tag (cascade)",
+	"modal.cascade.title": "Move location and descendants",
 	"modal.cascade.desc":
-		"Rewrites this tag and everything under it across the vault. Filenames follow automatically.",
+		"Moves this location and everything under it. Filename codes follow automatically.",
 	"modal.namespaceBlocked.title": "Namespace is still in use",
 	"modal.namespaceBlocked.desc":
 		"This schema would stop managing these namespaces: {items}. Migrate or remove those tags first; nothing was changed.",
@@ -160,11 +160,11 @@ const EN: Record<string, string> = {
 	// bootstrap modal
 	"modal.bootstrap.title": "Bootstrap — dry-run preview",
 	"modal.bootstrap.summary":
-		"{assign} file(s) would get a tag · {already} already tagged (skipped) · {none} have no recognizable tagkey (skipped). Nothing is written.",
+		"{assign} file(s) would get a tag · {already} already tagged (skipped) · {none} have no recognizable filename code (skipped). Nothing is written.",
 	"modal.bootstrap.segmentWarning":
 		"A visible hierarchy separator is active. Bootstrap treats every occurrence inside the tagkey as a level boundary; review names whose original segment may have contained that symbol.",
 	"modal.bootstrap.willAssign": "Will assign ({n})",
-	"modal.bootstrap.noTagkey": "No tagkey — skipped, check manually ({n})",
+	"modal.bootstrap.noTagkey": "No recognizable filename code — skipped ({n})",
 	"modal.bootstrap.apply": "Apply — tag {n} file(s)",
 	"modal.bootstrap.close": "Close",
 	// bootstrap errors modal
@@ -181,25 +181,25 @@ const EN: Record<string, string> = {
 	"modal.sep.apply": "Change — {n} file(s)",
 	"modal.sep.cancel": "Cancel",
 	// settings
-	"setting.nsName": "Location tag namespace",
+	"setting.nsName": "Location tag",
 	"setting.nsDesc":
-		"Tags under this namespace are the source of truth. Put them in frontmatter — cascade rewrites frontmatter tags. e.g. 'trel' → #trel/S88/B07",
-	"setting.sepName": "Separator symbol",
+		"The tag family Trellis treats as the source of truth. For example, 'trel' manages #trel/S88/B07.",
+	"setting.sepName": "Code–title symbol",
 	"setting.sepDesc":
-		"Symbol between filename key slots. Choose a preset or a custom parse-safe symbol; spaces are configured separately.",
+		"Symbol between the generated filename code and your title.",
 	"setting.sepCustom": "Custom…",
-	"setting.sepSpacingName": "Separator spacing",
-	"setting.sepSpacingDesc": "Spaces rendered around the slot-boundary symbol.",
+	"setting.sepSpacingName": "Spaces around the symbol",
+	"setting.sepSpacingDesc": "Choose where spaces appear around the code–title symbol.",
 	"spacing.none": "None (BP-title)",
 	"spacing.before": "Before (BP -title)",
 	"spacing.after": "After (BP- title)",
 	"spacing.both": "Both (BP - title)",
-	"setting.segmentSepName": "Tag hierarchy separator",
+	"setting.segmentSepName": "Hierarchy shown in the filename code",
 	"setting.segmentSepDesc":
-		"How tag path levels appear inside the tag-key slot. Hidden keeps the classic S88B07 form.",
+		"Show or hide the levels of a location tag inside the generated code. Hidden keeps S88B07.",
 	"segmentSep.hidden": "Hidden (S88B07)",
-	"setting.posName": "Key position",
-	"setting.posDesc": "Where the tagkey sits in the filename.",
+	"setting.posName": "Filename code position",
+	"setting.posDesc": "Place the generated code before or after your title.",
 	"setting.posPrefix": "Prefix — start of filename (S88B07-title)",
 	"setting.posSuffix": "Suffix — end of filename (title-S88B07)",
 	"setting.treeName": "Sidebar tree view",
@@ -208,20 +208,20 @@ const EN: Record<string, string> = {
 	"setting.treeLabelName": "Sidebar view name",
 	"setting.treeLabelDesc":
 		"Custom title for the tree view's tab. Leave blank for the default. Avoid reusing the core File explorer's name.",
-	"setting.headerButtonsName": "Sidebar header buttons",
+	"setting.headerButtonsName": "Tree actions",
 	"setting.headerButtonsDesc":
-		"Show or hide each action button in the tree view header.",
+		"Choose which actions appear directly in the header or in its More menu.",
 	"setting.hb.newNote": "New note",
 	"setting.hb.sort": "Sort direction",
 	"setting.hb.collapseAll": "Collapse / expand all",
 	"setting.hb.showCurrent": "Show current file",
-	"setting.hb.bootstrap": "Bootstrap",
-	"setting.hb.cascade": "Rename location tag",
+	"setting.hb.bootstrap": "Import existing filenames",
+	"setting.hb.cascade": "Move location and descendants",
 	"setting.hb.undo": "Undo",
 	"setting.sortName": "Tree sort by",
 	"setting.sortDesc":
 		"Sort order in the tree (ascending/descending is toggled in the panel header).",
-	"setting.sortTagkey": "Tagkey (name)",
+	"setting.sortTagkey": "Filename code",
 	"setting.sortMtime": "Modified time",
 	"setting.sortCtime": "Created time",
 	"setting.langName": "Language",
@@ -233,8 +233,8 @@ const EN: Record<string, string> = {
 	"tree.sortDesc": "Sort: descending (click for ascending)",
 	"tree.collapseAll": "Collapse / expand all",
 	"tree.showCurrent": "Show current file",
-	"tree.bootstrap": "Bootstrap tags…",
-	"tree.cascade": "Rename location tag",
+	"tree.bootstrap": "Import existing filenames…",
+	"tree.cascade": "Move location and descendants",
 	"tree.undo": "Undo…",
 	"tree.empty": "No location-tagged notes found.",
 	// bootstrap select modal
@@ -342,7 +342,7 @@ const EN: Record<string, string> = {
 	"bulk.title.cascade": "Renaming location tags",
 	"bulk.title.cascadeUndo": "Undoing location-tag rename",
 	// ID scheme presets (0.3.0 experimental, B26)
-	"setting.schemeName": "ID scheme (experimental)",
+	"setting.schemeName": "Automatic ID suggestion (experimental)",
 	"setting.schemeDesc":
 		"Optional preset for the primary tag slot. Suggests the next segment for new notes and sharpens bootstrap parsing. Live sync stays format-agnostic either way.",
 	"scheme.none": "None (format-agnostic)",
@@ -380,10 +380,10 @@ const KO: Record<string, string> = {
 	// commands
 	"cmd.openTree": "트리 뷰 열기",
 	"cmd.newNote": "새 노트 (현재 노트 위치 아래)",
-	"cmd.cascade": "위치 태그 이름 변경 (하위 전체)",
+	"cmd.cascade": "하위 위치 함께 변경",
 	"cmd.cascadeUndo": "마지막 위치 태그 이름 변경 되돌리기",
 	"cmd.namespaceUndo": "마지막 네임스페이스 변경 되돌리기",
-	"cmd.bootstrapPreview": "부트스트랩: 태그 부여 미리보기 (드라이런)",
+	"cmd.bootstrapPreview": "기존 파일명 편입 미리보기",
 	"cmd.bootstrapUndo": "마지막 부트스트랩 되돌리기",
 	"cmd.sepUndo": "마지막 구분자 변경 되돌리기",
 	"cmd.checkDuplicates": "중복 위치 태그 점검",
@@ -395,7 +395,7 @@ const KO: Record<string, string> = {
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "{name} 이름 변경 실패",
 	"notice.renameCollision": "{name} 건너뜀: 대상 \"{target}\" 이(가) 이미 있습니다",
-	"notice.noTagkey": "태그키를 도출할 수 없습니다 (네임스페이스 확인)",
+	"notice.noTagkey": "파일명 코드를 읽을 수 없습니다 (위치 태그 확인)",
 	"notice.exists": '"{base}" 이(가) 이미 있습니다',
 	"notice.createFailed": '"{base}" 생성 실패',
 	"notice.retagged": "{n}개 파일 재태그 {from} → {to}",
@@ -430,7 +430,7 @@ const KO: Record<string, string> = {
 	"notice.nsApplied": "네임스페이스를 '{ns}' 로 설정했습니다",
 	"setting.apply": "적용",
 	"setting.section.general": "일반",
-	"setting.section.scheme": "파일명 규칙",
+	"setting.section.scheme": "파일명",
 	"setting.section.tree": "사이드바 트리 뷰",
 	"setting.formatPreview": "미리보기: {name}",
 	"setting.formatApplyName": "파일명 형식 적용",
@@ -459,9 +459,9 @@ const KO: Record<string, string> = {
 	// menu
 	"menu.newHere": "여기에 새 노트",
 	// cascade modal
-	"modal.cascade.title": "위치 태그 이름 변경 (하위 전체)",
+	"modal.cascade.title": "하위 위치 함께 변경",
 	"modal.cascade.desc":
-		"이 태그와 그 하위 전체를 볼트에서 다시 씁니다. 파일명은 자동으로 따라갑니다.",
+		"이 위치와 그 하위 전체를 옮깁니다. 파일명 코드는 자동으로 따라갑니다.",
 	"modal.namespaceBlocked.title": "사용 중인 네임스페이스입니다",
 	"modal.namespaceBlocked.desc":
 		"이 스키마를 적용하면 다음 네임스페이스가 관리 밖으로 빠집니다: {items}. 먼저 해당 태그를 이관하거나 제거하세요. 변경된 내용은 없습니다.",
@@ -491,11 +491,11 @@ const KO: Record<string, string> = {
 	// bootstrap modal
 	"modal.bootstrap.title": "부트스트랩 — 드라이런 미리보기",
 	"modal.bootstrap.summary":
-		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 태그키 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
+		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 파일명 코드 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
 	"modal.bootstrap.segmentWarning":
 		"표시형 계층 구분자가 켜져 있습니다. 부트스트랩은 태그키 안의 해당 기호를 모두 계층 경계로 해석하므로, 원래 세그먼트 자체에 그 기호가 있었을 수 있는 이름은 직접 검토하세요.",
 	"modal.bootstrap.willAssign": "부여 예정 ({n})",
-	"modal.bootstrap.noTagkey": "태그키 없음 — 건너뜀, 수동 확인 ({n})",
+	"modal.bootstrap.noTagkey": "파일명 코드 인식 불가 — 건너뜀 ({n})",
 	"modal.bootstrap.apply": "적용 — {n}개 파일 태그",
 	"modal.bootstrap.close": "닫기",
 	// bootstrap errors modal
@@ -512,25 +512,25 @@ const KO: Record<string, string> = {
 	"modal.sep.apply": "변경 — {n}개 파일",
 	"modal.sep.cancel": "취소",
 	// settings
-	"setting.nsName": "위치 태그 네임스페이스",
+	"setting.nsName": "위치 태그",
 	"setting.nsDesc":
-		"이 네임스페이스 아래 태그가 진실원입니다. frontmatter에 두세요 — cascade는 frontmatter 태그를 갱신합니다. 예: 'trel' → #trel/S88/B07",
-	"setting.sepName": "구분자 기호",
+		"Trellis가 원본으로 관리할 태그 계열입니다. 예를 들어 'trel'은 #trel/S88/B07을 관리합니다.",
+	"setting.sepName": "코드와 제목 사이 기호",
 	"setting.sepDesc":
-		"파일명 키 슬롯 사이의 기호입니다. 프리셋이나 안전한 사용자 기호를 고르며 공백은 별도로 설정합니다.",
+		"자동 생성되는 파일명 코드와 사용자가 붙인 제목 사이의 기호입니다.",
 	"setting.sepCustom": "사용자 지정…",
-	"setting.sepSpacingName": "구분자 공백",
-	"setting.sepSpacingDesc": "슬롯 경계 기호 양옆에 표시할 공백입니다.",
+	"setting.sepSpacingName": "기호 주위 공백",
+	"setting.sepSpacingDesc": "코드와 제목 사이 기호의 어느 쪽에 공백을 둘지 정합니다.",
 	"spacing.none": "없음 (BP-제목)",
 	"spacing.before": "왼쪽 (BP -제목)",
 	"spacing.after": "오른쪽 (BP- 제목)",
 	"spacing.both": "양쪽 (BP - 제목)",
-	"setting.segmentSepName": "태그 계층 구분자",
+	"setting.segmentSepName": "파일명 코드의 계층 표시",
 	"setting.segmentSepDesc":
-		"태그 경로의 각 계층을 태그키 슬롯 안에서 표시하는 방식입니다. 숨김은 기존 S88B07 형식을 유지합니다.",
+		"위치 태그의 각 계층을 자동 생성 코드에 표시할지 정합니다. 숨김은 S88B07 형식을 유지합니다.",
 	"segmentSep.hidden": "숨김 (S88B07)",
-	"setting.posName": "키 위치",
-	"setting.posDesc": "파일명에서 태그키가 놓이는 위치.",
+	"setting.posName": "파일명 코드 위치",
+	"setting.posDesc": "자동 생성 코드를 제목 앞이나 뒤에 둡니다.",
 	"setting.posPrefix": "접두 — 파일명 앞 (S88B07-제목)",
 	"setting.posSuffix": "접미 — 파일명 뒤 (제목-S88B07)",
 	"setting.treeName": "사이드바 트리 뷰",
@@ -539,19 +539,19 @@ const KO: Record<string, string> = {
 	"setting.treeLabelName": "사이드바 뷰 이름",
 	"setting.treeLabelDesc":
 		"트리 뷰 탭의 표시 이름. 비우면 기본값을 씁니다. 코어 '탐색기'와 같은 이름은 피하세요.",
-	"setting.headerButtonsName": "사이드바 헤더 버튼",
+	"setting.headerButtonsName": "트리 동작",
 	"setting.headerButtonsDesc":
-		"트리 뷰 헤더의 각 동작 버튼을 켜거나 끕니다.",
+		"각 동작을 헤더나 더보기 메뉴에 표시할지 정합니다.",
 	"setting.hb.newNote": "새 노트",
 	"setting.hb.sort": "정렬 방향",
 	"setting.hb.collapseAll": "전체 접기 / 펼치기",
 	"setting.hb.showCurrent": "현재 파일 보기",
-	"setting.hb.bootstrap": "부트스트랩",
-	"setting.hb.cascade": "위치 태그 이름 변경",
+	"setting.hb.bootstrap": "기존 파일명 편입",
+	"setting.hb.cascade": "하위 위치 함께 변경",
 	"setting.hb.undo": "되돌리기",
 	"setting.sortName": "트리 정렬 기준",
 	"setting.sortDesc": "트리 정렬 순서 (오름/내림차순은 패널 헤더에서 전환).",
-	"setting.sortTagkey": "태그키 (이름)",
+	"setting.sortTagkey": "파일명 코드",
 	"setting.sortMtime": "수정 시간",
 	"setting.sortCtime": "생성 시간",
 	"setting.langName": "언어",
@@ -563,8 +563,8 @@ const KO: Record<string, string> = {
 	"tree.sortDesc": "정렬: 내림차순 (클릭하면 오름차순)",
 	"tree.collapseAll": "전체 접기 / 펼치기",
 	"tree.showCurrent": "현재 파일 보기",
-	"tree.bootstrap": "부트스트랩…",
-	"tree.cascade": "위치 태그 이름 변경",
+	"tree.bootstrap": "기존 파일명 편입…",
+	"tree.cascade": "하위 위치 함께 변경",
 	"tree.undo": "되돌리기…",
 	"tree.empty": "위치 태그가 붙은 노트가 없습니다.",
 	// bootstrap select modal
@@ -672,7 +672,7 @@ const KO: Record<string, string> = {
 	"bulk.title.cascade": "위치 태그 이름 변경 중",
 	"bulk.title.cascadeUndo": "위치 태그 이름 변경 되돌리는 중",
 	// ID scheme presets (0.3.0 experimental, B26)
-	"setting.schemeName": "ID 스킴 (시험 기능)",
+	"setting.schemeName": "ID 자동 제안 (시험 기능)",
 	"setting.schemeDesc":
 		"1번 태그 슬롯의 선택적 프리셋. 새 노트의 다음 세그먼트를 제안하고 부트스트랩 파싱을 정확하게 합니다. 실시간 동기화는 어느 쪽이든 형식-무지 그대로입니다.",
 	"scheme.none": "없음 (형식-무지)",
