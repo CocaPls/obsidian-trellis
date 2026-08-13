@@ -372,6 +372,14 @@ export default class TrellisPlugin extends Plugin {
 						getSortAsc: () => this.settings.sortAsc,
 						getDisplayName: () => this.treeDisplayName(),
 						getButtons: () => this.settings.headerButtons,
+						getUndoAvailability: () => ({
+							cascade: this.settings.lastCascade?.length ?? 0,
+							namespace: this.settings.lastNamespaceChange?.changes.length ?? 0,
+							bootstrap: this.settings.lastBootstrap?.length ?? 0,
+							separator: this.settings.lastSeparatorChange?.renames.length ?? 0,
+							dedup: this.settings.lastDedup?.length ?? 0,
+							root: this.settings.lastRootChange !== undefined,
+						}),
 						getViewMode: () => this.settings.treeViewMode,
 						onToggleViewMode: () => void this.toggleTreeViewMode(),
 						getTagRoot: () => this.fullTagTree(),
@@ -398,6 +406,7 @@ export default class TrellisPlugin extends Plugin {
 						onUndoRoot: () => void this.undoRootChange(),
 						onUndoCascade: () => void this.undoCascade(),
 						onUndoNamespace: () => void this.undoPrimaryNamespaceChange(),
+						onUndoDedup: () => void this.undoDedup(),
 					})
 			);
 		} catch (e) {

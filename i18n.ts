@@ -371,6 +371,8 @@ const EN: Record<string, string> = {
 	"setting.hb.viewMode": "View mode toggle",
 	"tree.modeToNotes": "Switch to notes view",
 	"tree.modeToTags": "Switch to nested tag view",
+	"tree.more": "More actions",
+	"tree.undoCount": "{action} — {n} note(s)",
 	"tree.untagged": "Untagged notes ({n})",
 };
 
@@ -698,6 +700,8 @@ const KO: Record<string, string> = {
 	"setting.hb.viewMode": "뷰 모드 전환",
 	"tree.modeToNotes": "노트 뷰로 전환",
 	"tree.modeToTags": "중첩 태그 뷰로 전환",
+	"tree.more": "더보기",
+	"tree.undoCount": "{action} — {n}개 노트",
 	"tree.untagged": "무태그 노트 ({n})",
 };
 

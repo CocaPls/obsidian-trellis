@@ -16,6 +16,15 @@ export interface HeaderButtonVisibility {
 	undo: boolean;
 }
 
+export interface UndoAvailability {
+	cascade: number;
+	namespace: number;
+	bootstrap: number;
+	separator: number;
+	dedup: number;
+	root: boolean;
+}
+
 /** Header-button ids in render (left-to-right) order — the single source shared
  *  by the view (which buttons to draw) and settings (which toggles to list). */
 export const HEADER_BUTTON_IDS: (keyof HeaderButtonVisibility)[] = [
@@ -48,6 +57,8 @@ export interface TrellisTreeCallbacks {
 	onUndoRoot: () => void;
 	onUndoCascade: () => void;
 	onUndoNamespace: () => void;
+	onUndoDedup: () => void;
+	getUndoAvailability: () => UndoAvailability;
 	// Nested tag mode (0.3.0 experimental, B24)
 	getViewMode: () => "notes" | "tags";
 	onToggleViewMode: () => void;
@@ -143,73 +154,29 @@ export class TrellisTreeView extends ItemView {
 				() => this.cb.onToggleViewMode()
 			);
 		}
-		// Sort applies to the notes tree only — nested mode is fixed segment
-		// order (buildTagTree), so hide the button there instead of showing a
-		// control that does nothing.
-		if (vis.sort && this.cb.getViewMode() !== "tags") {
-			const asc = this.cb.getSortAsc();
-			this.addButton(
-				buttons,
-				asc ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow",
-				asc ? t("tree.sortAsc") : t("tree.sortDesc"),
-				() => this.cb.onToggleSort()
-			);
-		}
-		if (vis.collapseAll) {
-			this.addButton(buttons, "chevrons-down-up", t("tree.collapseAll"), () =>
-				this.toggleCollapseAll()
-			);
-		}
 		if (vis.showCurrent) {
 			this.addButton(buttons, "crosshair", t("tree.showCurrent"), () =>
 				this.revealActiveFile()
 			);
 		}
-		if (vis.bootstrap) {
-			this.addButton(buttons, "wand-2", t("tree.bootstrap"), () =>
-				this.cb.onBootstrap()
+		const undo = this.cb.getUndoAvailability();
+		const hasUndo =
+			undo.cascade > 0 ||
+			undo.namespace > 0 ||
+			undo.bootstrap > 0 ||
+			undo.separator > 0 ||
+			undo.dedup > 0 ||
+			undo.root;
+		const hasMore =
+			(vis.sort && this.cb.getViewMode() !== "tags") ||
+			vis.collapseAll ||
+			vis.bootstrap ||
+			vis.cascade ||
+			(vis.undo && hasUndo);
+		if (hasMore) {
+			this.addButton(buttons, "ellipsis", t("tree.more"), (e) =>
+				this.showMoreMenu(e, vis, undo, hasUndo)
 			);
-		}
-		if (vis.cascade) {
-			this.addButton(buttons, "pencil-line", t("tree.cascade"), () =>
-				this.cb.onCascade()
-			);
-		}
-		if (vis.undo) {
-			this.addButton(buttons, "undo-2", t("tree.undo"), (e) => {
-				const menu = new Menu();
-				menu.addItem((i) =>
-					i
-						.setTitle(t("cmd.cascadeUndo"))
-						.setIcon("rotate-ccw")
-						.onClick(() => this.cb.onUndoCascade())
-				);
-				menu.addItem((i) =>
-					i
-						.setTitle(t("cmd.namespaceUndo"))
-						.setIcon("network")
-						.onClick(() => this.cb.onUndoNamespace())
-				);
-				menu.addItem((i) =>
-					i
-						.setTitle(t("cmd.bootstrapUndo"))
-						.setIcon("wand-2")
-						.onClick(() => this.cb.onUndoBootstrap())
-				);
-				menu.addItem((i) =>
-					i
-						.setTitle(t("cmd.sepUndo"))
-						.setIcon("scissors")
-						.onClick(() => this.cb.onUndoSeparator())
-				);
-				menu.addItem((i) =>
-					i
-						.setTitle(t("cmd.rootUndo"))
-						.setIcon("network")
-						.onClick(() => this.cb.onUndoRoot())
-				);
-				menu.showAtMouseEvent(e);
-			});
 		}
 
 		const nav = container.createDiv({ cls: "nav-files-container" });
@@ -263,6 +230,123 @@ export class TrellisTreeView extends ItemView {
 		// indent step, which made the tree look unlike the native explorer.
 		for (const node of roots) {
 			this.renderNode(nav, node, activePath);
+		}
+	}
+
+	/** Keep navigation controls calm: infrequent management actions live behind
+	 *  one native menu instead of competing with New/Mode/Current in the header. */
+	private showMoreMenu(
+		event: MouseEvent,
+		vis: HeaderButtonVisibility,
+		undo: UndoAvailability,
+		hasUndo: boolean
+	) {
+		const menu = new Menu();
+		if (vis.sort && this.cb.getViewMode() !== "tags") {
+			const asc = this.cb.getSortAsc();
+			menu.addItem((item) =>
+				item
+					.setTitle(asc ? t("tree.sortAsc") : t("tree.sortDesc"))
+					.setIcon(asc ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow")
+					.onClick(() => this.cb.onToggleSort())
+			);
+		}
+		if (vis.collapseAll) {
+			menu.addItem((item) =>
+				item
+					.setTitle(t("tree.collapseAll"))
+					.setIcon("chevrons-down-up")
+					.onClick(() => this.toggleCollapseAll())
+			);
+		}
+		if ((vis.sort && this.cb.getViewMode() !== "tags") || vis.collapseAll) {
+			menu.addSeparator();
+		}
+		if (vis.bootstrap) {
+			menu.addItem((item) =>
+				item
+					.setTitle(t("tree.bootstrap"))
+					.setIcon("wand-2")
+					.onClick(() => this.cb.onBootstrap())
+			);
+		}
+		if (vis.cascade) {
+			menu.addItem((item) =>
+				item
+					.setTitle(t("tree.cascade"))
+					.setIcon("pencil-line")
+					.onClick(() => this.cb.onCascade())
+			);
+		}
+		if (vis.undo && hasUndo) {
+			menu.addSeparator();
+			menu.addItem((item) =>
+				item
+					.setTitle(t("tree.undo"))
+					.setIcon("undo-2")
+					.onClick((undoEvent) => this.showUndoMenu(undoEvent, undo))
+			);
+		}
+		menu.showAtMouseEvent(event);
+	}
+
+	private showUndoMenu(
+		event: MouseEvent | KeyboardEvent,
+		undo: UndoAvailability
+	) {
+		const menu = new Menu();
+		const counted = (key: string, count: number) =>
+			t("tree.undoCount", { action: t(key), n: count });
+		if (undo.cascade > 0)
+			menu.addItem((i) =>
+				i
+					.setTitle(counted("cmd.cascadeUndo", undo.cascade))
+					.setIcon("rotate-ccw")
+					.onClick(() => this.cb.onUndoCascade())
+			);
+		if (undo.namespace > 0)
+			menu.addItem((i) =>
+				i
+					.setTitle(counted("cmd.namespaceUndo", undo.namespace))
+					.setIcon("network")
+					.onClick(() => this.cb.onUndoNamespace())
+			);
+		if (undo.bootstrap > 0)
+			menu.addItem((i) =>
+				i
+					.setTitle(counted("cmd.bootstrapUndo", undo.bootstrap))
+					.setIcon("wand-2")
+					.onClick(() => this.cb.onUndoBootstrap())
+			);
+		if (undo.separator > 0)
+			menu.addItem((i) =>
+				i
+					.setTitle(counted("cmd.sepUndo", undo.separator))
+					.setIcon("scissors")
+					.onClick(() => this.cb.onUndoSeparator())
+			);
+		if (undo.dedup > 0)
+			menu.addItem((i) =>
+				i
+					.setTitle(counted("cmd.dedupUndo", undo.dedup))
+					.setIcon("tags")
+					.onClick(() => this.cb.onUndoDedup())
+			);
+		if (undo.root)
+			menu.addItem((i) =>
+				i
+					.setTitle(t("cmd.rootUndo"))
+					.setIcon("network")
+					.onClick(() => this.cb.onUndoRoot())
+			);
+		if (event instanceof MouseEvent) {
+			menu.showAtMouseEvent(event);
+			return;
+		}
+		const target = event.currentTarget;
+		if (target instanceof HTMLElement) {
+			const rect = target.getBoundingClientRect();
+			menu.showAtPosition({ x: rect.right, y: rect.top });
 		}
 	}
 
