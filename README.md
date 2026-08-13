@@ -74,20 +74,22 @@ Community plugins.
 
 - **Tag a note** — add a location tag in frontmatter (`tags: [trel/S88/B07]`) and
   the filename prefix syncs to `S88B07`.
-- **Move a level** — run *Rename location tag (cascade)* from the command palette
+- **Move a level** — run *Move location and descendants* from the command palette
   or a note's right-click menu.
 - **Open the tree** — use the ribbon icon; switch between the notes and tags
   modes from the header or settings.
 - **New note in place** — from the tree, create a note under a branch. Trellis
   can suggest the next segment for you (see presets under Advanced).
-- **Onboard an existing vault** — run *Bootstrap*, pick a scope, dry-run, apply.
+- **Onboard an existing vault** — run *Import existing filenames*, pick a scope,
+  preview, and apply.
 - **Clean up duplicates** — run *Check duplicate location tags*.
 - **Change filename formatting** — set the boundary symbol, spacing, or visible
   hierarchy separator; review the exact vault-wide preview before applying.
 
 ## Advanced
 
-Both of these are off by default. The single-key engine stays the default path.
+These tools live in the collapsed **Experimental filename features** section.
+The single-key engine stays the default path.
 
 **Multi-key slots.** By default a filename is one tagkey plus a title. If a note
 needs more than one identifier — say a project code *and* a cross-cutting area
@@ -139,18 +141,20 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 ![Settings tab](screenshots/settings.png)
 
-- **Location tag namespace** — which tags are the source of truth (e.g. `trel`).
+- **Location tag** — which tag family is the source of truth (e.g. `trel`).
   Staged and committed with an Apply button.
-- **Separator symbol / spacing** — the slot-boundary symbol and whether it has a
-  space on neither side, one side, or both sides.
-- **Tag hierarchy separator** — hidden (classic `S88B07`) or visibly joined with
+- **Code–title symbol / spacing** — the boundary between the generated filename
+  code and the user's title, with optional spaces on either side.
+- **Hierarchy shown in the filename code** — hidden (classic `S88B07`) or joined with
   `.`, `-`, or `_` (for example `S.88.B.07`).
-- **Key position** — prefix (start) or suffix (end) of the filename.
+- **Filename code position** — prefix (start) or suffix (end) of the filename.
 - **Tree view** — on / off, and which mode (notes or tags) it opens in.
 - **Sidebar view name** — a custom title for the tree tab (blank uses the
   default).
 - **Tree sort** — by tagkey, modified time, or created time.
-- **Header buttons** — show or hide each tree header action individually.
+- **Tree actions** — New, view mode, and current-note navigation stay in the
+  header; sorting, collapse, import, subtree movement, and available undo
+  records share a native **More** menu. Each action can still be hidden.
 - **Multi-key slots** — off by default; the opt-in slot editor (see Advanced).
 - **Root namespace** — off by default; the opt-in top-level root (see Advanced).
 - **Language** — auto / Korean / English.
