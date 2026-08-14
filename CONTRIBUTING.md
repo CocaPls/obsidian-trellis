@@ -7,8 +7,9 @@ Thanks for your interest in improving Trellis!
 Requirements: Node.js 18+ (CI uses 20).
 
 ```bash
-npm install     # install dependencies
+npm ci          # install the locked dependencies
 npm run dev     # watch build for development
+npm run lint    # official Obsidian + TypeScript lint checks
 npm run build   # type-check + production build
 npm test        # run the unit test suite
 ```
@@ -19,7 +20,8 @@ Point a test vault's `.obsidian/plugins/trellis/` folder at your build output
 ## Pull requests
 
 - Keep changes focused — one topic per pull request.
-- Run `npm run build` and `npm test` before submitting; both must pass.
+- Run `npm run lint`, `npm run build`, and `npm test` before submitting; all
+  three must pass.
 - Match the existing code style: TypeScript, tab indentation, and no hardcoded
   styling (use CSS classes and Obsidian's CSS variables in `styles.css`).
 - Explain what changed and why in the pull request description.

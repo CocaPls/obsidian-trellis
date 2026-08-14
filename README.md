@@ -167,6 +167,16 @@ location tag, pick the one to keep; the rest are removed (undoable).
 
 Requires Obsidian **1.8.7** or newer. Desktop and mobile.
 
+## Privacy and safety
+
+Trellis works locally through Obsidian's public vault APIs. It makes no network
+requests, collects no telemetry, shows no ads, and requires no account. It does
+not access files outside the current vault.
+
+Filename and tag changes can affect many notes, so bulk operations show an exact
+preview before writing and keep rollback or undo information. Keep a normal
+vault backup as you would for any tool that performs bulk edits.
+
 ## Under the hood
 
 A filename is a positional list of slots joined by separators — by default a

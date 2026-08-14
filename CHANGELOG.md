@@ -8,6 +8,29 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
+## 0.4.0 — Safe automation and filename formatting
+
+- **Flexible filename formatting.** Configure the code–title boundary symbol,
+  spacing on either side, and a visible hierarchy separator (`.`, `-`, `_`, or
+  hidden) for each managed tag slot. Every vault-wide formatting change is
+  previewed, collision-checked, rollback-safe, and undoable.
+- **Guarded automation API.** AI tools and scripts can inspect a note, prepare a
+  read-only plan, and apply only that exact plan. Writes are rejected when the
+  note or schema changed after planning, when inline tags conflict, or when
+  another managed write is in progress.
+- **Transactional migrations.** Namespace, root, slot-schema, and bulk tag
+  changes now share stricter validation, serialized writes, rollback reporting,
+  and retryable undo records instead of leaving partial state behind.
+- **Simpler settings and tree controls.** Everyday single-key controls stay
+  prominent while experimental schema tools are collapsed. Tree sorting,
+  import, subtree movement, and undo records share one More menu; the five
+  frequent navigation and creation actions remain directly in the tree header.
+- **Accessibility and review hardening.** Keyboard paths, labels, notices, and
+  rollback results were clarified. Official Obsidian ESLint rules, release
+  metadata checks, and expanded unit coverage now guard the public build.
+- **Documentation refresh.** English and Korean guides now use the simplified
+  terminology and explain previews, safety boundaries, and advanced features.
+
 ## 0.2.0 — Multi-key & bulk UX (experimental)
 
 - **Multi-key slots (advanced mode, experimental)** — a settings toggle exposes

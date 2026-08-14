@@ -1,7 +1,7 @@
 {
 	"name": "trellis-plugin",
-	"version": "0.3.3",
-	"description": "Tag-driven filename sync for Obsidian — mirror a location tag into the filename prefix (tagkey), link-safe.",
+	"version": "0.4.0",
+	"description": "Keep hierarchical tags and filename codes in sync in Obsidian, with a tag-based sidebar tree and link-safe bulk changes.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
@@ -9,6 +9,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "eslint .",
 		"test": "node --test",
+		"verify:release": "node verify-release.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [

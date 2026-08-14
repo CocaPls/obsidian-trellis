@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "*"
+      - "*.*.*"
 
 permissions:
   contents: write
@@ -13,6 +13,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -22,9 +23,15 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run verify:release -- "${GITHUB_REF_NAME}"
+
+      - run: npm run lint
+
       - run: npm run build
 
       - run: npm test
+
+      - run: npm audit --audit-level=high
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
@@ -42,4 +49,5 @@ jobs:
           gh release create "$tag" \
             --title="$tag" \
             --draft \
+            --generate-notes \
             main.js manifest.json styles.css
