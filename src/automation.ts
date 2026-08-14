@@ -25,6 +25,7 @@ export type AutomationErrorCode =
 	| "inline-tag-conflict"
 	| "duplicate-location-tags"
 	| "name-slot-unavailable"
+	| "would-unmanage-note"
 	| "invalid-name"
 	| "target-exists"
 	| "frontmatter-write-failed"
@@ -86,6 +87,10 @@ export interface TrellisChangeRequest {
 	tagChanges?: TagSlotChange[];
 	/** Exact free name-key value. Empty string is allowed for an index note. */
 	nameChange?: string;
+	/** Explicitly allow removing the final managed tag from a schema that has no
+	 * name-key. The current basename is then preserved and the note leaves
+	 * Trellis management. Omitted/false keeps this surprising transition blocked. */
+	allowUnmanaged?: boolean;
 }
 
 export interface TrellisChangePlan {
@@ -317,6 +322,24 @@ export function planNoteChange(
 
 	const current = inspectNoteState(state, schema);
 	const keys = slotTagkeys(nextAllTags, schema);
+	const nextManaged = schema.slots.some(
+		(slot, index) => slot.role === "tag" && keys[index] !== null
+	);
+	if (
+		current.managed &&
+		!schema.slots.some((slot) => slot.role === "name") &&
+		!nextManaged &&
+		!request.allowUnmanaged
+	) {
+		return {
+			ok: false,
+			error: {
+				code: "would-unmanage-note",
+				message:
+					"Removing the final managed tag would leave this no-name-key note unmanaged. Retry with allowUnmanaged to preserve the current filename explicitly.",
+			},
+		};
+	}
 	const name = request.nameChange ?? current.nameKey;
 	const values = schema.slots.map((slot, index) =>
 		slot.role === "name" ? name : keys[index]

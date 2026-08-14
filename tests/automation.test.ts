@@ -105,6 +105,66 @@ test("plan blocks a frontmatter change that conflicts with an inline managed tag
 	assert.equal(result.ok ? "ok" : result.error.code, "inline-tag-conflict");
 });
 
+test("no-name schema requires explicit approval before removing the final tag-key", () => {
+	const noName: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "tree" },
+			{ role: "tag", namespace: "project" },
+		],
+		separators: ["-"],
+	};
+	const oneKey: TrellisNoteState = {
+		path: "T01.md",
+		basename: "T01",
+		extension: "md",
+		mtime: 1,
+		allTags: ["#tree/T/01"],
+		frontmatterTags: ["tree/T/01"],
+	};
+	const blocked = planNoteChange(oneKey, noName, {
+		path: oneKey.path,
+		tagChanges: [{ namespace: "tree", tagPath: null }],
+	});
+	assert.equal(blocked.ok ? "ok" : blocked.error.code, "would-unmanage-note");
+
+	const allowed = planNoteChange(oneKey, noName, {
+		path: oneKey.path,
+		tagChanges: [{ namespace: "tree", tagPath: null }],
+		allowUnmanaged: true,
+	});
+	assert.equal(allowed.ok, true);
+	if (!allowed.ok) return;
+	assert.equal(allowed.value.next.basename, "T01");
+	assert.deepEqual(allowed.value.next.frontmatterTags, []);
+	assert.deepEqual(allowed.value.changes, { frontmatter: true, rename: false });
+});
+
+test("no-name schema can remove one tag-key while another remains", () => {
+	const noName: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "tree" },
+			{ role: "tag", namespace: "project" },
+		],
+		separators: ["-"],
+	};
+	const twoKeys: TrellisNoteState = {
+		path: "T01-P02.md",
+		basename: "T01-P02",
+		extension: "md",
+		mtime: 1,
+		allTags: ["#tree/T/01", "#project/P/02"],
+		frontmatterTags: ["tree/T/01", "project/P/02"],
+	};
+	const result = planNoteChange(twoKeys, noName, {
+		path: twoKeys.path,
+		tagChanges: [{ namespace: "project", tagPath: null }],
+	});
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.equal(result.value.next.path, "T01.md");
+	assert.deepEqual(result.value.next.frontmatterTags, ["tree/T/01"]);
+});
+
 test("plan snapshot becomes stale after a note or schema change", () => {
 	const planned = planNoteChange(state, schema, { path: state.path, nameChange: "배" });
 	assert.equal(planned.ok, true);
