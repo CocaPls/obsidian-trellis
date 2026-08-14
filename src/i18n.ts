@@ -111,6 +111,13 @@ const EN: Record<string, string> = {
 	"setting.section.status": "Vault status",
 	"setting.tagsDesc":
 		"Register the Obsidian tag branches Trellis owns. A registered tag can be used in filenames, shown only in the sidebar, or kept hidden from both.",
+	"setting.propertyTagDisplayName": "Managed tag labels in Properties",
+	"setting.propertyTagDisplayDesc":
+		"Visual only. The full Obsidian tag remains stored and is shown on hover.",
+	"propertyTagDisplay.full": "Full path — trellis/bp/N/E/03",
+	"propertyTagDisplay.name": "Trellis tag name — BLUEPRINT",
+	"propertyTagDisplay.nameTerminal": "Name + terminal — BLUEPRINT · 03",
+	"propertyTagDisplay.terminal": "Terminal only — 03",
 	"setting.tagDisplayName": "Display name",
 	"setting.tagDisplayNameDesc":
 		"Human-readable label used in Trellis. The tag namespace remains the stored identity.",
@@ -583,6 +590,13 @@ const KO: Record<string, string> = {
 	"setting.section.status": "볼트 현황",
 	"setting.tagsDesc":
 		"트렐리가 소유할 옵시디언 태그 분기를 등록합니다. 등록한 태그는 파일명에 넣거나, 사이드바에서만 보이거나, 양쪽 모두에서 숨길 수 있습니다.",
+	"setting.propertyTagDisplayName": "속성의 트렐리 태그 표시",
+	"setting.propertyTagDisplayDesc":
+		"화면 표시만 줄입니다. 실제 옵시디언 태그 전체 경로는 그대로 저장되며 마우스를 올리면 확인할 수 있습니다.",
+	"propertyTagDisplay.full": "전체 경로 — trellis/bp/N/E/03",
+	"propertyTagDisplay.name": "트렐리 태그 이름 — BLUEPRINT",
+	"propertyTagDisplay.nameTerminal": "이름 + 말단 — BLUEPRINT · 03",
+	"propertyTagDisplay.terminal": "말단만 — 03",
 	"setting.tagDisplayName": "표시 이름",
 	"setting.tagDisplayNameDesc":
 		"트렐리 화면에서 사람이 읽는 이름입니다. 실제 저장 식별은 태그 네임스페이스가 맡습니다.",

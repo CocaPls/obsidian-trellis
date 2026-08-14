@@ -194,6 +194,7 @@ type TreeViewMode = "notes" | "tags";
 
 /** What a note row shows in nested mode: its filename or its tag segment. */
 type TreeLabelMode = "filename" | "tag";
+type PropertyTagDisplayMode = "full" | "name" | "name-terminal" | "terminal";
 
 interface TrellisSettings {
 	/** Serialized settings model version. */
@@ -221,6 +222,8 @@ interface TrellisSettings {
 	treeTagKeyNamespace: string;
 	/** Definition-stable sidebar exclusions. `relativePath` excludes descendants too. */
 	hiddenTagBranches: HiddenTagBranch[];
+	/** Visual-only label for managed tags in Obsidian's core Properties editor. */
+	propertyTagDisplay: PropertyTagDisplayMode;
 	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
 	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
@@ -266,6 +269,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeLabelMode: "filename",
 	treeTagKeyNamespace: "",
 	hiddenTagBranches: [],
+	propertyTagDisplay: "full",
 	language: "auto",
 };
 
@@ -326,6 +330,7 @@ export default class TrellisPlugin extends Plugin {
 	/** Guarded in-process automation surface. No network, URI, REST, or MCP
 	 * endpoint is opened; callers must already hold this plugin instance. */
 	readonly automation = Object.freeze({
+		describe: () => this.describeAutomationModel(),
 		inspectNote: (path: string) => this.inspectNote(path),
 		planChange: (request: TrellisChangeRequest) => this.planChange(request),
 		applyChange: (plan: TrellisChangePlan) => this.applyChange(plan),
@@ -387,12 +392,18 @@ export default class TrellisPlugin extends Plugin {
 		500,
 		true
 	);
+	private readonly schedulePropertyTagDecoration = debounce(
+		() => this.decoratePropertyTags(),
+		50,
+		true
+	);
 
 	async onload() {
 		await this.loadSettings();
 		setLang(this.settings.language);
 		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
+		this.installPropertyTagDecorator();
 
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
 		// collapsible tree (the read-side counterpart to the rename engine).
@@ -647,6 +658,12 @@ export default class TrellisPlugin extends Plugin {
 						isValidTagPath(value.relativePath)
 				)
 			: [];
+		if (
+			this.settings.propertyTagDisplay !== "full" &&
+			this.settings.propertyTagDisplay !== "name" &&
+			this.settings.propertyTagDisplay !== "name-terminal" &&
+			this.settings.propertyTagDisplay !== "terminal"
+		) this.settings.propertyTagDisplay = "full";
 		const schemaChanged =
 			JSON.stringify(loaded.schema ?? null) !== JSON.stringify(this.settings.schema);
 		if (
@@ -694,6 +711,65 @@ export default class TrellisPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		this.schedulePropertyTagDecoration();
+	}
+
+	private installPropertyTagDecorator() {
+		const observer = new MutationObserver(() => this.schedulePropertyTagDecoration());
+		observer.observe(document.body, { childList: true, subtree: true });
+		this.register(() => observer.disconnect());
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () => this.schedulePropertyTagDecoration())
+		);
+		this.decoratePropertyTags();
+	}
+
+	/** Visual-only decoration. The original full path stays as the actual DOM
+	 * text and editing value; CSS overlays a shorter label, so clicking/removing
+	 * the pill still operates on the unmodified Obsidian tag. */
+	decoratePropertyTags() {
+		const pills = Array.from(
+			document.querySelectorAll<HTMLElement>(
+				'.metadata-property[data-property-key="tags"] .multi-select-pill'
+			)
+		);
+		for (const pill of pills) {
+			pill.classList.remove("trellis-property-tag-pill");
+			pill.style.removeProperty("--trellis-tag-color");
+			const content = pill.querySelector<HTMLElement>(".multi-select-pill-content");
+			if (!content) continue;
+			content.classList.remove("trellis-property-tag-label");
+			delete content.dataset.trellisLabel;
+			content.removeAttribute("title");
+
+			const raw = content.textContent?.trim() ?? "";
+			const match = matchTagKey(raw, this.settings.schema);
+			if (!match?.tagDefinitionId) continue;
+			const definition = tagDefinitionById(this.settings.schema, match.tagDefinitionId);
+			if (!definition) continue;
+			pill.classList.add("trellis-property-tag-pill");
+			if (definition.color) {
+				pill.style.setProperty("--trellis-tag-color", definition.color);
+			}
+			if (this.settings.propertyTagDisplay === "full") continue;
+			const name = definition.name || definition.namespace;
+			const terminal = match.keyPath.split("/").filter(Boolean).pop() ?? name;
+			const label =
+				this.settings.propertyTagDisplay === "name"
+					? name
+					: this.settings.propertyTagDisplay === "name-terminal"
+						? `${name} · ${terminal}`
+						: terminal;
+			content.dataset.trellisLabel = label;
+			content.setAttribute("title", raw);
+			content.classList.add("trellis-property-tag-label");
+		}
+	}
+
+	async setPropertyTagDisplay(mode: PropertyTagDisplayMode) {
+		this.settings.propertyTagDisplay = mode;
+		await this.saveSettings();
+		this.decoratePropertyTags();
 	}
 
 	private currentTagInventory(): TagInventory {
@@ -1030,6 +1106,26 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	/** Read-only, structured note inspection for internal automation. */
+	private describeAutomationModel() {
+		return {
+			settingsVersion: this.settings.settingsVersion,
+			filenameSyncEnabled: this.settings.filenameSyncEnabled,
+			rootNamespace: this.settings.schema.rootNamespace ?? "",
+			tagDefinitions: this.tagDefinitions().map((definition) => ({
+				...definition,
+				fullNamespace: nsPath(this.settings.schema, definition.namespace),
+				valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
+			})),
+			filenameSlots: this.settings.schema.slots.map((slot, index) => ({
+				index,
+				...slot,
+				wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
+			})),
+			separators: [...this.settings.schema.separators],
+			separatorSpacing: [...(this.settings.schema.separatorSpacing ?? [])],
+		};
+	}
+
 	inspectNote(path: string): AutomationResult<TrellisNoteInspection> {
 		const state = this.noteState(path);
 		return state.ok
@@ -1041,7 +1137,10 @@ export default class TrellisPlugin extends Plugin {
 	planChange(request: TrellisChangeRequest): AutomationResult<TrellisChangePlan> {
 		const state = this.noteState(request.path);
 		return state.ok
-			? planNoteChange(state.value, this.settings.schema, request)
+			? planNoteChange(state.value, this.settings.schema, {
+					...request,
+					syncFilename: request.syncFilename ?? this.settings.filenameSyncEnabled,
+				})
 			: state;
 	}
 

@@ -373,3 +373,17 @@ button.trellis-destructive:hover {
 .trellis-tag-accent {
 	color: var(--trellis-tag-color);
 }
+
+.trellis-property-tag-pill {
+	color: var(--trellis-tag-color, var(--text-normal));
+	border-color: color-mix(in srgb, var(--trellis-tag-color, currentColor) 35%, transparent);
+}
+
+.trellis-property-tag-label {
+	font-size: 0;
+}
+
+.trellis-property-tag-label::before {
+	content: attr(data-trellis-label);
+	font-size: var(--font-ui-small);
+}

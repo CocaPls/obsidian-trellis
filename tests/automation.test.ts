@@ -35,7 +35,7 @@ test("inspect exposes managed slots, free name and immutable state", () => {
 	assert.deepEqual(inspected.issues, []);
 });
 
-test("inspect reports filename drift, duplicates and managed inline tags", () => {
+test("inspect reports filename drift and managed inline tags without using inline tags as state", () => {
 	const inspected = inspectNoteState(
 		{
 			...state,
@@ -47,7 +47,7 @@ test("inspect reports filename drift, duplicates and managed inline tags", () =>
 	);
 	assert.deepEqual(
 		inspected.issues.map((issue) => issue.code),
-		["filename-drift", "duplicate-location-tags", "inline-managed-tag"]
+		["filename-drift", "inline-managed-tag"]
 	);
 });
 
@@ -176,4 +176,50 @@ test("plan snapshot becomes stale after a note or schema change", () => {
 	const changedSchema = { ...schema, separators: ["_"] };
 	const staleSchema = validatePlanSnapshot(state, changedSchema, planned.value);
 	assert.equal(staleSchema.ok ? "ok" : staleSchema.error.code, "stale-plan");
+});
+
+test("stable definition ids can change sidebar-only tags without renaming", () => {
+	const normalized: TrellisSchema = {
+		tagDefinitions: [
+			{ id: "place", name: "Place", namespace: "place", sidebarVisible: true },
+			{ id: "state", name: "State", namespace: "state", sidebarVisible: true },
+		],
+		slots: [
+			{ id: "slot-place", role: "tag", tagDefinitionId: "place" },
+			{ id: "slot-name", role: "name" },
+		],
+		separators: ["-"],
+	};
+	const note: TrellisNoteState = {
+		path: "A01-note.md",
+		basename: "A01-note",
+		extension: "md",
+		mtime: 1,
+		allTags: ["#place/A/01", "#state/wip"],
+		frontmatterTags: ["place/A/01", "state/wip"],
+	};
+	const inspected = inspectNoteState(note, normalized);
+	assert.equal(inspected.slots[0].tagDefinitionId, "place");
+	assert.equal(inspected.slots[0].namespace, "place");
+
+	const planned = planNoteChange(note, normalized, {
+		path: note.path,
+		tagChanges: [{ tagDefinitionId: "state", tagPath: "state/done" }],
+	});
+	assert.equal(planned.ok, true);
+	if (!planned.ok) return;
+	assert.equal(planned.value.next.path, note.path);
+	assert.deepEqual(planned.value.next.frontmatterTags, ["place/A/01", "state/done"]);
+});
+
+test("automation can explicitly change a filename-bearing tag without renaming", () => {
+	const result = planNoteChange(state, schema, {
+		path: state.path,
+		tagChanges: [{ namespace: "trel", tagPath: "trel/S/99" }],
+		syncFilename: false,
+	});
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.equal(result.value.next.path, state.path);
+	assert.deepEqual(result.value.changes, { frontmatter: true, rename: false });
 });

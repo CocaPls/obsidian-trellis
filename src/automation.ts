@@ -4,6 +4,7 @@ import {
 	duplicateLocationGroups,
 	extractNameMulti,
 	isValidTagPath,
+	isValidTagSegment,
 	isValidTagSegmentForSlot,
 	nsPath,
 	normalizeTagList,
@@ -11,6 +12,9 @@ import {
 	slotTagkeys,
 	syncedBasenameMulti,
 	matchTagKey,
+	schemaTagDefinitions,
+	tagDefinitionById,
+	slotNamespace,
 } from "./tagkey.ts";
 
 export type AutomationErrorCode =
@@ -61,7 +65,10 @@ export interface InspectionIssue {
 
 export interface InspectedSlot {
 	index: number;
+	slotId?: string;
 	role: "tag" | "name";
+	tagDefinitionId?: string;
+	displayName?: string;
 	namespace?: string;
 	value: string | null;
 }
@@ -76,8 +83,10 @@ export interface TrellisNoteInspection {
 }
 
 export interface TagSlotChange {
-	/** Logical slot namespace from the schema, without a root namespace. */
-	namespace: string;
+	/** Stable managed-tag identity (preferred). */
+	tagDefinitionId?: string;
+	/** Backward-compatible lookup. New callers should use tagDefinitionId. */
+	namespace?: string;
 	/** Full tag path without '#', or null to remove this slot's frontmatter tag. */
 	tagPath: string | null;
 }
@@ -87,6 +96,9 @@ export interface TrellisChangeRequest {
 	tagChanges?: TagSlotChange[];
 	/** Exact free name-key value. Empty string is allowed for an index note. */
 	nameChange?: string;
+	/** False changes frontmatter only. Omitted follows the plugin's global live
+	 * sync setting when called through the public automation surface. */
+	syncFilename?: boolean;
 	/** Explicitly allow removing the final managed tag from a schema that has no
 	 * name-key. The current basename is then preserved and the note leaves
 	 * Trellis management. Omitted/false keeps this surprising transition blocked. */
@@ -147,11 +159,12 @@ export function inspectNoteState(
 	state: TrellisNoteState,
 	schema: TrellisSchema
 ): TrellisNoteInspection {
-	const keys = slotTagkeys(state.allTags, schema);
+	const frontmatterTags = state.frontmatterTags.map((tag) => `#${withoutHash(tag)}`);
+	const keys = slotTagkeys(frontmatterTags, schema);
 	const nameKey = extractNameMulti(state.basename, keys, schema);
 	const expectedBasename =
-		syncedBasenameMulti(state.basename, state.allTags, schema) ?? state.basename;
-	const duplicates = duplicateLocationGroups(state.allTags, schema);
+		syncedBasenameMulti(state.basename, frontmatterTags, schema) ?? state.basename;
+	const duplicates = duplicateLocationGroups(frontmatterTags, schema);
 	const frontmatter = new Set(state.frontmatterTags.map(withoutHash));
 	const inlineManaged = state.allTags
 		.map(withoutHash)
@@ -182,12 +195,21 @@ export function inspectNoteState(
 	}
 	return {
 		state,
-		managed: keys.some((key) => key !== null),
+		managed: frontmatterTags.some((tag) => {
+			const match = matchTagKey(tag, schema);
+			return match !== null && match.keyPath !== "";
+		}),
 		nameKey,
 		slots: schema.slots.map((slot, index) => ({
 			index,
+			slotId: slot.id,
 			role: slot.role,
-			namespace: slot.namespace,
+			tagDefinitionId: slot.role === "tag" ? slot.tagDefinitionId : undefined,
+			displayName:
+				slot.role === "tag"
+					? tagDefinitionById(schema, slot.tagDefinitionId)?.name
+					: undefined,
+			namespace: slot.role === "tag" ? slotNamespace(schema, slot) : undefined,
 			value: slot.role === "name" ? nameKey : keys[index],
 		})),
 		expectedBasename,
@@ -214,6 +236,15 @@ export function planNoteChange(
 		};
 	}
 	if (request.nameChange !== undefined) {
+		if (request.syncFilename === false) {
+			return {
+				ok: false,
+				error: {
+					code: "invalid-request",
+					message: "A name-slot change requires syncFilename to be enabled.",
+				},
+			};
+		}
 		if (!schema.slots.some((slot) => slot.role === "name")) {
 			return {
 				ok: false,
@@ -235,44 +266,57 @@ export function planNoteChange(
 	}
 
 	const changes = request.tagChanges ?? [];
-	const requestedNamespaces = new Set<string>();
+	const requestedDefinitions = new Set<string>();
+	const requestedFullNamespaces = new Set<string>();
 	let nextFrontmatter = normalizeTagList(state.frontmatterTags).map(withoutHash);
 	const inlineTags = state.allTags
 		.map(withoutHash)
 		.filter((tag) => !state.frontmatterTags.map(withoutHash).includes(tag));
 
 	for (const change of changes) {
-		if (requestedNamespaces.has(change.namespace)) {
-			return {
-				ok: false,
-				error: {
-					code: "invalid-request",
-					message: `Namespace '${change.namespace}' is changed more than once.`,
-				},
-			};
-		}
-		requestedNamespaces.add(change.namespace);
-		const slot = schema.slots.find(
-			(candidate) =>
-				candidate.role === "tag" && candidate.namespace === change.namespace
-		);
-		if (!slot) {
+		const definition = change.tagDefinitionId
+			? tagDefinitionById(schema, change.tagDefinitionId)
+			: schemaTagDefinitions(schema).find(
+					(candidate) => candidate.namespace === change.namespace
+				);
+		if (!definition) {
 			return {
 				ok: false,
 				error: {
 					code: "unknown-namespace",
-					message: `No tag slot uses namespace '${change.namespace}'.`,
+					message: `No managed Trellis tag matches '${change.tagDefinitionId ?? change.namespace ?? ""}'.`,
 				},
 			};
 		}
-		const fullNamespace = nsPath(schema, change.namespace);
+		if (requestedDefinitions.has(definition.id)) {
+			return {
+				ok: false,
+				error: {
+					code: "invalid-request",
+					message: `Managed tag '${definition.id}' is changed more than once.`,
+				},
+			};
+		}
+		requestedDefinitions.add(definition.id);
+		const slot = schema.slots.find(
+			(candidate) =>
+				candidate.role === "tag" &&
+				(candidate.tagDefinitionId === definition.id ||
+					(!candidate.tagDefinitionId && candidate.namespace === definition.namespace))
+		);
+		const fullNamespace = nsPath(schema, definition.namespace);
+		requestedFullNamespaces.add(fullNamespace);
 		if (change.tagPath !== null) {
 			const tagPath = withoutHash(change.tagPath);
 			const segments = tagPath.slice(fullNamespace.length + 1).split("/");
 			if (
 				!tagPath.startsWith(`${fullNamespace}/`) ||
 				!isValidTagPath(tagPath) ||
-				segments.some((segment) => !isValidTagSegmentForSlot(segment, slot))
+				segments.some((segment) =>
+					slot
+						? !isValidTagSegmentForSlot(segment, slot)
+						: !isValidTagSegment(segment)
+				)
 			) {
 				return {
 					ok: false,
@@ -291,7 +335,7 @@ export function planNoteChange(
 				ok: false,
 				error: {
 					code: "inline-tag-conflict",
-					message: `Inline tags prevent a safe change in '${change.namespace}'.`,
+					message: `Inline tags prevent a safe change in '${definition.namespace}'.`,
 					details: { tags: conflictingInline },
 				},
 			};
@@ -307,7 +351,7 @@ export function planNoteChange(
 		...new Set([...inlineTags, ...nextFrontmatter].map((tag) => `#${tag}`)),
 	];
 	const unresolvedDuplicates = duplicateLocationGroups(nextAllTags, schema).filter(
-		(group) => !requestedNamespaces.has(group.namespace.split("/").pop() ?? "")
+		(group) => !requestedFullNamespaces.has(group.namespace)
 	);
 	if (unresolvedDuplicates.length > 0) {
 		return {
@@ -322,9 +366,10 @@ export function planNoteChange(
 
 	const current = inspectNoteState(state, schema);
 	const keys = slotTagkeys(nextAllTags, schema);
-	const nextManaged = schema.slots.some(
-		(slot, index) => slot.role === "tag" && keys[index] !== null
-	);
+	const nextManaged = nextAllTags.some((tag) => {
+		const match = matchTagKey(tag, schema);
+		return match !== null && match.keyPath !== "";
+	});
 	if (
 		current.managed &&
 		!schema.slots.some((slot) => slot.role === "name") &&
@@ -344,7 +389,10 @@ export function planNoteChange(
 	const values = schema.slots.map((slot, index) =>
 		slot.role === "name" ? name : keys[index]
 	);
-	const nextBasename = assembleBasenameMulti(values, schema) || state.basename;
+	const nextBasename =
+		request.syncFilename === false
+			? state.basename
+			: assembleBasenameMulti(values, schema) || state.basename;
 	const nextPath = notePath(parentPath(state.path), nextBasename, state.extension);
 	const frontmatterChanged = !sameStrings(state.frontmatterTags, nextFrontmatter);
 	const renameChanged = nextPath !== state.path;
