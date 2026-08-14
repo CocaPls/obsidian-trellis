@@ -14,6 +14,7 @@ import {
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
+	assembleBasenameMulti,
 	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
@@ -101,6 +102,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsCleanups: (() => void)[] = [];
 	private filenameSelection: FilenameSelection | null = null;
 	private activeSection: SettingsSection = "overview";
+	private statusExpanded = false;
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	constructor(app: App, plugin: TrellisPlugin) {
@@ -235,7 +237,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					: t("setting.filenameSyncOff")
 			)
 			.addButton((button) =>
-				button.setButtonText(t("setting.openSettings")).onClick(() => {
+				button.setButtonText(t("setting.configureFilename")).onClick(() => {
 					this.activeSection = "filename";
 					this.render();
 				})
@@ -248,7 +250,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					: t("setting.treeDisabled")
 			)
 			.addButton((button) =>
-				button.setButtonText(t("setting.openSettings")).onClick(() => {
+				button.setButtonText(t("setting.configureViews")).onClick(() => {
 					this.activeSection = "views";
 					this.render();
 				})
@@ -275,8 +277,26 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl).setName(t("setting.section.status")).setHeading();
-		this.renderStats(containerEl);
+		const details = containerEl.createEl("details", {
+			cls: "trellis-settings-details",
+		});
+		details.open = this.statusExpanded;
+		const summary = details.createEl("summary", {
+			cls: "trellis-settings-details-summary",
+		});
+		const copy = summary.createSpan({ cls: "trellis-settings-details-copy" });
+		copy.createSpan({
+			cls: "trellis-settings-details-title",
+			text: t("setting.statusDisclosure"),
+		});
+		copy.createSpan({
+			cls: "trellis-settings-details-desc",
+			text: t("setting.statusDisclosureDesc"),
+		});
+		details.addEventListener("toggle", () => {
+			this.statusExpanded = details.open;
+		});
+		this.renderStats(details);
 	}
 
 	private renderMetric(
@@ -834,6 +854,24 @@ export class TrellisSettingTab extends PluginSettingTab {
 			if (index < schema.slots.length - 1) {
 				this.renderFilenameSequenceGap(sequence, schema, index, selection);
 			}
+		});
+		const exampleParts = schema.slots.map((slot, index) => {
+			if (slot.role === "name") return t("setting.filenameExampleName");
+			const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+			const sample = (definition?.name || definition?.namespace || `TAG${index + 1}`)
+				.trim()
+				.replace(/\s+/g, "");
+			return sample || `TAG${index + 1}`;
+		});
+		const filenameExample = containerEl.createDiv({
+			cls: "trellis-filename-example",
+		});
+		filenameExample.createSpan({
+			cls: "trellis-filename-example-label",
+			text: t("setting.filenameExample"),
+		});
+		filenameExample.createEl("code", {
+			text: assembleBasenameMulti(exampleParts, schema) || "—",
 		});
 
 		const selectedEditor = containerEl.createDiv({

@@ -119,7 +119,8 @@ const EN: Record<string, string> = {
 	"setting.metricCollisions": "Collisions",
 	"setting.overviewFilename": "Filename synchronization",
 	"setting.overviewViews": "Trellis sidebar",
-	"setting.openSettings": "Configure",
+	"setting.configureFilename": "Filename settings",
+	"setting.configureViews": "View settings",
 	"setting.treeEnabled": "The Trellis sidebar is enabled.",
 	"setting.treeDisabled": "The Trellis sidebar is disabled.",
 	"setting.section.general": "Basics",
@@ -138,9 +139,9 @@ const EN: Record<string, string> = {
 	"setting.tagAdvancedDesc": "Color, value suggestions, and removal.",
 	"setting.slotFormatting": "Display format",
 	"setting.slotFormattingDesc": "Hierarchy separator and optional wrapping.",
-	"setting.statusDisclosure": "Live vault status",
+	"setting.statusDisclosure": "Detailed vault status",
 	"setting.statusDisclosureDesc":
-		"Check managed tags and filename issues.",
+		"See aggregate counts and per-tag diagnostics.",
 	"setting.propertyTagDisplayName": "Tag labels in Properties",
 	"setting.propertyTagDisplayDesc":
 		"Changes only how labels look. Stored tags stay unchanged.",
@@ -197,6 +198,8 @@ const EN: Record<string, string> = {
 	"valueRule.example": "Example",
 	"setting.filenameStructureDesc":
 		"Arrange filename parts from left to right.",
+	"setting.filenameExample": "Example filename",
+	"setting.filenameExampleName": "note-title",
 	"setting.filenameSyncName": "Update filenames when tags change",
 	"setting.filenameSyncOn":
 		"When a tag changes, its filename changes too.",
@@ -625,7 +628,8 @@ const KO: Record<string, string> = {
 	"setting.metricCollisions": "충돌",
 	"setting.overviewFilename": "파일명 동기화",
 	"setting.overviewViews": "Trellis 사이드바",
-	"setting.openSettings": "설정",
+	"setting.configureFilename": "파일명 설정",
+	"setting.configureViews": "보기 설정",
 	"setting.treeEnabled": "Trellis 사이드바가 켜져 있습니다.",
 	"setting.treeDisabled": "Trellis 사이드바가 꺼져 있습니다.",
 	"setting.section.general": "기본",
@@ -644,9 +648,9 @@ const KO: Record<string, string> = {
 	"setting.tagAdvancedDesc": "색상, 값 제안, 삭제를 설정합니다.",
 	"setting.slotFormatting": "표시 형식",
 	"setting.slotFormattingDesc": "계층 기호와 선택적 감싸기를 설정합니다.",
-	"setting.statusDisclosure": "현재 볼트 현황",
+	"setting.statusDisclosure": "세부 볼트 현황",
 	"setting.statusDisclosureDesc":
-		"관리 태그와 파일명 문제를 확인합니다.",
+		"전체 집계와 태그별 진단을 확인합니다.",
 	"setting.propertyTagDisplayName": "속성의 태그 표시",
 	"setting.propertyTagDisplayDesc":
 		"보이는 모양만 바꿉니다. 저장된 태그는 그대로 유지됩니다.",
@@ -703,6 +707,8 @@ const KO: Record<string, string> = {
 	"valueRule.example": "예시",
 	"setting.filenameStructureDesc":
 		"파일명에 들어갈 항목을 왼쪽부터 순서대로 정합니다.",
+	"setting.filenameExample": "파일명 예시",
+	"setting.filenameExampleName": "노트제목",
 	"setting.filenameSyncName": "태그 변경 시 파일명 자동 변경",
 	"setting.filenameSyncOn":
 		"태그가 바뀌면 파일명도 함께 바꿉니다.",
