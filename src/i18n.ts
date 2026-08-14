@@ -63,6 +63,8 @@ const EN: Record<string, string> = {
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "rename failed for {name}",
 	"notice.renameCollision": "skipped {name}: target \"{target}\" already exists",
+	"notice.filenameNotPortable":
+		'skipped "{name}": the filename is not portable across supported devices',
 	"notice.noTagkey": "could not derive a filename code (check the location tag)",
 	"notice.exists": '"{base}" already exists',
 	"notice.createFailed": 'failed to create "{base}"',
@@ -396,6 +398,8 @@ const KO: Record<string, string> = {
 	"notice.renamed": "{from} → {to}",
 	"notice.renameFailed": "{name} 이름 변경 실패",
 	"notice.renameCollision": "{name} 건너뜀: 대상 \"{target}\" 이(가) 이미 있습니다",
+	"notice.filenameNotPortable":
+		'"{name}" 건너뜀: 지원 기기 간에 호환되지 않는 파일명입니다',
 	"notice.noTagkey": "파일명 코드를 읽을 수 없습니다 (위치 태그 확인)",
 	"notice.exists": '"{base}" 이(가) 이미 있습니다',
 	"notice.createFailed": '"{base}" 생성 실패',

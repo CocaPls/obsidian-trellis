@@ -7,6 +7,7 @@ import {
 	isValidTagSegmentForSlot,
 	nsPath,
 	normalizeTagList,
+	portableBasenameIssue,
 	slotTagkeys,
 	syncedBasenameMulti,
 	tagNamespaces,
@@ -329,6 +330,17 @@ export function planNoteChange(
 	const nextPath = notePath(parentPath(state.path), nextBasename, state.extension);
 	const frontmatterChanged = !sameStrings(state.frontmatterTags, nextFrontmatter);
 	const renameChanged = nextPath !== state.path;
+	const filenameIssue = renameChanged ? portableBasenameIssue(nextBasename) : null;
+	if (filenameIssue) {
+		return {
+			ok: false,
+			error: {
+				code: "invalid-name",
+				message: "The planned filename is not portable across supported platforms.",
+				details: { basename: nextBasename, issue: filenameIssue },
+			},
+		};
+	}
 	return {
 		ok: true,
 		value: {

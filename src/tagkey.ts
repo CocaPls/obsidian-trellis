@@ -505,6 +505,29 @@ export function isValidTagPath(path: string): boolean {
 	return segs.every(isValidTagSegment);
 }
 
+export type PortableBasenameIssue =
+	| "empty"
+	| "reserved-character"
+	| "trailing-dot-or-space"
+	| "reserved-name";
+
+/**
+ * Cross-platform filename guard for basenames Trellis is about to create or
+ * rename. Obsidian can run on filesystems with different rules, so accepting
+ * what happens to work on the current device can create a vault that later
+ * fails to sync to Windows. This intentionally uses the strict common subset:
+ * Windows-illegal/control characters, terminal dots/spaces, and device names.
+ */
+export function portableBasenameIssue(basename: string): PortableBasenameIssue | null {
+	if (basename === "" || basename === "." || basename === "..") return "empty";
+	if ([...basename].some((char) => char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char)))
+		return "reserved-character";
+	if (/[. ]$/.test(basename)) return "trailing-dot-or-space";
+	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9]|conin\$|conout\$)(\..*)?$/i.test(basename))
+		return "reserved-name";
+	return null;
+}
+
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
 export function tagToTagkeyNs(
 	tag: string,

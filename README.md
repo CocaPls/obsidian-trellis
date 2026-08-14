@@ -67,6 +67,10 @@ put them in `your-vault/.obsidian/plugins/trellis/`, and enable the plugin.
 6. Review every bulk preview before applying it; completed operations retain an
    undo record where supported.
 
+The configured namespace is active immediately. Use a namespace that is not
+already assigned to unrelated tags: every descendant tag under it is
+intentionally treated as a managed location.
+
 ## Advanced features
 
 Advanced filename features are opt-in and stay collapsed in settings. The

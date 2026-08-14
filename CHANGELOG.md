@@ -8,6 +8,14 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
+## Unreleased
+
+- Reject generated filenames that would fail on another supported platform,
+  including Windows device names and terminal dots or spaces, while preserving
+  the original note.
+- Run the normal CI checks on both Ubuntu and Windows, and clarify that every
+  descendant tag under the configured namespace is managed immediately.
+
 ## 0.4.1 — Tree view hot-update repair
 
 - Recreate an already-open Trellis sidebar view when Obsidian hot-updates the

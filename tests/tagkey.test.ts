@@ -40,6 +40,7 @@ import {
 	primarySeparatorSymbol,
 	separatorConflicts,
 	schemaMigratedName,
+	portableBasenameIssue,
 } from "../src/tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -960,4 +961,19 @@ test("isValidTagPath: slash-joined valid segments, no empty levels", () => {
 	assert.equal(isValidTagPath("trel//S88"), false); // empty middle level
 	assert.equal(isValidTagPath("trel/S 88"), false); // bad char in a segment
 	assert.equal(isValidTagPath("trel/S88]"), false);
+});
+
+test("portableBasenameIssue enforces the cross-platform filename subset", () => {
+	for (const name of ["S88-사과", "S.88-note", "S88-CON", "COM10", "한글 문서"]) {
+		assert.equal(portableBasenameIssue(name), null, name);
+	}
+	assert.equal(portableBasenameIssue(""), "empty");
+	assert.equal(portableBasenameIssue("."), "empty");
+	assert.equal(portableBasenameIssue("bad:name"), "reserved-character");
+	assert.equal(portableBasenameIssue("bad\u0001name"), "reserved-character");
+	assert.equal(portableBasenameIssue("note."), "trailing-dot-or-space");
+	assert.equal(portableBasenameIssue("note "), "trailing-dot-or-space");
+	for (const name of ["CON", "con.txt", "PRN", "AUX", "NUL", "COM1", "LPT9", "CONOUT$"]) {
+		assert.equal(portableBasenameIssue(name), "reserved-name", name);
+	}
 });

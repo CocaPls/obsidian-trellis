@@ -45,6 +45,7 @@ import {
 	tagNamespaces,
 	separatorConflicts,
 	schemaMigratedName,
+	portableBasenameIssue,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -311,6 +312,9 @@ export default class TrellisPlugin extends Plugin {
 	 *  a collision Notice on every edit of a still-colliding file. Cleared once
 	 *  the file syncs cleanly (collision resolved). */
 	private collisionWarned = new Set<string>();
+	/** Files already warned about a generated basename that is legal locally but
+	 *  unsafe on another supported filesystem (notably Windows). */
+	private portabilityWarned = new Set<string>();
 	/** Suppress normal filename sync while separator migration owns renames. */
 	private separatorMigrationRunning = false;
 	/** A bulk pass (bootstrap / separator change / cascade) is running: suppress
@@ -444,6 +448,7 @@ export default class TrellisPlugin extends Plugin {
 			this.app.vault.on("rename", (file, oldPath) => {
 				this.multiWarned.delete(oldPath); // stale warning key at the old path
 				this.collisionWarned.delete(oldPath);
+				this.portabilityWarned.delete(oldPath);
 				if (file instanceof TFile && file.extension === "md") {
 					// Bulk/AI transactions own and record their own final paths. Ordinary
 					// user renames (including the live-sync correction they trigger) must
@@ -465,6 +470,7 @@ export default class TrellisPlugin extends Plugin {
 			this.app.vault.on("delete", (file) => {
 				this.multiWarned.delete(file.path); // drop warning key for a gone file
 				this.collisionWarned.delete(file.path);
+				this.portabilityWarned.delete(file.path);
 				this.scheduleTreeRefresh();
 			})
 		);
@@ -988,8 +994,27 @@ export default class TrellisPlugin extends Plugin {
 		if (newBasename === null) {
 			// Already in sync — a previously reported collision (if any) is over.
 			this.collisionWarned.delete(file.path);
+			this.portabilityWarned.delete(file.path);
 			return;
 		}
+		const portabilityIssue = portableBasenameIssue(newBasename);
+		if (portabilityIssue) {
+			if (!this.portabilityWarned.has(file.path)) {
+				this.portabilityWarned.add(file.path);
+				if (!this.bulkActive) {
+					new Notice(t("notice.filenameNotPortable", { name: newBasename }));
+				}
+				console.warn(
+					"TRELLIS: cross-platform filename guard, skipping",
+					file.path,
+					"→",
+					newBasename,
+					portabilityIssue
+				);
+			}
+			return;
+		}
+		this.portabilityWarned.delete(file.path);
 
 		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
@@ -1258,6 +1283,10 @@ export default class TrellisPlugin extends Plugin {
 			i === idx ? tagkey : s.role === "name" ? safeTitle : null
 		);
 		const base = assembleBasenameMulti(values, schema);
+		if (portableBasenameIssue(base)) {
+			new Notice(t("notice.filenameNotPortable", { name: base }));
+			return;
+		}
 
 		const path = normalizePath(`${base}.md`);
 		if (this.app.vault.getAbstractFileByPath(path)) {
@@ -2231,6 +2260,25 @@ export default class TrellisPlugin extends Plugin {
 	/** Rename a file with the infinite-loop guard set, so our own rename's
 	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
 	private async renameGuarded(file: TFile, newPath: string): Promise<boolean> {
+		const filename = newPath.split("/").pop() ?? "";
+		const extension = `.${file.extension}`;
+		const basename = filename.endsWith(extension)
+			? filename.slice(0, -extension.length)
+			: filename;
+		const portabilityIssue = portableBasenameIssue(basename);
+		if (portabilityIssue) {
+			console.warn(
+				"TRELLIS: cross-platform filename guard, skipping",
+				file.path,
+				"→",
+				newPath,
+				portabilityIssue
+			);
+			if (!this.bulkActive) {
+				new Notice(t("notice.filenameNotPortable", { name: basename }));
+			}
+			return false;
+		}
 		// Collision guard: refuse to rename onto a different existing file so a
 		// separator migration / undo can never clobber an unrelated note.
 		const existing = this.app.vault.getAbstractFileByPath(newPath);

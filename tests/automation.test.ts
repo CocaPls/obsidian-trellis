@@ -83,6 +83,11 @@ test("plan rejects unknown namespaces, ambiguous segments and unsafe names", () 
 		nameChange: "bad/name",
 	});
 	assert.equal(badName.ok ? "ok" : badName.error.code, "invalid-name");
+	const windowsUnsafe = planNoteChange(state, schema, {
+		path: state.path,
+		nameChange: "배.",
+	});
+	assert.equal(windowsUnsafe.ok ? "ok" : windowsUnsafe.error.code, "invalid-name");
 });
 
 test("plan blocks a frontmatter change that conflicts with an inline managed tag", () => {
