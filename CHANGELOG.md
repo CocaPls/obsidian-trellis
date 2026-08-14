@@ -13,6 +13,8 @@ development milestones; `0.1.0` is the first public release.
 - Recreate an already-open Trellis sidebar view when Obsidian hot-updates the
   plugin and leaves that tab as an unknown view, avoiding an app restart or
   manual tab repair after upgrading.
+- Reorganize source, tests, and release scripts into focused directories and
+  document the guarded in-process automation surface in English and Korean.
 
 ## 0.4.0 — Safe automation and filename formatting
 
@@ -36,6 +38,48 @@ development milestones; `0.1.0` is the first public release.
   metadata checks, and expanded unit coverage now guard the public build.
 - **Documentation refresh.** English and Korean guides now use the simplified
   terminology and explain previews, safety boundaries, and advanced features.
+
+## 0.3.3 — Public-repository and review hardening
+
+- Rewrote the English and Korean guides around the stable 0.3 feature set and
+  standardized the public name as Trellis.
+- Built new-note frontmatter through Obsidian's API instead of raw YAML and
+  resolved review findings in tree and CSS code.
+- Added contributor guidance and a tag-triggered draft-release workflow with
+  build provenance.
+
+## 0.3.2 — Nested tags, root namespace, and ID presets
+
+- Promoted the 0.3 line to stable with opt-in nested tag view, shared root
+  namespace migrations, and per-slot segment presets.
+- Added strict new-note tag/segment validation with Unicode support and retained
+  root undo records when an undo is cancelled.
+- Required Obsidian 1.8.7 or newer; default single-key behavior stayed unchanged.
+
+## 0.3.1 — Experimental 0.3 line with review cleanup
+
+- Combined the experimental 0.3 features with the 0.2.2 compatibility and lint
+  cleanup. This prerelease was superseded by stable 0.3.2.
+
+## 0.3.0 — Experimental nested-tree feature set
+
+- Introduced opt-in nested tag view, shared root namespace migrations, and ID
+  segment presets on the experimental branch.
+- This snapshot predates the 0.2.2 review cleanup and is retained for history;
+  use a later release.
+
+## 0.2.2 — Compatibility and lint cleanup
+
+- Removed remaining version-gated or deprecated UI paths, used CSS classes for
+  destructive actions, and switched locale detection to Obsidian's official API.
+- Raised the minimum supported Obsidian version to 1.8.7 without changing sync,
+  tree, cascade, import, or separator behavior.
+
+## 0.2.1 — Settings UX and polish
+
+- Added staged advanced-setting apply, inline schema validation, and a read-only
+  managed-note and active-namespace summary.
+- Restored robust language fallback and removed deprecated styling helpers.
 
 ## 0.2.0 — Multi-key & bulk UX (experimental)
 
