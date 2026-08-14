@@ -2,7 +2,7 @@
 
 [한국어](automation.ko.md)
 
-Trellis 0.4 exposes an experimental, in-process surface for an AI tool or script
+Trellis 0.5 exposes an experimental, in-process surface for an AI tool or script
 that already has access to the running Obsidian app. It is designed for one
 reviewable note change at a time:
 
@@ -30,6 +30,13 @@ const automation = trellis.automation;
 If either value is missing, Trellis is not installed, enabled, or loaded. Do not
 reach into private plugin methods; use only the frozen `automation` object.
 
+Read the current stable IDs and filename structure before planning:
+
+```js
+const model = automation.describe();
+console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled);
+```
+
 ## 1. Inspect
 
 Inspection is read-only:
@@ -51,14 +58,14 @@ tags.
 
 ## 2. Plan
 
-Planning is also read-only. A tag change names the logical slot namespace and
-the complete desired tag path without `#`:
+Planning is also read-only. Prefer the stable managed-tag definition ID returned
+by `describe()`, plus the complete desired tag path without `#`:
 
 ```js
 const planned = automation.planChange({
   path: "Projects/S88B07-meeting-notes.md",
   tagChanges: [
-    { namespace: "trel", tagPath: "trel/S88/B99" },
+    { tagDefinitionId: "tag-trel", tagPath: "trel/S88/B99" },
   ],
   nameChange: "meeting-notes",
 });
@@ -68,11 +75,14 @@ if (planned.ok) console.log(planned.value);
 
 - Omit `tagChanges` or `nameChange` when that part should stay unchanged.
 - Use `tagPath: null` to remove the frontmatter tag for that slot.
+- Set `syncFilename: false` for a reviewed frontmatter-only change. When omitted
+  through the plugin surface, the current global filename-sync setting applies.
 - In a schema without a name-key, removing the final managed tag would leave
   the note unmanaged. Trellis returns `would-unmanage-note` unless the reviewed
   request explicitly sets `allowUnmanaged: true`; the current filename is then
   preserved.
-- `namespace` is the slot namespace (`trel`), not an optional shared root.
+- `namespace` remains as a compatibility lookup, but stable
+  `tagDefinitionId` is preferred and also supports sidebar-only Trellis tags.
 - `tagPath` must include the configured root when one exists, for example
   `zettel/trel/S88/B99`.
 - An empty `nameChange` is allowed for an index note.
@@ -106,7 +116,7 @@ request and rejects modified output.
 - Apply rechecks path, filename, modification time, frontmatter tags, and the
   complete Trellis schema.
 - A note or schema change after planning returns `stale-plan` without writing.
-- Unknown namespaces, irreversible tag paths, illegal filename characters,
+- Unknown definition IDs/namespaces, irreversible tag paths, illegal filename characters,
   duplicate managed locations, inline managed-tag conflicts, and target-path
   collisions are rejected.
 - Frontmatter is written through Obsidian's API and renames use Obsidian's

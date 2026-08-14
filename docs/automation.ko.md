@@ -2,7 +2,7 @@
 
 [English](automation.md)
 
-Trellis 0.4는 실행 중인 Obsidian 앱에 이미 접근할 수 있는 AI 도구나 스크립트를
+Trellis 0.5는 실행 중인 Obsidian 앱에 이미 접근할 수 있는 AI 도구나 스크립트를
 위해 실험적인 프로세스 내부 표면을 제공합니다. 한 번에 검토 가능한 노트 하나를
 바꾸도록 설계했습니다.
 
@@ -30,6 +30,13 @@ const automation = trellis.automation;
 두 값 중 하나가 없다면 Trellis가 설치·활성화·로드되지 않은 상태입니다. 플러그인의
 private method에 직접 접근하지 말고 동결된 `automation` 객체만 사용하세요.
 
+계획 전에 현재의 안정 ID와 파일명 구조를 읽습니다.
+
+```js
+const model = automation.describe();
+console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled);
+```
+
 ## 1. 검사
 
 검사는 읽기 전용입니다.
@@ -50,14 +57,14 @@ if (!inspected.ok) {
 
 ## 2. 계획
 
-계획도 읽기 전용입니다. 태그 변경은 논리적 슬롯 네임스페이스와 `#` 없는 전체
-목표 태그 경로를 지정합니다.
+계획도 읽기 전용입니다. `describe()`가 반환한 안정적인 관리 태그 정의 ID와 `#`
+없는 전체 목표 태그 경로를 우선 사용합니다.
 
 ```js
 const planned = automation.planChange({
   path: "Projects/S88B07-회의록.md",
   tagChanges: [
-    { namespace: "trel", tagPath: "trel/S88/B99" },
+    { tagDefinitionId: "tag-trel", tagPath: "trel/S88/B99" },
   ],
   nameChange: "회의록",
 });
@@ -67,10 +74,13 @@ if (planned.ok) console.log(planned.value);
 
 - 유지할 부분은 `tagChanges`나 `nameChange`를 생략합니다.
 - 해당 슬롯의 frontmatter 태그를 제거하려면 `tagPath: null`을 사용합니다.
+- 검토한 태그 전용 변경은 `syncFilename: false`를 지정합니다. 플러그인 표면에서
+  생략하면 현재 전역 파일명 동기화 설정을 따릅니다.
 - 네임키 없는 스키마에서 마지막 관리 태그를 제거하면 노트가 트렐리 관리 밖으로
   나갑니다. 검토한 요청에 `allowUnmanaged: true`를 명시하지 않으면
   `would-unmanage-note`로 차단하며, 명시한 경우 현재 파일명을 보존합니다.
-- `namespace`는 선택형 공통 루트가 아니라 슬롯 네임스페이스(`trel`)입니다.
+- `namespace`도 호환 조회용으로 남지만 안정적인 `tagDefinitionId`를 권장합니다.
+  ID 방식은 파일명 슬롯이 없는 사이드바 전용 트렐리 태그도 바꿀 수 있습니다.
 - 루트가 설정돼 있다면 `tagPath`에는 `zettel/trel/S88/B99`처럼 루트까지
   포함합니다.
 - 인덱스 노트는 빈 `nameChange`도 허용됩니다.
@@ -104,7 +114,7 @@ if (!applied.ok) {
 - 적용 직전에 경로·파일명·수정 시각·frontmatter 태그·전체 Trellis schema를
   다시 확인합니다.
 - 계획 이후 노트나 schema가 바뀌면 쓰지 않고 `stale-plan`을 반환합니다.
-- 알 수 없는 네임스페이스, 역변환 불가능한 태그 경로, 파일명 금지 문자, 관리
+- 알 수 없는 정의 ID/네임스페이스, 역변환 불가능한 태그 경로, 파일명 금지 문자, 관리
   위치 중복, 관리 inline 태그 충돌, 목표 경로 충돌을 거부합니다.
 - frontmatter는 Obsidian API로 쓰고 이름변경은 링크 안전 file manager를
   사용합니다.

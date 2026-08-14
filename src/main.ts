@@ -398,13 +398,14 @@ export default class TrellisPlugin extends Plugin {
 		50,
 		true
 	);
+	private readonly propertyTagObservers = new Map<HTMLElement, MutationObserver>();
 
 	async onload() {
 		await this.loadSettings();
 		setLang(this.settings.language);
 		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
-		this.installPropertyTagDecorator();
+		this.app.workspace.onLayoutReady(() => this.installPropertyTagDecorator());
 
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
 		// collapsible tree (the read-side counterpart to the rename engine).
@@ -716,22 +717,46 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	private installPropertyTagDecorator() {
-		const observer = new MutationObserver(() => this.schedulePropertyTagDecoration());
-		observer.observe(document.body, { childList: true, subtree: true });
-		this.register(() => observer.disconnect());
+		this.syncPropertyTagObservers();
 		this.registerEvent(
-			this.app.workspace.on("layout-change", () => this.schedulePropertyTagDecoration())
+			this.app.workspace.on("layout-change", () => {
+				this.syncPropertyTagObservers();
+				this.schedulePropertyTagDecoration();
+			})
 		);
+		this.register(() => {
+			for (const observer of this.propertyTagObservers.values()) observer.disconnect();
+			this.propertyTagObservers.clear();
+		});
 		this.decoratePropertyTags();
+	}
+
+	private syncPropertyTagObservers() {
+		const containers = new Set(
+			this.app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view.containerEl)
+		);
+		for (const [container, observer] of this.propertyTagObservers) {
+			if (containers.has(container)) continue;
+			observer.disconnect();
+			this.propertyTagObservers.delete(container);
+		}
+		for (const container of containers) {
+			if (this.propertyTagObservers.has(container)) continue;
+			const observer = new MutationObserver(() => this.schedulePropertyTagDecoration());
+			observer.observe(container, { childList: true, subtree: true });
+			this.propertyTagObservers.set(container, observer);
+		}
 	}
 
 	/** Visual-only decoration. The original full path stays as the actual DOM
 	 * text and editing value; CSS overlays a shorter label, so clicking/removing
 	 * the pill still operates on the unmodified Obsidian tag. */
 	decoratePropertyTags() {
-		const pills = Array.from(
-			document.querySelectorAll<HTMLElement>(
-				'.metadata-property[data-property-key="tags"] .multi-select-pill'
+		const pills = this.app.workspace.getLeavesOfType("markdown").flatMap((leaf) =>
+			Array.from(
+				leaf.view.containerEl.querySelectorAll<HTMLElement>(
+					'.metadata-property[data-property-key="tags"] .multi-select-pill'
+				)
 			)
 		);
 		for (const pill of pills) {

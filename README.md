@@ -5,9 +5,10 @@
 [![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
 · [Community plugin page](https://community.obsidian.md/plugins/trellis)
 
-Trellis keeps a hierarchical **location tag** as the source of truth for a note
-and mirrors it into the note's **filename code**. Move a note in the tag tree and
-its filename follows through Obsidian's link-safe rename.
+Trellis registers hierarchical **managed tags** for a note and can mirror any
+of them into configurable **filename slots**. Move a note in the tag tree and,
+when filename sync is enabled, its filename follows through Obsidian's link-safe
+rename.
 
 ```text
 tag  #trel/S88/B07  →  file  S88B07-meeting-notes.md
@@ -36,16 +37,19 @@ code by hand and Trellis restores it from the tag on the next sync.
 
 ## Highlights
 
-- **Filename sync** through Obsidian's link-safe rename, with duplicate-location
-  detection when a note carries more than one managed tag.
+- **Pauseable filename sync** through Obsidian's link-safe rename, with an exact
+  drift preview before resuming and duplicate/collision guards.
 - **Sidebar tree** built from tags rather than folders, with note and tag modes,
-  new-note creation, current-note reveal, and collapse controls.
+  new-note creation, current-note reveal, collapse controls, branch visibility,
+  and per-managed-tag colors.
 - **Subtree moves** that preview and migrate a location and every descendant,
   including filenames and wikilinks, with rollback and undo.
 - **Existing-vault import** that derives tags from filename codes for a selected
   vault, folder, or note scope, with dry run, progress controls, and undo.
-- **Safe formatting changes** for the code–title symbol, surrounding spacing,
-  code position, and visible hierarchy (`S88B07`, `S.88.B.07`, and more).
+- **Safe filename structures** with sparse tag/name slots, gap spacing, custom
+  portable separators, hierarchy display, and optional slot wrappers.
+- **Managed-tag registry and inventory** independent from filename projection,
+  including sidebar-only tags, combinations, drift, and collision reporting.
 - **Korean and English UI**, following Obsidian's language by default.
 
 ## Install
@@ -71,10 +75,10 @@ The configured namespace is active immediately. Use a namespace that is not
 already assigned to unrelated tags: every descendant tag under it is
 intentionally treated as a managed location.
 
-## Advanced features
+## Flexible filename structures
 
-Advanced filename features are opt-in and stay collapsed in settings. The
-single-code path remains the default.
+The single-code path remains the default, but the same staged editor can model
+multiple optional projections without switching to a separate advanced mode.
 
 - **Multi-key slots** combine more than one managed namespace with one free title:
 
@@ -82,21 +86,25 @@ single-code path remains the default.
   #trel/AA/01 + #area/BB/02  →  AA01-my-note--BB02
   ```
 
-  Each tag slot has its own namespace and hierarchy display. Applying a schema
-  change requires a preview; ambiguous or orphaning layouts are rejected.
-  The name-key is optional. With a global `[A]-[B]-[C]` schema, each note may
-  carry only the tag-keys it needs: `A`, `A-B`, `A-C`, and `B-C` coexist while
+  Each tag slot has its own registered source, hierarchy display, and optional
+  wrapper. Applying a structure change requires a preview; ambiguous or
+  colliding layouts are rejected. The name slot is optional. With a global
+  `[A]-[B]-[C]` structure, each note may carry only the tags it needs: `A`,
+  `A-B`, `A-C`, and `B-C` coexist while
   omitted slots and their separators collapse automatically. Removing the
-  name-key shows an explicit free-name loss warning, and exact filename
+  name slot shows an explicit free-name loss warning, and exact filename
   collisions block the schema change.
 - **Root namespace** places every managed tag below a shared root such as
   `#zettel/trel/...` without adding that root to filenames. Changes are migrated
   behind confirmation and are undoable.
-- **Segment presets** can suggest the next sequence number, date, Zettelkasten
-  timestamp, or alternating letter/number segment when creating a note.
+- **Value suggestions** can follow a configurable sequence, date, local/UTC
+  timestamp, or alternating alphabet/number pattern when creating a note.
 
-Filename sync, the nested tag tree, and subtree moves recognize every configured
-tag-key. The classic notes-only tree lets you choose one tag-key as its axis.
+Filename sync, the nested tag tree, and subtree moves recognize every registered
+Trellis tag. A definition can be filename-bearing, sidebar-only, or hidden from
+the sidebar. The classic notes-only tree lets you choose one visible tag as its axis.
+Subtree moves may also transfer a reviewed branch between definitions, which
+supports deliberate hierarchy split/merge workflows.
 Import existing filenames still reads the primary outer code because arbitrary
 multi-key filenames are not always reversibly parseable without their tags.
 
@@ -118,11 +126,10 @@ multi-key filenames are not always reversibly parseable without their tags.
 
 ![Settings tab](screenshots/settings.png)
 
-The everyday controls cover the managed location namespace, filename-code
-format, tree behavior, visible header actions, language, and a live per-tag-key
-note count, active tag-key combinations, and filename collisions. Multi-key
-slots, root namespaces, and segment presets remain in the
-collapsed experimental section.
+The settings cover registered Trellis tags, filename synchronization and slot
+structure, tree behavior, compact Properties labels, visible header actions,
+language, and a live per-definition inventory with combinations, drift, and
+filename collisions.
 
 Vault-wide setting changes are staged first. Trellis shows the exact affected
 files, checks collisions and parse ambiguity, then applies through Obsidian's
@@ -130,8 +137,8 @@ rename API. A cancel or failure rolls the transaction back.
 
 ## Automation for AI and scripts
 
-Trellis exposes an experimental, in-process `inspectNote → planChange →
-applyChange` surface for tools that already run inside Obsidian. It opens no
+Trellis exposes an experimental, in-process `describe / inspectNote → planChange
+→ applyChange` surface for tools that already run inside Obsidian. It opens no
 network, REST, URI, or MCP endpoint. Plans are rejected if the note or schema
 changed after inspection.
 
@@ -151,7 +158,7 @@ a normal vault backup as you would for any bulk-editing tool.
 
 ## Development
 
-The pure filename and schema logic lives in [`src/tagkey.ts`](src/tagkey.ts);
+The pure filename-structure logic lives in [`src/tagkey.ts`](src/tagkey.ts);
 [`src/main.ts`](src/main.ts) connects it to Obsidian. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the local build, tests, and contribution
 workflow.

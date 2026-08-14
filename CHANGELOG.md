@@ -10,23 +10,32 @@ development milestones; `0.1.0` is the first public release.
 
 ## Unreleased
 
-- Classify ordinary tags and every configured tag-key through one root-aware
-  matcher instead of treating the first tag-key as the global managed axis.
-- Allow subtree moves in any managed tag-key namespace while keeping moves
-  between tag-keys and ordinary-tag rewrites outside the command's scope.
-- Show a live, per-tag-key vault inventory in settings while that tab is open,
-  including duplicate, inline-only, and namespace-node counts.
-- Let the classic notes-only tree choose one tag-key as its axis; the nested tag
-  tree continues to show every configured tag-key. Reverse import remains tied
-  to the primary outer filename code because arbitrary multi-key filenames are
-  not always reversibly parseable.
-- Keep sparse no-name schemas explicit and safe: omitted tag-key slots collapse
-  with their separators, automation requires approval before the final managed
-  tag is removed, and dropping the name-key warns about free-name loss.
-- Report live tag-key combination usage and prospective filename collisions;
-  block a schema edit before it can create an exact-path collision.
-- Offer the middle dot (`·`) as a first-class slot-boundary preset while keeping
-  uncommon safe symbols available through the existing custom separator input.
+## 0.5.0 — Managed tags and filename structures
+
+- Separate registered **Trellis tags** from their optional filename slots. Each
+  definition and slot has a stable internal ID; legacy settings migrate without
+  changing existing filenames.
+- Replace the experimental/simple split with one staged filename-structure
+  editor: sparse tag/name slots, per-gap symbols and spacing, per-tag hierarchy
+  display, optional wrappers, and validated custom portable punctuation.
+- Add a global filename-sync pause. Tags and the sidebar continue to work while
+  paused; resuming shows exact filename drift and blocks collisions before a
+  guarded batch applies.
+- Let sidebar tag definitions be shown or hidden independently, hide and restore
+  individual branches, and apply per-definition accent colors. Core Properties
+  can display full paths, definition names, name + terminal, or terminal only
+  without changing the stored Obsidian tags.
+- Expand value suggestions with configurable alphabet/number alternation,
+  sequences, dates, and local/UTC timestamps. Mixed existing formats stay
+  manual instead of receiving a guess.
+- Allow reviewed subtree transfers between different Trellis tag definitions,
+  enabling branch split/merge workflows while preserving free filenames,
+  checking post-move duplicates and targets, and rolling back on failure.
+- Inventory every registered definition from frontmatter, separately report
+  inline managed tags, combinations, filename drift, and exact collisions.
+- Extend guarded automation with a read-only model description, stable
+  definition IDs, sidebar-only tag changes, and explicit `syncFilename: false`
+  plans. Frontmatter is the sole management source; inline tags remain warnings.
 
 ## 0.4.2 — Cross-platform filename safety
 
