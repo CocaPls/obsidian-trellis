@@ -374,9 +374,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 			this.selectedTagDefinitionId = definitions[0]?.id ?? null;
 		}
 		if (definitions.length > 0) {
-			const list = containerEl.createDiv({ cls: "trellis-tag-definition-list" });
-			for (const definition of definitions) {
-				this.renderTagDefinitionChoice(list, definition);
+			if (definitions.length > 1) {
+				const list = containerEl.createDiv({ cls: "trellis-tag-definition-list" });
+				for (const definition of definitions) {
+					this.renderTagDefinitionChoice(list, definition);
+				}
 			}
 			const selected = definitions.find(
 				(definition) => definition.id === this.selectedTagDefinitionId
@@ -487,7 +489,39 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
-		const editor = containerEl.createDiv({ cls: "trellis-settings-card" });
+		const editor = containerEl.createDiv({
+			cls: "trellis-settings-card trellis-tag-editor-card",
+		});
+		const header = editor.createDiv({ cls: "trellis-tag-editor-header" });
+		const identity = header.createDiv({ cls: "trellis-tag-editor-identity" });
+		const color = identity.createSpan({ cls: "trellis-tag-definition-color" });
+		color.style.setProperty("--trellis-tag-color", definition.color || "#7c6df2");
+		const title = identity.createDiv({ cls: "trellis-tag-editor-title" });
+		title.createSpan({
+			cls: "trellis-tag-definition-name",
+			text: definition.name || definition.namespace,
+		});
+		title.createEl("code", {
+			cls: "trellis-tag-definition-path",
+			text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
+		});
+		const badges = header.createDiv({ cls: "trellis-tag-definition-badges" });
+		if (
+			this.plugin.settings.schema.slots.some(
+				(slot) => slot.role === "tag" && slot.tagDefinitionId === definition.id
+			)
+		) {
+			badges.createSpan({
+				cls: "trellis-tag-definition-badge",
+				text: t("setting.tagBadgeFilename"),
+			});
+		}
+		if (definition.sidebarVisible) {
+			badges.createSpan({
+				cls: "trellis-tag-definition-badge",
+				text: t("setting.tagBadgeSidebar"),
+			});
+		}
 		const card = editor.createDiv({ cls: "trellis-settings-card-body" });
 
 		let pendingName = definition.name;

@@ -343,10 +343,44 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-settings-card {
-	margin: var(--size-4-3) 0;
+	overflow: hidden;
+	margin: var(--size-4-4) 0;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.trellis-tag-editor-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-3);
+	padding: var(--size-4-3) var(--size-4-4);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.trellis-tag-editor-identity {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--size-4-3);
+}
+
+.trellis-tag-editor-title {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.trellis-tag-editor-title .trellis-tag-definition-name {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-settings-card-body {
+	padding: 0 var(--size-4-4) var(--size-4-2);
 }
 
 .trellis-settings-card-body > .setting-item:last-child {
@@ -355,9 +389,9 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-tag-definition-list {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--size-4-2);
-	margin: var(--size-4-3) 0;
+	margin: var(--size-4-4) 0 var(--size-4-3);
 }
 
 .trellis-tag-definition-add {
@@ -384,8 +418,12 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-tag-definition-choice:hover,
 .trellis-tag-definition-choice.is-selected {
-	border-color: var(--interactive-accent);
+	border-color: var(--background-modifier-border-hover);
 	background: var(--background-modifier-hover);
+}
+
+.trellis-tag-definition-choice.is-selected {
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
 }
 
 .trellis-tag-definition-color {
@@ -426,7 +464,8 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-tag-definition-badge {
 	padding: 2px 6px;
-	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
 	background: var(--background-primary);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
