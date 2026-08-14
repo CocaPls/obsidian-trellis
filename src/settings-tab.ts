@@ -37,6 +37,10 @@ const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
 const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
 const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
+type FilenameSelection =
+	| { kind: "slot"; index: number }
+	| { kind: "gap"; index: number };
+
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
 		rootNamespace: schema.rootNamespace,
@@ -87,6 +91,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsEl: HTMLElement | null = null;
 	private statsTimer: number | null = null;
 	private statsCleanups: (() => void)[] = [];
+	private filenameSelection: FilenameSelection | null = null;
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -560,15 +565,32 @@ export class TrellisSettingTab extends PluginSettingTab {
 			);
 		const schema = this.draft();
 		this.ensureSeparators(schema);
-		const editor = containerEl.createDiv({ cls: "trellis-filename-builder" });
-		editor.classList.toggle("is-scrollable", schema.slots.length > 2);
+		const selection = this.ensureFilenameSelection(schema);
+		const sequence = containerEl.createDiv({ cls: "trellis-filename-sequence" });
 
 		schema.slots.forEach((slot, index) => {
-			this.renderFilenameSlot(editor, schema, slot, index);
+			this.renderFilenameSequenceSlot(sequence, schema, slot, index, selection);
 			if (index < schema.slots.length - 1) {
-				this.renderGap(editor, schema, index);
+				this.renderFilenameSequenceGap(sequence, schema, index, selection);
 			}
 		});
+
+		const selectedEditor = containerEl.createDiv({
+			cls: "trellis-filename-selection",
+		});
+		if (selection?.kind === "slot") {
+			const index = selection.index;
+			if (index >= 0) {
+				this.renderFilenameSlotEditor(
+					selectedEditor,
+					schema,
+					schema.slots[index],
+					index
+				);
+			}
+		} else if (selection?.kind === "gap") {
+			this.renderGapEditor(selectedEditor, schema, selection.index);
+		}
 
 		const usedDefinitions = new Set(
 			schema.slots
@@ -580,17 +602,22 @@ export class TrellisSettingTab extends PluginSettingTab {
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
 		if (available || !hasName) {
-			const addSlot = new Setting(editor)
+			const addSlot = new Setting(containerEl)
 				.setName(t("setting.slotAdd"))
 				.setDesc(t("setting.slotAddDesc"));
 			if (available) {
 				addSlot.addButton((button) =>
 					button.setButtonText(t("setting.addTagSlot")).onClick(() => {
+						const id = nextSlotId(schema);
 						schema.slots.push({
-							id: nextSlotId(schema),
+							id,
 							role: "tag",
 							tagDefinitionId: available.id,
 						});
+						this.filenameSelection = {
+							kind: "slot",
+							index: schema.slots.length - 1,
+						};
 						this.ensureSeparators(schema);
 						this.render();
 					})
@@ -599,7 +626,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 			if (!hasName) {
 				addSlot.addButton((button) =>
 					button.setButtonText(t("setting.addNameSlot")).onClick(() => {
-						schema.slots.push({ id: nextSlotId(schema), role: "name" });
+						const id = nextSlotId(schema);
+						schema.slots.push({ id, role: "name" });
+						this.filenameSelection = {
+							kind: "slot",
+							index: schema.slots.length - 1,
+						};
 						this.ensureSeparators(schema);
 						this.render();
 					})
@@ -608,7 +640,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 
 		if (this.draftDirty()) {
-			new Setting(editor)
+			new Setting(containerEl)
 				.setName(t("setting.filenamePending"))
 				.setDesc(t("setting.pendingDesc"))
 				.addButton((button) =>
@@ -641,32 +673,114 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.addButton((button) =>
 					button.setButtonText(t("adv.revert")).onClick(() => {
 						this.draftSchema = null;
+						this.filenameSelection = null;
 						this.render();
 					})
 				);
 		}
 	}
 
-	private renderFilenameSlot(
-		containerEl: HTMLElement,
+	private ensureFilenameSelection(
+		schema: TrellisSchema
+	): FilenameSelection | null {
+		if (
+			this.filenameSelection?.kind === "slot" &&
+			this.filenameSelection.index >= 0 &&
+			this.filenameSelection.index < schema.slots.length
+		) {
+			return this.filenameSelection;
+		}
+		if (
+			this.filenameSelection?.kind === "gap" &&
+			this.filenameSelection.index >= 0 &&
+			this.filenameSelection.index < schema.slots.length - 1
+		) {
+			return this.filenameSelection;
+		}
+		const first = schema.slots[0];
+		this.filenameSelection = first ? { kind: "slot", index: 0 } : null;
+		return this.filenameSelection;
+	}
+
+	private filenamePartLabel(
 		schema: TrellisSchema,
 		slot: KeySlot,
 		index: number
-	) {
-		const card = containerEl.createDiv({ cls: "trellis-filename-part" });
+	): { title: string; meta: string } {
 		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
 		const partType =
 			slot.role === "tag"
 				? t("setting.filenamePartTag")
 				: t("setting.filenamePartName");
-		const heading = new Setting(card)
-			.setName(
-				t("setting.slotTitle", {
-					n: index + 1,
-					type: partType,
-				})
-			)
-			.setHeading();
+		return {
+			title: t("setting.slotTitle", { n: index + 1, type: partType }),
+			meta:
+				slot.role === "tag" && definition
+					? definition.name || definition.namespace
+					: "",
+		};
+	}
+
+	private renderFilenameSequenceSlot(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		slot: KeySlot,
+		index: number,
+		selection: FilenameSelection | null
+	) {
+		const label = this.filenamePartLabel(schema, slot, index);
+		const button = containerEl.createEl("button", {
+			cls: "trellis-filename-sequence-slot",
+			attr: { type: "button" },
+		});
+		button.createSpan({ text: label.title });
+		if (label.meta) {
+			button.createSpan({
+				cls: "trellis-filename-sequence-meta",
+				text: label.meta,
+			});
+		}
+		const selected = selection?.kind === "slot" && selection.index === index;
+		button.classList.toggle("is-selected", selected);
+		button.setAttribute("aria-pressed", String(selected));
+		button.addEventListener("click", () => {
+			this.filenameSelection = { kind: "slot", index };
+			this.render();
+		});
+	}
+
+	private renderFilenameSequenceGap(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		index: number,
+		selection: FilenameSelection | null
+	) {
+		const button = containerEl.createEl("button", {
+			cls: "trellis-filename-sequence-gap",
+			text: schema.separators[index] ?? "-",
+			attr: {
+				type: "button",
+				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),
+			},
+		});
+		const selected = selection?.kind === "gap" && selection.index === index;
+		button.classList.toggle("is-selected", selected);
+		button.setAttribute("aria-pressed", String(selected));
+		button.addEventListener("click", () => {
+			this.filenameSelection = { kind: "gap", index };
+			this.render();
+		});
+	}
+
+	private renderFilenameSlotEditor(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		slot: KeySlot,
+		index: number
+	) {
+		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+		const label = this.filenamePartLabel(schema, slot, index);
+		const heading = new Setting(containerEl).setName(label.title).setHeading();
 		if (slot.role === "tag" && definition) {
 			heading.setDesc(
 				`${definition.name || definition.namespace} · #${nsPath(
@@ -675,11 +789,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 				)}/…`
 			);
 		}
-		heading.settingEl.addClass("trellis-filename-part-header");
 		heading
 			.addExtraButton((button) =>
 				button
-					.setIcon("chevron-up")
+					.setIcon("chevron-left")
 					.setTooltip(t("setting.partMoveUp"))
 					.setDisabled(index === 0)
 					.onClick(() => {
@@ -688,12 +801,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 							schema.slots[index],
 							schema.slots[index - 1],
 						];
+						this.filenameSelection = { kind: "slot", index: index - 1 };
 						this.render();
 					})
 			)
 			.addExtraButton((button) =>
 				button
-					.setIcon("chevron-down")
+					.setIcon("chevron-right")
 					.setTooltip(t("setting.partMoveDown"))
 					.setDisabled(index === schema.slots.length - 1)
 					.onClick(() => {
@@ -702,6 +816,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							schema.slots[index + 1],
 							schema.slots[index],
 						];
+						this.filenameSelection = { kind: "slot", index: index + 1 };
 						this.render();
 					})
 			)
@@ -711,13 +826,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setTooltip(t("setting.partRemove"))
 					.onClick(() => {
 						this.removeSlot(schema, index);
+						this.filenameSelection = schema.slots.length
+							? {
+									kind: "slot",
+									index: Math.min(index, schema.slots.length - 1),
+								}
+							: null;
 						this.render();
 					})
 			);
 
 		const definitions = schemaTagDefinitions(schema);
 		if (slot.role === "tag" && (definitions.length > 1 || !definition)) {
-			new Setting(card)
+			new Setting(containerEl)
 				.setName(t("setting.slotSource"))
 				.addDropdown((dropdown) => {
 					for (const candidate of definitions) {
@@ -732,8 +853,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 				});
 		}
-		if (slot.role === "tag") this.renderHierarchySetting(card, slot);
-		this.renderWrapperSetting(card, slot);
+		if (slot.role === "tag") this.renderHierarchySetting(containerEl, slot);
+		this.renderWrapperSetting(containerEl, slot);
 	}
 
 	private renderHierarchySetting(containerEl: HTMLElement, slot: KeySlot) {
@@ -824,11 +945,18 @@ export class TrellisSettingTab extends PluginSettingTab {
 		toggleCustom(current === "custom");
 	}
 
-	private renderGap(containerEl: HTMLElement, schema: TrellisSchema, index: number) {
+	private renderGapEditor(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		index: number
+	) {
 		const current = schema.separators[index] ?? "-";
 		let customInput: HTMLInputElement | null = null;
-		const row = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName(t("setting.gapName", { a: index + 1, b: index + 2 }))
+			.setHeading();
+		new Setting(containerEl)
+			.setName(t("setting.separatorSymbol"))
 			.addDropdown((dropdown) => {
 				for (const preset of BOUNDARY_PRESETS) dropdown.addOption(preset, preset);
 				dropdown
@@ -852,7 +980,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setValue(BOUNDARY_PRESETS.includes(current) ? "" : current)
 					.onChange((value) => (schema.separators[index] = value));
 				text.inputEl.classList.toggle("trellis-hidden", BOUNDARY_PRESETS.includes(current));
-			})
+			});
+		new Setting(containerEl)
+			.setName(t("setting.separatorSpacing"))
 			.addDropdown((dropdown) => {
 				for (const spacing of SPACING_OPTIONS) {
 					dropdown.addOption(spacing, t(`spacing.${spacing}`));
@@ -867,7 +997,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 					this.render();
 				});
 			});
-		row.settingEl.addClass("trellis-filename-connector");
 	}
 
 	private removeSlot(schema: TrellisSchema, index: number) {
