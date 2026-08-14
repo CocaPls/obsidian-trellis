@@ -308,11 +308,17 @@ button.trellis-destructive:hover {
 }
 
 .trellis-filename-builder {
+	display: flex;
+	align-items: stretch;
+	gap: var(--size-4-3);
+	overflow-x: auto;
 	margin-bottom: var(--size-4-3);
+	padding-bottom: var(--size-4-1);
 }
 
 .trellis-filename-part {
-	margin-top: var(--size-4-4);
+	min-width: 240px;
+	flex: 1 1 0;
 }
 
 .trellis-filename-part-header.setting-item {
@@ -327,10 +333,29 @@ button.trellis-destructive:hover {
 
 .trellis-filename-part > .setting-item:not(.trellis-filename-part-header) {
 	margin-bottom: var(--size-4-2);
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.trellis-filename-part > .setting-item:not(.trellis-filename-part-header) .setting-item-control {
+	width: 100%;
+	justify-content: flex-start;
+	flex-wrap: wrap;
 }
 
 .trellis-filename-connector.setting-item {
-	margin: var(--size-4-2) 0 var(--size-4-4);
+	min-width: 150px;
+	flex: 0 0 150px;
+	align-self: center;
+	margin: 0;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.trellis-filename-connector .setting-item-control {
+	width: 100%;
+	justify-content: flex-start;
+	flex-wrap: wrap;
 }
 
 @media (max-width: 600px) {
@@ -338,9 +363,20 @@ button.trellis-destructive:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-settings-card .setting-item,
-	.trellis-filename-part .setting-item,
+	.trellis-filename-builder {
+		flex-direction: column;
+		overflow-x: visible;
+	}
+
+	.trellis-filename-part,
 	.trellis-filename-connector {
+		width: 100%;
+		min-width: 0;
+		flex: 0 0 auto;
+	}
+
+	.trellis-settings-card .setting-item,
+	.trellis-filename-part .setting-item {
 		align-items: flex-start;
 		flex-wrap: wrap;
 	}
