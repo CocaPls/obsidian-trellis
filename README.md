@@ -184,8 +184,9 @@ vault backup as you would for any tool that performs bulk edits.
 
 A filename is a positional list of slots joined by separators — by default a
 two-slot `[tagkey, title]` layout, so multi-key schemes grow without rewriting
-the core. The conversion logic lives in `tagkey.ts` (pure and unit-tested);
-`main.ts` is the Obsidian glue. The live sync mirrors whatever the tag path is.
+the core. The conversion logic lives in [`src/tagkey.ts`](src/tagkey.ts) (pure
+and unit-tested); [`src/main.ts`](src/main.ts) is the Obsidian glue. The live
+sync mirrors whatever the tag path is.
 Bootstrap reverses a visible hierarchy separator exactly; in classic hidden mode
 it splits a flat prefix at letter/digit boundaries, which cannot recover a
 boundary inside a run of the same character class.

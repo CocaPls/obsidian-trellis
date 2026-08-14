@@ -4,7 +4,7 @@ Thanks for your interest in improving Trellis!
 
 ## Development
 
-Requirements: Node.js 18+ (CI uses 20).
+Requirements: Node.js 22.18+ (CI uses 24).
 
 ```bash
 npm ci          # install the locked dependencies
