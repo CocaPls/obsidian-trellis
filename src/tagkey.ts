@@ -1070,6 +1070,29 @@ export function syncedBasenameMulti(
 	return rebuilt === basename ? null : rebuilt;
 }
 
+/** Reproject a filename after an explicit frontmatter tag change. The name is
+ * parsed with BEFORE keys and emitted with AFTER keys, which is essential when
+ * a branch moves between two managed tag definitions (split/merge). */
+export function tagChangeProjectedName(
+	basename: string,
+	beforeTags: string[],
+	afterTags: string[],
+	schema: TrellisSchema
+): string | null {
+	const beforeKeys = slotTagkeys(beforeTags, schema);
+	const afterKeys = slotTagkeys(afterTags, schema);
+	if (
+		!afterKeys.some(Boolean) &&
+		!schema.slots.some((slot) => slot.role === "name")
+	) return null;
+	const name = extractNameMulti(basename, beforeKeys, schema);
+	const values = schema.slots.map((slot, index) =>
+		slot.role === "name" ? name : afterKeys[index]
+	);
+	const rebuilt = assembleBasenameMulti(values, schema);
+	return !rebuilt || rebuilt === basename ? null : rebuilt;
+}
+
 /** Rebuild one managed basename under a new filename schema while preserving
  * its free name slot. Used by settings dry-runs for boundary formatting,
  * internal segment joiners, and advanced slot edits. Tags remain the source of
@@ -1082,9 +1105,18 @@ export function schemaMigratedName(
 ): string | null {
 	const newKeys = slotTagkeys(tags, newSchema);
 	const hasNewTag = newSchema.slots.some((slot, i) => slot.role === "tag" && newKeys[i]);
-	if (!hasNewTag) return null;
-
 	const oldKeys = slotTagkeys(tags, oldSchema);
+	const hasOldTag = oldSchema.slots.some((slot, i) => slot.role === "tag" && oldKeys[i]);
+	if (!hasNewTag) {
+		if (!hasOldTag || !newSchema.slots.some((slot) => slot.role === "name")) return null;
+		const oldName = extractNameMulti(basename, oldKeys, oldSchema);
+		const values = newSchema.slots.map((slot) =>
+			slot.role === "name" ? oldName : null
+		);
+		const rebuilt = assembleBasenameMulti(values, newSchema);
+		return !rebuilt || rebuilt === basename ? null : rebuilt;
+	}
+
 	const oldTagCount = oldSchema.slots.filter((slot) => slot.role === "tag").length;
 	const newTagCount = newSchema.slots.filter((slot) => slot.role === "tag").length;
 	let name: string;

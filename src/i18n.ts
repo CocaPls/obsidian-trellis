@@ -170,7 +170,7 @@ const EN: Record<string, string> = {
 	"setting.filenameSyncOn":
 		"On. Frontmatter Trellis tag changes update the configured filename slots.",
 	"setting.filenameSyncOff":
-		"Paused. Tags and the sidebar still work; filenames stay unchanged. Turning this on previews current drift first.",
+		"Paused. Tags, sidebar moves, and filename-structure edits keep current filenames unchanged. Turning this on previews current drift first.",
 	"setting.preview": "Preview",
 	"setting.previewName": "Sample note",
 	"setting.previewUnmanaged": "No filename slots — Trellis will not rename files",
@@ -243,6 +243,9 @@ const EN: Record<string, string> = {
 		"{n} note(s) will change from {from} to {to}. Any failure or cancellation rolls the completed part back.",
 	"modal.cascadePreview.showList": "Show affected notes ({n})",
 	"modal.cascadePreview.apply": "Rename — {n} note(s)",
+	"modal.cascadeConflict.title": "Branch move needs attention",
+	"modal.cascadeConflict.desc":
+		"Resolve {n} ambiguous tag or occupied filename target(s) before moving this branch: {items}",
 	"modal.filenameSync.title": "Review filename synchronization",
 	"modal.filenameSync.desc":
 		"Turning synchronization on will rename {n} note(s). Nothing changes until you apply this list.",
@@ -649,7 +652,7 @@ const KO: Record<string, string> = {
 	"setting.filenameSyncOn":
 		"켜짐. 속성의 트렐리 태그가 바뀌면 설정한 파일명 슬롯을 갱신합니다.",
 	"setting.filenameSyncOff":
-		"일시정지. 태그와 사이드바는 그대로 작동하고 파일명만 바꾸지 않습니다. 다시 켜면 현재 차이를 먼저 보여줍니다.",
+		"일시정지. 태그·사이드바 이동·파일명 구조 편집은 작동하지만 현재 파일명은 유지합니다. 다시 켜면 현재 차이를 먼저 보여줍니다.",
 	"setting.preview": "미리보기",
 	"setting.previewName": "나무위키",
 	"setting.previewUnmanaged": "파일명 슬롯 없음 — 트렐리가 파일명을 바꾸지 않음",
@@ -722,6 +725,9 @@ const KO: Record<string, string> = {
 		"{n}개 노트가 {from}에서 {to}(으)로 바뀝니다. 실패하거나 취소하면 완료된 부분을 되돌립니다.",
 	"modal.cascadePreview.showList": "영향받는 노트 보기 ({n})",
 	"modal.cascadePreview.apply": "이름 변경 — {n}개 노트",
+	"modal.cascadeConflict.title": "분기 이동 전 확인이 필요합니다",
+	"modal.cascadeConflict.desc":
+		"이 분기를 이동하기 전에 중복 태그 또는 이미 사용 중인 파일명 대상 {n}건을 해결하세요: {items}",
 	"modal.filenameSync.title": "파일명 동기화 검토",
 	"modal.filenameSync.desc":
 		"동기화를 켜면 {n}개 노트의 파일명이 바뀝니다. 이 목록을 적용하기 전에는 아무것도 바뀌지 않습니다.",

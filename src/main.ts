@@ -40,6 +40,7 @@ import {
 	assembleBasenameMulti,
 	isMultiKey,
 	syncedBasenameMulti,
+	tagChangeProjectedName,
 	isValidTagSegmentForSlot,
 	isValidTagSegment,
 	isValidTagPath,
@@ -1944,23 +1945,78 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.cascadeOutside", { ns: namespaces || "—" }));
 			return;
 		}
-		if (fromKey.tagDefinitionId !== toKey.tagDefinitionId) {
-			new Notice(
-				t("notice.cascadeDifferentKey", {
-					from: fromKey.fullNamespace,
-					to: toKey.fullNamespace,
-				})
-			);
-			return;
-		}
 		const rows = this.previewCascade(from, to);
 		if (rows.length === 0) {
 			new Notice(t("notice.noFilesTagged", { from }));
 			return;
 		}
+		const conflicts = this.cascadePreviewConflicts(rows);
+		if (conflicts.length > 0) {
+			new AlertModal(
+				this.app,
+				t("modal.cascadeConflict.title"),
+				t("modal.cascadeConflict.desc", {
+					n: conflicts.length,
+					items: conflicts.slice(0, 5).join(", "),
+				})
+			).open();
+			return;
+		}
 		new CascadePreviewModal(this.app, from, to, rows, () => {
 			void this.applyCascade(from, to, rows);
 		}).open();
+	}
+
+	/** Conservative preflight for both same-definition moves and cross-definition
+	 * branch transfers (split/merge). Ambiguous post-tags or an occupied target
+	 * path are blocked before the review modal. */
+	private cascadePreviewConflicts(rows: CascadePreviewRow[]): string[] {
+		const conflicts = new Set<string>();
+		const targetSources = new Map<string, string>();
+		for (const row of rows) {
+			const tags = row.afterTags.map((tag) => `#${tag}`);
+			if (duplicateLocationGroups(tags, this.settings.schema).length > 0) {
+				conflicts.add(row.path);
+				continue;
+			}
+			if (!this.settings.filenameSyncEnabled) continue;
+			const file = this.app.vault.getAbstractFileByPath(row.path);
+			if (!(file instanceof TFile)) {
+				conflicts.add(row.path);
+				continue;
+			}
+			const targetPath = this.projectedPathForTagChange(
+				file,
+				row.beforeTags,
+				row.afterTags
+			);
+			if (!targetPath || targetPath === row.path) continue;
+			const firstSource = targetSources.get(targetPath);
+			if (firstSource && firstSource !== row.path) {
+				conflicts.add(targetPath);
+			} else {
+				targetSources.set(targetPath, row.path);
+			}
+			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
+			if (occupied && occupied !== file) conflicts.add(targetPath);
+		}
+		return [...conflicts].sort();
+	}
+
+	private projectedPathForTagChange(
+		file: TFile,
+		beforeTags: string[],
+		afterTags: string[]
+	): string | null {
+		const basename = tagChangeProjectedName(
+			file.basename,
+			beforeTags.map((tag) => `#${tag}`),
+			afterTags.map((tag) => `#${tag}`),
+			this.settings.schema
+		);
+		if (!basename) return null;
+		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+		return normalizePath(`${dir}${basename}.${file.extension}`);
 	}
 
 	/** Compute the link-safe filename target for explicit, already-validated tags.
@@ -2080,9 +2136,10 @@ export default class TrellisPlugin extends Plugin {
 					if (stale) throw new Error("cascade preview became stale");
 					records.push(record);
 					const nextPath = this.settings.filenameSyncEnabled
-						? this.syncedPathForTags(
+						? this.projectedPathForTagChange(
 								abstract,
-								row.afterTags.map((tag) => `#${tag}`)
+								row.beforeTags,
+								row.afterTags
 							)
 						: null;
 					if (nextPath !== null) {
@@ -2507,23 +2564,26 @@ export default class TrellisPlugin extends Plugin {
 	 * include a file this schema edit would rename block the apply; unrelated
 	 * pre-existing drift remains visible in the live settings inventory. */
 	private schemaFilenameCollisions(
-		newSchema: TrellisSchema,
-		changedPaths: Set<string>
+		rows: { path: string; newName: string }[]
 	): { targetPath: string; notePaths: string[] }[] {
-		const inventory = new TagInventory(newSchema);
-		for (const file of this.app.vault.getMarkdownFiles()) {
-			const cache = this.app.metadataCache.getFileCache(file);
-			inventory.upsertFile({
-				path: file.path,
-				allTags: cache ? getAllTags(cache) ?? [] : [],
-				frontmatterTags: normalizeTagList(cache?.frontmatter?.tags),
-			});
+		const sources = new Map<string, Set<string>>();
+		for (const row of rows) {
+			const file = this.app.vault.getAbstractFileByPath(row.path);
+			if (!(file instanceof TFile)) continue;
+			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+			const targetPath = normalizePath(`${dir}${row.newName}.${file.extension}`);
+			const group = sources.get(targetPath) ?? new Set<string>();
+			group.add(row.path);
+			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
+			if (occupied && occupied !== file) group.add(targetPath);
+			sources.set(targetPath, group);
 		}
-		return inventory
-			.snapshot()
-			.filenameCollisions.filter((group) =>
-				group.notePaths.some((path) => changedPaths.has(path))
-			);
+		return [...sources.entries()]
+			.filter(([, paths]) => paths.size > 1)
+			.map(([targetPath, paths]) => ({
+				targetPath,
+				notePaths: [...paths].sort(),
+			}));
 	}
 
 	requestPrimaryFormattingChange(
@@ -2551,35 +2611,13 @@ export default class TrellisPlugin extends Plugin {
 			onDone();
 			return;
 		}
-		const oldNamespaces = tagNamespaces(oldSchema).map((ns) => nsPath(oldSchema, ns));
-		const newNamespaces = new Set(
-			tagNamespaces(newSchema).map((ns) => nsPath(newSchema, ns))
-		);
-		const orphaned = oldNamespaces
-			.filter((namespace) => !newNamespaces.has(namespace))
-			.map((namespace) => ({
-				namespace,
-				count: this.managedNoteCountForNamespace(namespace),
-			}))
-			.filter(({ count }) => count > 0);
-		if (orphaned.length > 0) {
-			new AlertModal(
-				this.app,
-				t("modal.namespaceBlocked.title"),
-				t("modal.namespaceBlocked.desc", {
-					items: orphaned
-						.map(({ namespace, count }) => `#${namespace} (${count})`)
-						.join(", "),
-				})
-			).open();
-			onDone();
-			return;
-		}
-		const rows = this.previewSchemaChange(newSchema);
-		const collisions = this.schemaFilenameCollisions(
-			newSchema,
-			new Set(rows.map((row) => row.path))
-		);
+		// Definitions outlive filename slots. Removing a projection never orphans
+		// its tags; with live sync on we clean the projected filename portion after
+		// an exact preview, while paused mode keeps current filenames verbatim.
+		const rows = this.settings.filenameSyncEnabled
+			? this.previewSchemaChange(newSchema)
+			: [];
+		const collisions = this.schemaFilenameCollisions(rows);
 		if (collisions.length > 0) {
 			new AlertModal(
 				this.app,

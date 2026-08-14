@@ -31,6 +31,7 @@ import {
 	assembleBasenameMulti,
 	extractNameMulti,
 	syncedBasenameMulti,
+	tagChangeProjectedName,
 	isValidNamespace,
 	isValidSeparator,
 	isValidTagSegment,
@@ -557,6 +558,18 @@ test("schema migration changes boundary formatting and internal joiner in one dr
 	assert.equal(schemaMigratedName("사과", ["#other/A/1"], cfg, next), null);
 });
 
+test("removing the final tag slot can clean its filename projection", () => {
+	const nameOnly: TrellisSchema = {
+		slots: [{ role: "name" }],
+		separators: [],
+	};
+	assert.equal(
+		schemaMigratedName("S88B07-사과", ["#trel/S/88/B/07"], cfg, nameOnly),
+		"사과"
+	);
+	assert.equal(schemaMigratedName("사과", ["#other/A"], cfg, nameOnly), null);
+});
+
 test("namespace/separator/position are read from the slot array (custom schema)", () => {
 	// hand-built schema: different namespace ("tree") + separator ("_")
 	const schema: TrellisSchema = {
@@ -754,6 +767,35 @@ test("syncedBasenameMulti with a leading name slot (name, tag, tag)", () => {
 	assert.equal(
 		syncedBasenameMulti("idea-S88B07-P02C03", ["#trel/S88/B99", "#proj/P02/C03"], schema),
 		"idea-S88B99-P02C03"
+	);
+});
+
+test("cross-definition tag moves preserve the old free name and reproject slots", () => {
+	const cross: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "area" },
+			{ role: "name" },
+			{ role: "tag", namespace: "state" },
+		],
+		separators: ["-", "-"],
+	};
+	assert.equal(
+		tagChangeProjectedName(
+			"A01-apple",
+			["#area/A/01"],
+			["#state/done"],
+			cross
+		),
+		"apple-done"
+	);
+	assert.equal(
+		tagChangeProjectedName(
+			"A01-apple-done",
+			["#area/A/01", "#state/done"],
+			["#area/A/01"],
+			cross
+		),
+		"A01-apple"
 	);
 });
 
