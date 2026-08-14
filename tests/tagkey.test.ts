@@ -1308,6 +1308,35 @@ test("slot wrappers render, parse and disappear with empty sparse slots", () => 
 	);
 });
 
+test("bootstrap extraction removes the primary slot wrapper", () => {
+	const prefix: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "ui", wrapper: { kind: "round" } },
+			{ role: "name" },
+		],
+		separators: ["-"],
+	};
+	assert.equal(extractTagkey("(UI)-버튼", prefix), "UI");
+	assert.equal(tagkeyToTagPath(extractTagkey("(UI01)-버튼", prefix), prefix), "ui/UI/01");
+
+	const suffix: TrellisSchema = {
+		slots: [
+			{ role: "name" },
+			{
+				role: "tag",
+				namespace: "ui",
+				wrapper: { kind: "custom", left: "〈", right: "〉" },
+			},
+		],
+		separators: ["-"],
+	};
+	assert.equal(extractTagkey("버튼-〈UI01〉", suffix), "UI01");
+	assert.equal(
+		extractTagkey("(UI01)", { ...prefix, slots: [prefix.slots[0]], separators: [] }),
+		"UI01"
+	);
+});
+
 test("custom hierarchy and wrapper characters use the portable safe subset", () => {
 	for (const value of ["", ".", "·", "~", "++"]) {
 		assert.equal(isValidHierarchySeparator(value), true, value);

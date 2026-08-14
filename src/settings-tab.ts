@@ -923,7 +923,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.addDropdown((dropdown) => {
 					for (const definition of visible) {
 						dropdown.addOption(
-							definition.namespace,
+							definition.id,
 							`${definition.name || definition.namespace} · #${nsPath(
 								this.plugin.settings.schema,
 								definition.namespace
@@ -931,9 +931,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 						);
 					}
 					dropdown
-						.setValue(this.plugin.treeTagKeyNamespace())
-						.onChange((namespace) =>
-							void this.plugin.setTreeTagKeyNamespace(namespace)
+						.setValue(this.plugin.treeTagDefinitionId())
+						.onChange((id) =>
+							void this.plugin.setTreeTagDefinitionId(id)
 						);
 				});
 		}

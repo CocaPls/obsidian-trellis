@@ -228,8 +228,10 @@ interface TrellisSettings {
 	treeShowUntagged: boolean;
 	/** Nested mode: note rows show the filename or only the tag segment. */
 	treeLabelMode: TreeLabelMode;
-	/** Namespace used as the single axis in the classic notes-only tree. */
-	treeTagKeyNamespace: string;
+	/** Stable definition selected as the single axis in the classic notes-only tree. */
+	treeTagDefinitionId: string;
+	/** Pre-0.5 migration source. Removed from saved settings after load. */
+	treeTagKeyNamespace?: string;
 	/** Definition-stable sidebar exclusions. `relativePath` excludes descendants too. */
 	hiddenTagBranches: HiddenTagBranch[];
 	/** Visual-only label for managed tags in Obsidian's core Properties editor. */
@@ -277,7 +279,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeShowRoot: true,
 	treeShowUntagged: true,
 	treeLabelMode: "filename",
-	treeTagKeyNamespace: "",
+	treeTagDefinitionId: "",
 	hiddenTagBranches: [],
 	propertyTagDisplay: "full",
 	language: "auto",
@@ -649,6 +651,22 @@ export default class TrellisPlugin extends Plugin {
 		this.settings.schema = normalizeSchemaModel(
 			normalizeSchemaFormatting(this.settings.schema)
 		);
+		const definitions = schemaTagDefinitions(this.settings.schema);
+		const legacyTreeNamespace = loaded.treeTagKeyNamespace ?? "";
+		const selectedTreeDefinition =
+			definitions.find(
+				(definition) =>
+					definition.id === loaded.treeTagDefinitionId && definition.sidebarVisible
+			) ??
+			definitions.find(
+				(definition) =>
+					sameTagPath(definition.namespace, legacyTreeNamespace) &&
+					definition.sidebarVisible
+			) ??
+			definitions.find((definition) => definition.sidebarVisible) ??
+			definitions[0];
+		this.settings.treeTagDefinitionId = selectedTreeDefinition?.id ?? "";
+		delete this.settings.treeTagKeyNamespace;
 		this.settings.settingsVersion = CURRENT_SETTINGS_VERSION;
 		delete (this.settings as unknown as Record<string, unknown>).advancedMode;
 		delete (this.settings as unknown as Record<string, unknown>).suppressSchemaConfirm;
@@ -680,6 +698,8 @@ export default class TrellisPlugin extends Plugin {
 		if (
 			loaded.settingsVersion !== CURRENT_SETTINGS_VERSION ||
 			schemaChanged ||
+			loaded.treeTagDefinitionId !== this.settings.treeTagDefinitionId ||
+			"treeTagKeyNamespace" in data ||
 			"advancedMode" in data ||
 			"suppressSchemaConfirm" in data
 		) {
@@ -1882,28 +1902,32 @@ export default class TrellisPlugin extends Plugin {
 		return tag ? tag.replace(/^#/, "") : null;
 	}
 
-	/** Currently selected tag-key namespace for the classic notes-only tree.
-	 * Empty or stale saved values fall back to the first tag-key. */
-	treeTagKeyNamespace(): string {
-		const requested = this.settings.treeTagKeyNamespace;
-		if (
-			requested &&
-			schemaTagDefinitions(this.settings.schema).some(
-				(definition) =>
-					sameTagPath(definition.namespace, requested) && definition.sidebarVisible
-			)
-		) {
-			return requested;
-		}
+	/** Currently selected managed tag for the classic notes-only tree. The
+	 * persisted identity is its stable definition ID, so namespace renames do
+	 * not silently switch the selected branch. */
+	private treeTagDefinition(): TrellisTagDefinition | undefined {
 		return (
-			this.tagDefinitions().find((definition) => definition.sidebarVisible)?.namespace ??
-			this.tagDefinitions()[0]?.namespace ??
-			primaryNamespace(this.settings.schema)
+			this.tagDefinitions().find(
+				(definition) =>
+					definition.id === this.settings.treeTagDefinitionId &&
+					definition.sidebarVisible
+			) ??
+			this.tagDefinitions().find((definition) => definition.sidebarVisible) ??
+			this.tagDefinitions()[0]
 		);
 	}
 
-	async setTreeTagKeyNamespace(namespace: string) {
-		this.settings.treeTagKeyNamespace = namespace;
+	treeTagDefinitionId(): string {
+		return this.treeTagDefinition()?.id ?? "";
+	}
+
+	private treeTagKeyNamespace(): string {
+		return this.treeTagDefinition()?.namespace ?? primaryNamespace(this.settings.schema);
+	}
+
+	async setTreeTagDefinitionId(id: string) {
+		if (!this.tagDefinitions().some((definition) => definition.id === id)) return;
+		this.settings.treeTagDefinitionId = id;
 		await this.saveSettings();
 		this.rebuildTrees();
 	}

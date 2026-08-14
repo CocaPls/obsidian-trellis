@@ -338,12 +338,12 @@ export class TrellisTreeView extends ItemView {
 					.setIcon("network")
 					.onClick(() => this.cb.onUndoRoot())
 			);
-		if (event instanceof MouseEvent) {
+		if (event.instanceOf(MouseEvent)) {
 			menu.showAtMouseEvent(event);
 			return;
 		}
-		const target = event.currentTarget;
-		if (target instanceof HTMLElement) {
+		const target = event.targetNode;
+		if (target?.instanceOf(HTMLElement)) {
 			const rect = target.getBoundingClientRect();
 			menu.showAtPosition({ x: rect.right, y: rect.top });
 		}

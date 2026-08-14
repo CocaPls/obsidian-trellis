@@ -690,12 +690,18 @@ export function pickTagkey(tags: string[], schema: TrellisSchema): string | null
  */
 export function extractTagkey(basename: string, schema: TrellisSchema): string {
 	const sep = primarySeparator(schema);
-	if (tagPosition(schema) === "suffix") {
+	const slot = schema.slots.find((candidate) => candidate.role === "tag");
+	let raw: string;
+	if (!sep) {
+		raw = basename;
+	} else if (tagPosition(schema) === "suffix") {
 		const i = basename.lastIndexOf(sep);
-		return i === -1 ? basename : basename.slice(i + sep.length);
+		raw = i === -1 ? basename : basename.slice(i + sep.length);
+	} else {
+		const i = basename.indexOf(sep);
+		raw = i === -1 ? basename : basename.slice(0, i);
 	}
-	const i = basename.indexOf(sep);
-	return i === -1 ? basename : basename.slice(0, i);
+	return slot ? unwrapSlotValue(raw, slot) : raw;
 }
 
 /**
