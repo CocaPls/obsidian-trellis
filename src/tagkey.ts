@@ -10,9 +10,9 @@
  * DATA MODEL — a filename is a positional array of key SLOTS separated by
  * delimiters. Each slot is a tag-key (TRELLIS-managed, tag →
  * filename) or a name-key (user-free, untouched). The single-key default is
- * just the 2-slot special case `[tag] sep [name]`. Multi-key parsing (>1 tag
- * slot, multiple separators) is deferred to an advanced mode; the model is the
- * general-form foundation so the core never needs rewriting again.
+ * just the 2-slot special case `[tag] sep [name]`. Multi-key schemas use the
+ * same model in advanced mode: each tag slot resolves from its own namespace,
+ * while the name slot remains user-controlled.
  */
 
 /** The role of a filename slot. */
@@ -150,9 +150,9 @@ export function schemaFromLegacy(
 }
 
 // --- Derived accessors (single-key view over the general schema) -----------
-// The current engine operates on ONE tag slot + ONE name slot. These helpers
-// read that pair out of the schema so the conversion functions stay the same
-// shape; multi-tag-slot parsing is a later (advanced-mode) concern.
+// These helpers expose the primary tag slot for the legacy/default two-slot
+// path and for intentionally primary-only operations such as reverse import.
+// Multi-key filename sync uses the general slot-array helpers below.
 
 /** Index of the first tag slot, or -1 if somehow none (schema requires ≥1). */
 function firstTagSlotIndex(schema: TrellisSchema): number {
