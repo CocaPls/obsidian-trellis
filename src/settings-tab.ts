@@ -13,14 +13,12 @@ import {
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
-	assembleBasenameMulti,
 	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
 	isValidSlotWrapper,
 	normalizeTagList,
 	nsPath,
-	renderSeparator,
 	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
@@ -562,10 +560,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 			);
 		const schema = this.draft();
 		this.ensureSeparators(schema);
-
-		const preview = containerEl.createDiv({ cls: "trellis-filename-preview" });
-		preview.createDiv({ cls: "trellis-filename-preview-label", text: t("setting.preview") });
-		preview.createEl("code", { text: this.filenamePreview(schema) });
 		const editor = containerEl;
 
 		schema.slots.forEach((slot, index) => {
@@ -614,7 +608,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		if (this.draftDirty()) {
 			new Setting(editor)
-				.setName(t("adv.pending"))
+				.setName(t("setting.filenamePending"))
 				.setDesc(t("setting.pendingDesc"))
 				.addButton((button) =>
 					button
@@ -652,14 +646,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 	}
 
-	private filenamePreview(schema: TrellisSchema): string {
-		const values = schema.slots.map((slot) => {
-			if (slot.role === "name") return t("setting.previewName");
-			return ["PRJ", "DOC", "01"].join(slot.segmentSeparator ?? "");
-		});
-		return assembleBasenameMulti(values, schema) || t("setting.previewUnmanaged");
-	}
-
 	private renderFilenameSlot(
 		containerEl: HTMLElement,
 		schema: TrellisSchema,
@@ -672,7 +658,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.setName(
 				t("setting.slotTitle", {
 					n: index + 1,
-					type: slot.role === "tag" ? t("adv.roleTag") : t("adv.roleName"),
+					type:
+						slot.role === "tag"
+							? t("setting.filenamePartTag")
+							: t("setting.filenamePartName"),
 				})
 			)
 			.setDesc(
@@ -838,12 +827,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const current = schema.separators[index] ?? "-";
 		let customInput: HTMLInputElement | null = null;
 		const row = new Setting(containerEl)
-			.setName(t("adv.sep", { n: index + 1, a: index + 1, b: index + 2 }))
-			.setDesc(
-				t("setting.gapPreview", {
-					value: renderSeparator(current, separatorSpacingAt(schema, index)),
-				})
-			)
+			.setName(t("setting.gapName", { a: index + 1, b: index + 2 }))
+			.setDesc(t("setting.gapDesc"))
 			.addDropdown((dropdown) => {
 				for (const preset of BOUNDARY_PRESETS) dropdown.addOption(preset, preset);
 				dropdown
