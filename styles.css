@@ -241,11 +241,18 @@ button.trellis-destructive:hover {
 	display: none;
 }
 
-/* Optional schema tools are useful for unusual vaults, but they should not
-   compete with the primary single-key setup. Match Obsidian's native details
-   affordance and keep the content visually subordinate. */
+/* Keep settings calm: one clear vertical flow, with editing tools disclosed
+   only when requested. */
+.trellis-settings > .setting-item-heading:not(:first-child) {
+	margin-top: var(--size-4-6);
+}
+
+.trellis-settings .setting-item-description {
+	line-height: 1.4;
+}
+
 .trellis-settings-disclosure {
-	margin: var(--size-4-3) 0 var(--size-4-5);
+	margin: var(--size-4-2) 0 var(--size-4-3);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	padding: var(--size-4-2) var(--size-4-3);
@@ -258,17 +265,47 @@ button.trellis-destructive:hover {
 }
 
 .trellis-settings-disclosure-desc {
-	margin: var(--size-4-2) 0;
+	margin: var(--size-4-2) 0 0;
 }
 
 .trellis-settings-disclosure-body > .setting-item:last-child {
 	border-bottom: 0;
 }
 
-.trellis-definition-card .trellis-settings-disclosure,
+.trellis-settings-card .trellis-settings-disclosure,
 .trellis-slot-card .trellis-settings-disclosure {
 	margin-bottom: var(--size-4-2);
-	background: var(--background-primary);
+}
+
+.trellis-settings-card {
+	margin: var(--size-4-2) 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.trellis-settings-card-summary {
+	cursor: pointer;
+	color: var(--text-normal);
+}
+
+.trellis-settings-card-title {
+	font-weight: var(--font-semibold);
+	margin-inline-start: var(--size-4-1);
+}
+
+.trellis-settings-card-meta {
+	float: right;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trellis-settings-card-body {
+	padding-top: var(--size-4-2);
+}
+
+.trellis-settings-card-body > .setting-item:last-child {
+	border-bottom: 0;
 }
 
 /* Live tag inventory stays compact; path samples are subordinate and indented
@@ -296,19 +333,16 @@ button.trellis-destructive:hover {
 /* 0.5 settings: registered tag definitions and filename slots are separate
    cards so users can see what a tag is versus where it appears in a name. */
 .trellis-section-description {
-	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-4);
+	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
-.trellis-definition-card,
 .trellis-slot-card {
-	margin: var(--size-4-3) 0;
+	margin: var(--size-4-2) 0;
 	padding: var(--size-4-2) var(--size-4-3);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-secondary);
+	border-radius: var(--radius-s);
 }
 
-.trellis-definition-card > .setting-item,
 .trellis-slot-card > .setting-item {
 	padding-inline: 0;
 }
@@ -317,11 +351,10 @@ button.trellis-destructive:hover {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-3);
-	margin: var(--size-4-3) 0 var(--size-4-4);
-	padding: var(--size-4-3);
-	border-radius: var(--radius-m);
+	margin: var(--size-4-2) 0;
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-s);
 	background: var(--background-primary-alt);
-	border: 1px solid var(--background-modifier-border);
 }
 
 .trellis-filename-preview-label {
@@ -341,14 +374,14 @@ button.trellis-destructive:hover {
 }
 
 @media (max-width: 600px) {
-	.trellis-definition-card .setting-item,
+	.trellis-settings-card .setting-item,
 	.trellis-slot-card .setting-item,
 	.trellis-gap-row {
 		align-items: flex-start;
 		flex-wrap: wrap;
 	}
 
-	.trellis-definition-card .setting-item-control,
+	.trellis-settings-card .setting-item-control,
 	.trellis-slot-card .setting-item-control,
 	.trellis-gap-row .setting-item-control {
 		width: 100%;
