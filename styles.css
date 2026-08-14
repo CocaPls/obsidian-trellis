@@ -317,7 +317,7 @@ button.trellis-destructive:hover {
 }
 
 .trellis-filename-part {
-	min-width: 240px;
+	min-width: 260px;
 	flex: 1 1 0;
 }
 
@@ -333,19 +333,11 @@ button.trellis-destructive:hover {
 
 .trellis-filename-part > .setting-item:not(.trellis-filename-part-header) {
 	margin-bottom: var(--size-4-2);
-	align-items: flex-start;
-	flex-wrap: wrap;
-}
-
-.trellis-filename-part > .setting-item:not(.trellis-filename-part-header) .setting-item-control {
-	width: 100%;
-	justify-content: flex-start;
-	flex-wrap: wrap;
 }
 
 .trellis-filename-connector.setting-item {
-	min-width: 150px;
-	flex: 0 0 150px;
+	min-width: 140px;
+	flex: 0 0 140px;
 	align-self: center;
 	margin: 0;
 	align-items: flex-start;

@@ -665,15 +665,15 @@ export class TrellisSettingTab extends PluginSettingTab {
 					type: partType,
 				})
 			)
-			.setDesc(
-				slot.role === "tag" && definition
-					? `${definition.name || definition.namespace} · #${nsPath(
-							schema,
-							definition.namespace
-						)}/…`
-					: t("setting.nameSlotDesc")
-			)
 			.setHeading();
+		if (slot.role === "tag" && definition) {
+			heading.setDesc(
+				`${definition.name || definition.namespace} · #${nsPath(
+					schema,
+					definition.namespace
+				)}/…`
+			);
+		}
 		heading.settingEl.addClass("trellis-filename-part-header");
 		heading
 			.addExtraButton((button) =>
@@ -717,7 +717,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		if (slot.role === "tag") {
 			new Setting(card)
 				.setName(t("setting.slotSource"))
-				.setDesc(t("setting.slotSourceDesc"))
 				.addDropdown((dropdown) => {
 					for (const candidate of schemaTagDefinitions(schema)) {
 						dropdown.addOption(
@@ -740,7 +739,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		let customInput: HTMLInputElement | null = null;
 		new Setting(containerEl)
 			.setName(t("setting.segmentSepName"))
-			.setDesc(t("setting.segmentSepDesc"))
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("", t("segmentSep.hidden"))
@@ -781,7 +779,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		};
 		new Setting(containerEl)
 			.setName(t("setting.wrapperName"))
-			.setDesc(t("setting.wrapperDesc"))
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("none", t("wrapper.none"))
@@ -830,7 +827,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		let customInput: HTMLInputElement | null = null;
 		const row = new Setting(containerEl)
 			.setName(t("setting.gapName", { a: index + 1, b: index + 2 }))
-			.setDesc(t("setting.gapDesc"))
 			.addDropdown((dropdown) => {
 				for (const preset of BOUNDARY_PRESETS) dropdown.addOption(preset, preset);
 				dropdown
