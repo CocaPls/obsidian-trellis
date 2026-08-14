@@ -1,5 +1,6 @@
 import {
 	App,
+	ButtonComponent,
 	Notice,
 	PluginSettingTab,
 	Setting,
@@ -19,6 +20,7 @@ import {
 	isValidSlotWrapper,
 	normalizeTagList,
 	nsPath,
+	renderSeparator,
 	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
@@ -83,6 +85,10 @@ function defaultRule(kind: string): TagValueRule | undefined {
 		return { kind, timestampPrecision: "second", timezone: "local" };
 	}
 	return undefined;
+}
+
+function cleanNamespaceInput(value: string): string {
+	return value.trim().replace(/^#/, "").replace(/\/$/, "");
 }
 
 export class TrellisSettingTab extends PluginSettingTab {
@@ -159,6 +165,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 				},
 			});
 			button.classList.toggle("is-active", selected);
+			button.classList.toggle(
+				"has-pending",
+				section === "filename" && this.draftDirty()
+			);
 			const activate = () => {
 				this.activeSection = section;
 				this.render();
@@ -306,7 +316,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
 		});
-		let pendingRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
+		const currentRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
+		let pendingRoot = currentRoot;
+		let rootApply: ButtonComponent | null = null;
+		const updateRootApply = () => {
+			const next = cleanNamespaceInput(pendingRoot);
+			rootApply?.setDisabled(next === currentRoot || Boolean(next && !isValidNamespace(next)));
+		};
 		new Setting(containerEl)
 			.setName(t("setting.ownerAdvanced"))
 			.setDesc(t("setting.ownerAdvancedDesc"))
@@ -314,19 +330,26 @@ export class TrellisSettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
 					.setValue(pendingRoot)
-					.onChange((value) => (pendingRoot = value))
+					.onChange((value) => {
+						pendingRoot = value;
+						updateRootApply();
+					})
 			)
-			.addButton((button) =>
-				button.setButtonText(t("setting.apply")).onClick(() => {
-					const next = pendingRoot.trim().replace(/^#/, "").replace(/\/$/, "");
+			.addButton((button) => {
+				rootApply = button;
+				button
+					.setButtonText(t("setting.apply"))
+					.setDisabled(true)
+					.onClick(() => {
+					const next = cleanNamespaceInput(pendingRoot);
 					if (next && !isValidNamespace(next)) {
 						new Notice(t("notice.rootBadChar"));
 						return;
 					}
 					this.resetDraft();
 					this.plugin.requestRootChange(next, () => this.render());
-				})
-			);
+					});
+			});
 
 		const definitions = this.plugin.tagDefinitions();
 		if (!definitions.some((definition) => definition.id === this.selectedTagDefinitionId)) {
@@ -441,20 +464,31 @@ export class TrellisSettingTab extends PluginSettingTab {
 			});
 
 		let pendingNamespace = definition.namespace;
+		let namespaceApply: ButtonComponent | null = null;
+		const updateNamespaceApply = () => {
+			const next = cleanNamespaceInput(pendingNamespace);
+			namespaceApply?.setDisabled(
+				!isValidNamespace(next) || next === definition.namespace
+			);
+		};
 		new Setting(card)
 			.setName(t("setting.tagNamespace"))
 			.setDesc(t("setting.tagNamespaceDesc"))
 			.addText((text) =>
 				text
 					.setValue(definition.namespace)
-					.onChange((value) => (pendingNamespace = value))
+					.onChange((value) => {
+						pendingNamespace = value;
+						updateNamespaceApply();
+					})
 			)
-			.addButton((button) =>
-				button.setButtonText(t("setting.apply")).onClick(() => {
-					const clean = pendingNamespace
-						.trim()
-						.replace(/^#/, "")
-						.replace(/\/$/, "");
+			.addButton((button) => {
+				namespaceApply = button;
+				button
+					.setButtonText(t("setting.apply"))
+					.setDisabled(true)
+					.onClick(() => {
+					const clean = cleanNamespaceInput(pendingNamespace);
 					if (!isValidNamespace(clean)) {
 						new Notice(t("notice.nsBadChar"));
 						return;
@@ -465,8 +499,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 						clean,
 						() => this.render()
 					);
-				})
-			);
+					});
+			});
 
 		new Setting(card)
 			.setName(t("setting.tagSidebarVisible"))
@@ -526,6 +560,18 @@ export class TrellisSettingTab extends PluginSettingTab {
 				button
 					.setButtonText(t("setting.tagRemoveButton"))
 					.setClass("trellis-destructive")
+					.setDisabled(
+						this.plugin.settings.schema.slots.some(
+							(slot) =>
+								slot.role === "tag" && slot.tagDefinitionId === definition.id
+						) ||
+							Boolean(
+								this.tagInventory
+									?.snapshot()
+									.tagKeys.find((row) => row.tagDefinitionId === definition.id)
+									?.notes
+							)
+					)
 					.onClick(async () => {
 						if (!(await this.plugin.removeTagDefinition(definition.id))) {
 							new Notice(t("notice.tagDefinitionInUse"));
@@ -952,7 +998,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 	) {
 		const button = containerEl.createEl("button", {
 			cls: "trellis-filename-sequence-gap",
-			text: schema.separators[index] ?? "-",
+			text: renderSeparator(
+				schema.separators[index] ?? "-",
+				separatorSpacingAt(schema, index)
+			),
 			attr: {
 				type: "button",
 				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),

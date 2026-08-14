@@ -249,6 +249,9 @@ button.trellis-destructive:hover {
 }
 
 .trellis-settings-nav {
+	position: sticky;
+	top: 0;
+	z-index: var(--layer-popover);
 	display: flex;
 	gap: var(--size-4-1);
 	overflow-x: auto;
@@ -257,6 +260,17 @@ button.trellis-destructive:hover {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-secondary);
+}
+
+.trellis-settings-nav-item.has-pending::after {
+	content: "";
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-inline-start: var(--size-4-2);
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	vertical-align: middle;
 }
 
 .trellis-settings-nav-item {
@@ -479,6 +493,7 @@ button.trellis-destructive:hover {
 	min-width: 32px;
 	padding: var(--size-4-2);
 	font-family: var(--font-monospace);
+	white-space: pre;
 }
 
 .trellis-filename-sequence-slot:hover,
