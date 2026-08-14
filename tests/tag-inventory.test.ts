@@ -53,6 +53,21 @@ test("inventory surfaces duplicates, inline-only values and namespace nodes", ()
 	assert.equal(title.namespaceNodeNotes, 1);
 });
 
+test("inventory does not split case-only variants of one Obsidian tag", () => {
+	const inventory = new TagInventory(schema);
+	inventory.upsertFile({
+		path: "case.md",
+		allTags: ["#BP/A", "#bp/a", "#STATUS/WIP", "#status/wip"],
+		frontmatterTags: ["BP/A", "bp/a", "STATUS/WIP", "status/wip"],
+	});
+	const snapshot = inventory.snapshot();
+	assert.equal(snapshot.managedOccurrences, 1);
+	assert.equal(snapshot.uniqueManagedPaths, 1);
+	assert.equal(snapshot.tagKeys[0].duplicateNotes, 0);
+	assert.equal(snapshot.generalOccurrences, 1);
+	assert.equal(snapshot.uniqueGeneralTags, 1);
+});
+
 test("inventory updates and removes only the changed note snapshot", () => {
 	const inventory = new TagInventory(schema);
 	assert.equal(

@@ -157,6 +157,37 @@ function uniqueId(prefix: string, hint: string, used: Set<string>): string {
 	return value;
 }
 
+/** Obsidian tag identity is case-insensitive. Keep the user's stored/display
+ * casing, but compare normalized paths through this one canonical key. */
+export function tagPathIdentity(path: string): string {
+	return path.replace(/^#/, "").normalize("NFC").toLowerCase();
+}
+
+export function sameTagPath(left: string, right: string): boolean {
+	return tagPathIdentity(left) === tagPathIdentity(right);
+}
+
+/** Return the path below a namespace, "" for the namespace node itself, or
+ * null when the path is outside it. Segment comparison is case-insensitive. */
+export function tagPathRelativeToNamespace(
+	path: string,
+	namespace: string
+): string | null {
+	const pathSegments = path.replace(/^#/, "").split("/");
+	const namespaceSegments = namespace.replace(/^#/, "").split("/");
+	if (
+		pathSegments.length < namespaceSegments.length ||
+		namespaceSegments.some(
+			(segment, index) => tagPathIdentity(pathSegments[index]) !== tagPathIdentity(segment)
+		)
+	) return null;
+	return pathSegments.slice(namespaceSegments.length).join("/");
+}
+
+export function tagPathInNamespace(path: string, namespace: string): boolean {
+	return tagPathRelativeToNamespace(path, namespace) !== null;
+}
+
 /** Convert a legacy scheme id into the 0.5 tag-definition value rule. */
 export function valueRuleFromLegacyScheme(scheme?: SchemeId): TagValueRule | undefined {
 	if (!scheme) return undefined;
@@ -190,8 +221,10 @@ export function schemaTagDefinitions(schema: TrellisSchema): TrellisTagDefinitio
 	const seen = new Set<string>();
 	const definitions: TrellisTagDefinition[] = [];
 	for (const slot of schema.slots) {
-		if (slot.role !== "tag" || !slot.namespace || seen.has(slot.namespace)) continue;
-		seen.add(slot.namespace);
+		if (slot.role !== "tag" || !slot.namespace) continue;
+		const identity = tagPathIdentity(slot.namespace);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
 		definitions.push({
 			id: `legacy-${slot.namespace}`,
 			name: slot.namespace,
@@ -245,10 +278,13 @@ export function normalizeSchemaModel(schema: TrellisSchema): TrellisSchema {
 	};
 
 	const definitionIds = new Set<string>();
+	const definitionAliases = new Map<string, string>();
 	const definitions: TrellisTagDefinition[] = [];
 	for (const definition of next.tagDefinitions ?? []) {
 		const namespace = definition.namespace.trim();
-		if (!namespace || definitions.some((candidate) => candidate.namespace === namespace)) {
+		const duplicate = definitions.find((candidate) => sameTagPath(candidate.namespace, namespace));
+		if (!namespace || duplicate) {
+			if (duplicate && definition.id) definitionAliases.set(definition.id, duplicate.id);
 			continue;
 		}
 		const id = definition.id && !definitionIds.has(definition.id)
@@ -267,9 +303,12 @@ export function normalizeSchemaModel(schema: TrellisSchema): TrellisSchema {
 	for (const slot of next.slots) {
 		if (slot.role !== "tag") continue;
 		const legacyNamespace = slot.namespace?.trim() ?? "";
-		let definition = definitions.find((candidate) => candidate.id === slot.tagDefinitionId);
+		const definitionId = slot.tagDefinitionId
+			? definitionAliases.get(slot.tagDefinitionId) ?? slot.tagDefinitionId
+			: undefined;
+		let definition = definitions.find((candidate) => candidate.id === definitionId);
 		if (!definition && legacyNamespace) {
-			definition = definitions.find((candidate) => candidate.namespace === legacyNamespace);
+			definition = definitions.find((candidate) => sameTagPath(candidate.namespace, legacyNamespace));
 		}
 		if (!definition && legacyNamespace) {
 			const id = uniqueId("tag", legacyNamespace, definitionIds);
@@ -474,10 +513,13 @@ export function matchTagKey(
 			(slot) =>
 				slot.role === "tag" &&
 				(slot.tagDefinitionId === definition.id ||
-					(!slot.tagDefinitionId && slot.namespace === definition.namespace))
+					(!slot.tagDefinitionId &&
+						sameTagPath(slot.namespace ?? "", definition.namespace)))
 		);
 		const fullNamespace = nsPath(schema, definition.namespace);
-		if (tagPath === fullNamespace) {
+		const keyPath = tagPathRelativeToNamespace(tagPath, fullNamespace);
+		if (keyPath === null) continue;
+		if (keyPath === "") {
 			return {
 				slotIndex,
 				tagDefinitionId: definition.id,
@@ -487,17 +529,14 @@ export function matchTagKey(
 				keyPath: "",
 			};
 		}
-		const prefix = `${fullNamespace}/`;
-		if (tagPath.startsWith(prefix)) {
-			return {
-				slotIndex,
-				tagDefinitionId: definition.id,
-				namespace: definition.namespace,
-				fullNamespace,
-				tagPath,
-				keyPath: tagPath.slice(prefix.length),
-			};
-		}
+		return {
+			slotIndex,
+			tagDefinitionId: definition.id,
+			namespace: definition.namespace,
+			fullNamespace,
+			tagPath,
+			keyPath,
+		};
 	}
 	return null;
 }
@@ -521,7 +560,7 @@ export function duplicateLocationGroups(
 		const match = matchTagKey(tag, schema);
 		if (!match) continue;
 		const matched = byNamespace.get(match.fullNamespace) ?? [];
-		if (!matched.includes(tag)) matched.push(tag);
+		if (!matched.some((candidate) => sameTagPath(candidate, tag))) matched.push(tag);
 		byNamespace.set(match.fullNamespace, matched);
 	}
 	return [...byNamespace.entries()]
@@ -553,12 +592,12 @@ export function tagPosition(schema: TrellisSchema): "prefix" | "suffix" {
  * @param tag  Tag including the leading "#", as Obsidian's getAllTags() yields.
  */
 export function tagToTagkey(tag: string, schema: TrellisSchema): string | null {
-	const prefix = `#${primaryNsPath(schema)}/`;
-	if (!tag.startsWith(prefix)) return null;
-	const path = tag.slice(prefix.length);
-	if (path.length === 0) return null;
+	const match = matchTagKey(tag, schema);
+	if (!match || match.slotIndex !== firstTagSlotIndex(schema) || match.keyPath === "") {
+		return null;
+	}
 	const slot = schema.slots.find((s) => s.role === "tag");
-	return path.split("/").join(slot?.segmentSeparator ?? "");
+	return match.keyPath.split("/").join(slot?.segmentSeparator ?? "");
 }
 
 /**
@@ -754,8 +793,9 @@ export function isMultiKey(schema: TrellisSchema): boolean {
 }
 
 /**
- * Whether a tag namespace is safe to use: a non-empty run of letters, digits,
- * hyphen or underscore. This excludes "/", whitespace, control characters and
+ * Whether a tag namespace is safe to use: a non-empty run of Unicode letters,
+ * marks, digits, hyphen or underscore, with at least one non-numeric character.
+ * This excludes "/", whitespace, control characters and
  * tag/YAML metacharacters (",", "[", "]", "#", quotes, newlines), so a namespace
  * can never break tag matching (`#ns/…`) or inject into the `tags: [ns/…]`
  * frontmatter that new-note creation writes. Namespaces are the tag ROOT only
@@ -763,22 +803,31 @@ export function isMultiKey(schema: TrellisSchema): boolean {
  * in practice (e.g. "trel", "tree", "proj").
  */
 export function isValidNamespace(ns: string): boolean {
-	return isValidTagSegment(ns) && !/^[0-9]+$/.test(ns);
+	return (
+		ns !== "" &&
+		/^[\p{L}\p{M}\p{N}_-]+$/u.test(ns) &&
+		/[\p{L}\p{M}_-]/u.test(ns)
+	);
 }
 
 /**
  * Whether a string is usable as a filename separator. It is inserted between
- * the tagkey and the title in the actual filename, so it must be non-empty and
- * must avoid: letters/digits (they'd blur the tagkey↔title boundary), the
+ * slots in the actual filename, so it must be 1–4 punctuation/symbol code
+ * points and must avoid: letters/digits (in every script), the
  * filesystem-illegal set (`\ / : * ? " < > |`), the Obsidian/wikilink-hostile
  * set (`# ^ [ ]`), and any whitespace or control character. Other punctuation
- * (`-`, `_`, `.`, `~`, `=`, `+`, …) is allowed, so uncommon parse-safe symbols
+ * (`-`, `_`, `.`, `~`, `=`, `+`, `·`, …) is allowed, so uncommon parse-safe symbols
  * stay available. Mirrors the reject set the settings UI used inline, made a
  * pure, tested function shared by simple- and advanced-mode validation.
  */
 export function isValidSeparator(s: string): boolean {
-	if (s === "") return false;
-	return !/[A-Za-z0-9/\\:*?"<>|#^[\]]|\s/.test(s);
+	const characters = [...s];
+	if (characters.length === 0 || characters.length > 4) return false;
+	return characters.every(
+		(character) =>
+			/^[\p{P}\p{S}]$/u.test(character) &&
+			!'/\\:*?"<>|#^[]'.includes(character)
+	);
 }
 
 /** Hierarchy display may be hidden, otherwise it follows filename-separator safety. */
@@ -917,10 +966,8 @@ export function tagToTagkeyNs(
 	namespace: string,
 	segmentSeparator: SegmentSeparator = ""
 ): string | null {
-	const prefix = `#${namespace}/`;
-	if (!tag.startsWith(prefix)) return null;
-	const path = tag.slice(prefix.length);
-	if (path.length === 0) return null;
+	const path = tagPathRelativeToNamespace(tag, namespace);
+	if (!path) return null;
 	return path.split("/").join(segmentSeparator);
 }
 
@@ -1278,9 +1325,9 @@ export function renameTagPath(
 	oldPath: string,
 	newPath: string
 ): string | null {
-	if (tag === oldPath) return newPath;
-	if (tag.startsWith(oldPath + "/")) return newPath + tag.slice(oldPath.length);
-	return null;
+	const relative = tagPathRelativeToNamespace(tag, oldPath);
+	if (relative === null) return null;
+	return relative ? `${newPath}/${relative}` : newPath;
 }
 
 // --- Root namespace migration (0.3.0 experimental, B25) ---------------------
@@ -1305,11 +1352,12 @@ export function rootMigratedTag(
 	if (oldRoot === newRoot) return null;
 	let rest = tag;
 	if (oldRoot) {
-		if (!tag.startsWith(oldRoot + "/")) return null; // bare root or foreign tag
-		rest = tag.slice(oldRoot.length + 1);
+		const relative = tagPathRelativeToNamespace(tag, oldRoot);
+		if (!relative) return null; // bare root or foreign tag
+		rest = relative;
 	}
 	const managed = slotNamespaces.some(
-		(ns) => ns && (rest === ns || rest.startsWith(ns + "/"))
+		(ns) => ns && tagPathInNamespace(rest, ns)
 	);
 	if (!managed) return null;
 	const next = newRoot ? `${newRoot}/${rest}` : rest;
@@ -1525,7 +1573,13 @@ export function normalizeTagList(raw: unknown): string[] {
 			: Array.isArray(raw)
 				? raw.filter((t): t is string => typeof t === "string")
 				: [];
-	return [...new Set(tags)];
+	const seen = new Set<string>();
+	return tags.filter((tag) => {
+		const identity = tagPathIdentity(tag);
+		if (seen.has(identity)) return false;
+		seen.add(identity);
+		return true;
+	});
 }
 
 /**
@@ -1536,14 +1590,15 @@ export function normalizeTagList(raw: unknown): string[] {
  * Leading "#" (as metadataCache.getTags yields) is stripped.
  */
 export function expandTagPrefixes(tags: string[]): string[] {
-	const set = new Set<string>();
+	const paths = new Map<string, string>();
 	for (const raw of tags) {
 		const parts = raw.replace(/^#/, "").split("/").filter(Boolean);
 		for (let i = 1; i <= parts.length; i++) {
-			set.add(parts.slice(0, i).join("/"));
+			const path = parts.slice(0, i).join("/");
+			if (!paths.has(tagPathIdentity(path))) paths.set(tagPathIdentity(path), path);
 		}
 	}
-	return [...set].sort();
+	return [...paths.values()].sort();
 }
 
 /** Case-insensitive substring filter, preserving order. */
@@ -1580,7 +1635,7 @@ export function buildTagTree(
 		let acc = "";
 		for (const seg of segs) {
 			acc = acc ? `${acc}/${seg}` : seg;
-			let child = node.children.find((c) => c.segment === seg);
+			let child = node.children.find((candidate) => sameTagPath(candidate.segment, seg));
 			if (!child) {
 				child = { segment: seg, path: acc, children: [], notePaths: [] };
 				node.children.push(child);

@@ -100,7 +100,7 @@ const EN: Record<string, string> = {
 		"parent contains characters a tag can't hold (spaces or symbols like , [ ] # \" ')",
 	"notice.nsEmpty": "namespace cannot be empty",
 	"notice.nsBadChar":
-		"namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
+		"namespace can only contain Unicode letters, marks, digits, '-' and '_' and cannot be numeric-only",
 	"notice.nsApplied": "namespace set to '{ns}'",
 	"setting.apply": "Apply",
 	"setting.section.general": "General",
@@ -206,7 +206,7 @@ const EN: Record<string, string> = {
 		"Reviews all affected filenames before committing the three formatting options above.",
 	"notice.sepEmpty": "separator cannot be empty",
 	"notice.sepBadChar":
-		"separator cannot contain letters, digits, '/', or filename-illegal characters (\\ : * ? \" < > |)",
+		"separator must be 1–4 safe punctuation or symbol characters (no letters, digits, spaces, or filename-illegal characters)",
 	"notice.sepChanged": "separator {from} → {to} on {n} file(s)",
 	"notice.sepReverted": "reverted separator change on {n} file(s)",
 	"notice.noSepChange": "no separator change to undo",
@@ -416,7 +416,7 @@ const EN: Record<string, string> = {
 	"adv.invalid.needTag": "At least one Trellis tag slot is required.",
 	"adv.invalid.oneName": "Only one name slot slot is supported.",
 	"adv.invalid.nsEmpty": "A tag slot namespace cannot be empty.",
-	"adv.invalid.nsBad": "Namespace '{ns}' has illegal characters — use letters, digits, '-' or '_'.",
+	"adv.invalid.nsBad": "Namespace '{ns}' has illegal characters — use Unicode letters, marks, digits, '-' or '_', not digits alone.",
 	"adv.invalid.nsDup": "Namespace '{ns}' is used by more than one tag slot.",
 	"adv.invalid.sep": "Separator {n} is empty or contains an illegal character.",
 	"adv.invalid.spacing": "Separator {n} has an invalid spacing mode.",
@@ -428,7 +428,7 @@ const EN: Record<string, string> = {
 	"modal.confirm.ok": "Apply",
 	"modal.confirm.cancel": "Cancel",
 	"modal.badSep.title": "Invalid separator",
-	"modal.badSep.desc": "A separator cannot be empty and cannot contain letters, digits, spaces, or characters illegal in filenames. Try a symbol like -, _, . or ~.",
+	"modal.badSep.desc": "A separator must be 1–4 safe punctuation or symbol characters. Try -, _, ., · or ~.",
 	"modal.badSep.conflict":
 		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
 	"modal.applyFilename structure.title": "Apply filename structure changes?",
@@ -481,7 +481,7 @@ const EN: Record<string, string> = {
 	"notice.rootUndone": "root namespace reverted on {n} note(s)",
 	"notice.noRootChange": "no root namespace change to undo",
 	"notice.rootBadChar":
-		"root namespace can only contain letters, digits, '-' and '_' (no '/', spaces, or symbols)",
+		"root namespace can only contain Unicode letters, marks, digits, '-' and '_' and cannot be numeric-only",
 	"bulk.title.root": "Changing root namespace",
 	"bulk.title.cascade": "Renaming location tags",
 	"bulk.title.cascadeUndo": "Undoing location-tag rename",
@@ -585,7 +585,7 @@ const KO: Record<string, string> = {
 		"부모에 태그로 쓸 수 없는 문자가 있습니다 (공백·, [ ] # \" ' 같은 기호)",
 	"notice.nsEmpty": "네임스페이스는 비울 수 없습니다",
 	"notice.nsBadChar":
-		"네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
+		"네임스페이스는 유니코드 문자·숫자·'-'·'_'만 쓸 수 있고 숫자로만 구성할 수 없습니다",
 	"notice.nsApplied": "네임스페이스를 '{ns}' 로 설정했습니다",
 	"setting.apply": "적용",
 	"setting.section.general": "일반",
@@ -691,7 +691,7 @@ const KO: Record<string, string> = {
 		"위의 세 형식 옵션이 바꾸는 파일명을 검토한 뒤 한 번에 적용합니다.",
 	"notice.sepEmpty": "구분자는 비울 수 없습니다",
 	"notice.sepBadChar":
-		"구분자에 영문·숫자·'/'·파일명 금지문자(\\ : * ? \" < > |)는 쓸 수 없습니다",
+		"구분자는 안전한 문장부호나 기호 1~4자로 입력하세요. 문자·숫자·공백·파일명 금지문자는 쓸 수 없습니다",
 	"notice.sepChanged": "구분자 {from} → {to}, {n}개 파일 변경",
 	"notice.sepReverted": "구분자 변경 {n}개 파일 되돌림",
 	"notice.noSepChange": "되돌릴 구분자 변경 없음",
@@ -899,7 +899,7 @@ const KO: Record<string, string> = {
 	"adv.invalid.needTag": "트렐리 태그 슬롯이 최소 1개 필요합니다.",
 	"adv.invalid.oneName": "이름 슬롯 슬롯은 1개까지만 지원합니다.",
 	"adv.invalid.nsEmpty": "태그 슬롯의 네임스페이스는 비울 수 없습니다.",
-	"adv.invalid.nsBad": "네임스페이스 '{ns}' 에 사용할 수 없는 문자가 있습니다 — 영문·숫자·'-'·'_'만 됩니다.",
+	"adv.invalid.nsBad": "네임스페이스 '{ns}' 에 사용할 수 없는 문자가 있습니다 — 문자·숫자·'-'·'_'만 쓸 수 있고 숫자로만 구성할 수 없습니다.",
 	"adv.invalid.nsDup": "네임스페이스 '{ns}' 가 둘 이상의 태그 슬롯에서 쓰입니다.",
 	"adv.invalid.sep": "구분자 {n} 이 비어 있거나 사용할 수 없는 문자를 포함합니다.",
 	"adv.invalid.spacing": "구분자 {n} 의 공백 설정이 올바르지 않습니다.",
@@ -911,7 +911,7 @@ const KO: Record<string, string> = {
 	"modal.confirm.ok": "적용",
 	"modal.confirm.cancel": "취소",
 	"modal.badSep.title": "잘못된 구분자",
-	"modal.badSep.desc": "구분자는 비울 수 없고, 영문·숫자·공백이나 파일명에 쓸 수 없는 기호는 넣을 수 없습니다. -, _, ., ~ 같은 기호를 쓰세요.",
+	"modal.badSep.desc": "구분자는 안전한 문장부호나 기호 1~4자로 입력하세요. -, _, ., ·, ~ 등을 쓸 수 있습니다.",
 	"modal.badSep.conflict":
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
 	"modal.applyFilename structure.title": "파일명 구조 변경을 적용할까요?",
@@ -964,7 +964,7 @@ const KO: Record<string, string> = {
 	"notice.rootUndone": "{n}개 노트의 루트 네임스페이스를 되돌렸습니다",
 	"notice.noRootChange": "되돌릴 루트 네임스페이스 변경 없음",
 	"notice.rootBadChar":
-		"루트 네임스페이스는 영문·숫자·'-'·'_'만 쓸 수 있습니다 ('/'·공백·기호 불가)",
+		"루트 네임스페이스는 유니코드 문자·숫자·'-'·'_'만 쓸 수 있고 숫자로만 구성할 수 없습니다",
 	"bulk.title.root": "루트 네임스페이스 변경 중",
 	"bulk.title.cascade": "위치 태그 이름 변경 중",
 	"bulk.title.cascadeUndo": "위치 태그 이름 변경 되돌리는 중",

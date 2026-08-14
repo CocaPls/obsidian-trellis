@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, TFile, Menu, setIcon } from "obsidian";
-import { NoteTreeNode, TagTreeNode } from "./tagkey";
+import { NoteTreeNode, TagTreeNode, tagPathInNamespace } from "./tagkey";
 import { t } from "./i18n";
 
 export const TRELLIS_TREE_VIEW = "trellis-tree-view";
@@ -673,7 +673,7 @@ export class TrellisTreeView extends ItemView {
 		if (tagPath) {
 			// Un-collapse every ancestor of the active note.
 			for (const p of [...this.collapsed]) {
-				if (tagPath === p || tagPath.startsWith(p + "/")) this.collapsed.delete(p);
+				if (tagPathInNamespace(tagPath, p)) this.collapsed.delete(p);
 			}
 		}
 		this.render();

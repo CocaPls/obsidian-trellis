@@ -223,3 +223,19 @@ test("automation can explicitly change a filename-bearing tag without renaming",
 	assert.equal(result.value.next.path, state.path);
 	assert.deepEqual(result.value.changes, { frontmatter: true, rename: false });
 });
+
+test("automation treats namespace and stored tag casing as the same Obsidian tag", () => {
+	const mixedCaseState: TrellisNoteState = {
+		...state,
+		allTags: ["#TREL/S/88/B/07"],
+		frontmatterTags: ["TREL/S/88/B/07"],
+	};
+	const result = planNoteChange(mixedCaseState, schema, {
+		path: mixedCaseState.path,
+		tagChanges: [{ namespace: "TREL", tagPath: "trel/S/99" }],
+	});
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.deepEqual(result.value.next.frontmatterTags, ["trel/S/99"]);
+	assert.equal(result.value.next.path, "notes/S.99- 사과.md");
+});

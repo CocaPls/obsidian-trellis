@@ -4,8 +4,12 @@ import {
 	extractNameMulti,
 	matchTagKey,
 	nsPath,
+	normalizeTagList,
+	sameTagPath,
 	schemaTagDefinitions,
 	slotTagkeys,
+	tagPathIdentity,
+	tagPathInNamespace,
 } from "./tagkey.ts";
 
 export interface TagInventoryFile {
@@ -72,14 +76,12 @@ function notePath(parent: string, basename: string): string {
 }
 
 function normalizedTags(tags: string[]): string[] {
-	return [
-		...new Set(
-			tags
-				.map((tag) => tag.trim())
-				.filter(Boolean)
-				.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-		),
-	].sort();
+	return normalizeTagList(
+		tags
+			.map((tag) => tag.trim())
+			.filter(Boolean)
+			.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
+	).sort();
 }
 
 function sameStrings(a: string[], b: string[]): boolean {
@@ -94,7 +96,7 @@ interface MutableDefinitionRow {
 	fullNamespace: string;
 	notePaths: Set<string>;
 	occurrences: number;
-	pathCounts: Map<string, number>;
+	pathCounts: Map<string, { tagPath: string; count: number }>;
 	duplicateNotes: number;
 	inlineOnlyNotes: number;
 	namespaceNodeNotes: number;
@@ -149,13 +151,14 @@ export class TagInventory {
 					(slot) =>
 						slot.role === "tag" &&
 						(slot.tagDefinitionId === definition.id ||
-							(!slot.tagDefinitionId && slot.namespace === definition.namespace))
+							(!slot.tagDefinitionId &&
+								sameTagPath(slot.namespace ?? "", definition.namespace)))
 				),
 				namespace: definition.namespace,
 				fullNamespace: nsPath(this.schema, definition.namespace),
 				notePaths: new Set<string>(),
 				occurrences: 0,
-				pathCounts: new Map<string, number>(),
+				pathCounts: new Map<string, { tagPath: string; count: number }>(),
 				duplicateNotes: 0,
 				inlineOnlyNotes: 0,
 				namespaceNodeNotes: 0,
@@ -175,13 +178,13 @@ export class TagInventory {
 		const filenameDrift: { path: string; targetPath: string }[] = [];
 
 		for (const file of this.files.values()) {
-			const frontmatter = new Set(file.frontmatterTags);
+			const frontmatter = new Set(file.frontmatterTags.map(tagPathIdentity));
 			const inlineDefinitions = new Set<string>();
 
 			for (const tag of file.allTags) {
 				const match = matchTagKey(tag, this.schema);
 				if (match) {
-					if (!frontmatter.has(tag) && match.tagDefinitionId) {
+					if (!frontmatter.has(tagPathIdentity(tag)) && match.tagDefinitionId) {
 						inlineDefinitions.add(match.tagDefinitionId);
 					}
 					continue;
@@ -189,12 +192,12 @@ export class TagInventory {
 				const tagPath = tag.replace(/^#/, "");
 				if (
 					ownerRoot &&
-					(tagPath === ownerRoot || tagPath.startsWith(`${ownerRoot}/`))
+					tagPathInNamespace(tagPath, ownerRoot)
 				) {
 					rootOwnedUnmatchedOccurrences++;
 				} else {
 					generalOccurrences++;
-					generalTags.add(tag);
+					generalTags.add(tagPathIdentity(tag));
 				}
 			}
 
@@ -225,8 +228,13 @@ export class TagInventory {
 					ambiguous = true;
 				}
 				for (const tagPath of values) {
-					managedPaths.add(tagPath);
-					row.pathCounts.set(tagPath, (row.pathCounts.get(tagPath) ?? 0) + 1);
+					managedPaths.add(tagPathIdentity(tagPath));
+					const identity = tagPathIdentity(tagPath);
+					const current = row.pathCounts.get(identity);
+					row.pathCounts.set(identity, {
+						tagPath: current?.tagPath ?? tagPath,
+						count: (current?.count ?? 0) + 1,
+					});
 				}
 			}
 			for (const definitionId of inlineDefinitions) {
@@ -323,8 +331,7 @@ export class TagInventory {
 				duplicateNotes: row.duplicateNotes,
 				inlineOnlyNotes: row.inlineOnlyNotes,
 				namespaceNodeNotes: row.namespaceNodeNotes,
-				paths: [...row.pathCounts.entries()]
-					.map(([tagPath, count]) => ({ tagPath, count }))
+				paths: [...row.pathCounts.values()]
 					.sort((a, b) => b.count - a.count || a.tagPath.localeCompare(b.tagPath)),
 			})),
 		};

@@ -63,6 +63,9 @@ import {
 	type TagValueRule,
 	isValidHierarchySeparator,
 	isValidSlotWrapper,
+	sameTagPath,
+	tagPathInNamespace,
+	tagPathRelativeToNamespace,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -702,7 +705,11 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const tags = normalizeTagList(cache?.frontmatter?.tags);
-			if (tags.some((tag) => tag.startsWith(`${namespace}/`))) count++;
+			if (
+				tags.some(
+					(tag) => tagPathInNamespace(tag, namespace) && !sameTagPath(tag, namespace)
+				)
+			) count++;
 		}
 		return count;
 	}
@@ -930,7 +937,7 @@ export default class TrellisPlugin extends Plugin {
 	async addTagDefinition(namespace: string, name: string): Promise<string | null> {
 		const clean = namespace.trim().replace(/^#/, "").replace(/\/$/, "");
 		if (!isValidNamespace(clean)) return null;
-		if (this.tagDefinitions().some((definition) => definition.namespace === clean)) {
+		if (this.tagDefinitions().some((definition) => sameTagPath(definition.namespace, clean))) {
 			return null;
 		}
 		const definition: TrellisTagDefinition = {
@@ -1492,14 +1499,13 @@ export default class TrellisPlugin extends Plugin {
 		if (this.treeCache) return this.treeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
 		const full = nsPath(this.settings.schema, this.treeTagKeyNamespace());
-		const prefix = `#${full}/`;
-		const exact = `#${full}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tag = hashedTagList(cache.frontmatter?.tags).find(
-				(t) => t.startsWith(prefix) || t === exact
-			);
+			const tag = hashedTagList(cache.frontmatter?.tags).find((candidate) => {
+				const match = matchTagKey(candidate, this.settings.schema);
+				return match !== null && sameTagPath(match.fullNamespace, full);
+			});
 			if (!tag) continue;
 			const tagPath = tag.replace(/^#/, "");
 			const match = matchTagKey(tagPath, this.settings.schema);
@@ -1707,10 +1713,8 @@ export default class TrellisPlugin extends Plugin {
 			for (const tag of hashedTagList(cache.frontmatter?.tags)) {
 				const match = matchTagKey(tag, this.settings.schema);
 				if (match?.tagDefinitionId !== parentMatch.tagDefinitionId) continue;
-				if (match.tagPath.startsWith(parentTagPath + "/")) {
-					const rest = match.tagPath.slice(parentTagPath.length + 1);
-					if (!rest.includes("/")) segs.add(rest);
-				}
+				const rest = tagPathRelativeToNamespace(match.tagPath, parentTagPath);
+				if (rest && !rest.includes("/")) segs.add(rest);
 			}
 		}
 		return [...segs];
@@ -1871,11 +1875,10 @@ export default class TrellisPlugin extends Plugin {
 		if (!cache) return null;
 		const full = primaryNsPath(this.settings.schema);
 		if (!full) return null;
-		const prefix = `#${full}/`;
-		const exact = `#${full}`;
-		const tag = hashedTagList(cache.frontmatter?.tags).find(
-			(t) => t === exact || t.startsWith(prefix)
-		);
+		const tag = hashedTagList(cache.frontmatter?.tags).find((candidate) => {
+			const match = matchTagKey(candidate, this.settings.schema);
+			return match !== null && sameTagPath(match.fullNamespace, full);
+		});
 		return tag ? tag.replace(/^#/, "") : null;
 	}
 
@@ -1886,7 +1889,8 @@ export default class TrellisPlugin extends Plugin {
 		if (
 			requested &&
 			schemaTagDefinitions(this.settings.schema).some(
-				(definition) => definition.namespace === requested && definition.sidebarVisible
+				(definition) =>
+					sameTagPath(definition.namespace, requested) && definition.sidebarVisible
 			)
 		) {
 			return requested;
@@ -1908,9 +1912,10 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
 		const full = nsPath(this.settings.schema, this.treeTagKeyNamespace());
-		const tag = hashedTagList(cache.frontmatter?.tags).find(
-			(value) => value === `#${full}` || value.startsWith(`#${full}/`)
-		);
+		const tag = hashedTagList(cache.frontmatter?.tags).find((candidate) => {
+			const match = matchTagKey(candidate, this.settings.schema);
+			return match !== null && sameTagPath(match.fullNamespace, full);
+		});
 		return tag ? tag.replace(/^#/, "") : null;
 	}
 
@@ -2273,7 +2278,8 @@ export default class TrellisPlugin extends Plugin {
 		if (
 			schemaTagDefinitions(oldSchema).some(
 				(definition) =>
-					definition.id !== definitionId && definition.namespace === newNamespace
+					definition.id !== definitionId &&
+					sameTagPath(definition.namespace, newNamespace)
 			)
 		) {
 			new Notice(t("notice.advNsDup"));

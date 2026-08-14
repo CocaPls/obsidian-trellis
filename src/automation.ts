@@ -15,6 +15,10 @@ import {
 	schemaTagDefinitions,
 	tagDefinitionById,
 	slotNamespace,
+	sameTagPath,
+	tagPathIdentity,
+	tagPathInNamespace,
+	tagPathRelativeToNamespace,
 } from "./tagkey.ts";
 
 export type AutomationErrorCode =
@@ -137,10 +141,6 @@ function withoutHash(tag: string): string {
 	return tag.replace(/^#/, "");
 }
 
-function pathInNamespace(tagPath: string, fullNamespace: string): boolean {
-	return tagPath === fullNamespace || tagPath.startsWith(`${fullNamespace}/`);
-}
-
 function parentPath(path: string): string {
 	const index = path.lastIndexOf("/");
 	return index === -1 ? "" : path.slice(0, index);
@@ -165,11 +165,11 @@ export function inspectNoteState(
 	const expectedBasename =
 		syncedBasenameMulti(state.basename, frontmatterTags, schema) ?? state.basename;
 	const duplicates = duplicateLocationGroups(frontmatterTags, schema);
-	const frontmatter = new Set(state.frontmatterTags.map(withoutHash));
+	const frontmatter = new Set(state.frontmatterTags.map((tag) => tagPathIdentity(withoutHash(tag))));
 	const inlineManaged = state.allTags
 		.map(withoutHash)
 		.filter(
-			(tag) => !frontmatter.has(tag) && matchTagKey(tag, schema) !== null
+			(tag) => !frontmatter.has(tagPathIdentity(tag)) && matchTagKey(tag, schema) !== null
 		);
 	const issues: InspectionIssue[] = [];
 	if (expectedBasename !== state.basename) {
@@ -269,15 +269,16 @@ export function planNoteChange(
 	const requestedDefinitions = new Set<string>();
 	const requestedFullNamespaces = new Set<string>();
 	let nextFrontmatter = normalizeTagList(state.frontmatterTags).map(withoutHash);
+	const frontmatterIdentities = new Set(nextFrontmatter.map(tagPathIdentity));
 	const inlineTags = state.allTags
 		.map(withoutHash)
-		.filter((tag) => !state.frontmatterTags.map(withoutHash).includes(tag));
+		.filter((tag) => !frontmatterIdentities.has(tagPathIdentity(tag)));
 
 	for (const change of changes) {
 		const definition = change.tagDefinitionId
 			? tagDefinitionById(schema, change.tagDefinitionId)
 			: schemaTagDefinitions(schema).find(
-					(candidate) => candidate.namespace === change.namespace
+					(candidate) => sameTagPath(candidate.namespace, change.namespace ?? "")
 				);
 		if (!definition) {
 			return {
@@ -302,15 +303,17 @@ export function planNoteChange(
 			(candidate) =>
 				candidate.role === "tag" &&
 				(candidate.tagDefinitionId === definition.id ||
-					(!candidate.tagDefinitionId && candidate.namespace === definition.namespace))
+					(!candidate.tagDefinitionId &&
+						sameTagPath(candidate.namespace ?? "", definition.namespace)))
 		);
 		const fullNamespace = nsPath(schema, definition.namespace);
-		requestedFullNamespaces.add(fullNamespace);
+		requestedFullNamespaces.add(tagPathIdentity(fullNamespace));
 		if (change.tagPath !== null) {
 			const tagPath = withoutHash(change.tagPath);
-			const segments = tagPath.slice(fullNamespace.length + 1).split("/");
+			const relative = tagPathRelativeToNamespace(tagPath, fullNamespace);
+			const segments = relative?.split("/") ?? [];
 			if (
-				!tagPath.startsWith(`${fullNamespace}/`) ||
+				!relative ||
 				!isValidTagPath(tagPath) ||
 				segments.some((segment) =>
 					slot
@@ -328,7 +331,7 @@ export function planNoteChange(
 			}
 		}
 		const conflictingInline = inlineTags.filter((tag) =>
-			pathInNamespace(tag, fullNamespace)
+			tagPathInNamespace(tag, fullNamespace)
 		);
 		if (conflictingInline.length > 0) {
 			return {
@@ -341,17 +344,17 @@ export function planNoteChange(
 			};
 		}
 		nextFrontmatter = nextFrontmatter.filter(
-			(tag) => !pathInNamespace(tag, fullNamespace)
+			(tag) => !tagPathInNamespace(tag, fullNamespace)
 		);
 		if (change.tagPath !== null) nextFrontmatter.push(withoutHash(change.tagPath));
 	}
 
-	nextFrontmatter = [...new Set(nextFrontmatter)];
+	nextFrontmatter = normalizeTagList(nextFrontmatter);
 	const nextAllTags = [
 		...new Set([...inlineTags, ...nextFrontmatter].map((tag) => `#${tag}`)),
 	];
 	const unresolvedDuplicates = duplicateLocationGroups(nextAllTags, schema).filter(
-		(group) => !requestedFullNamespaces.has(group.namespace)
+		(group) => !requestedFullNamespaces.has(tagPathIdentity(group.namespace))
 	);
 	if (unresolvedDuplicates.length > 0) {
 		return {

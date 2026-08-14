@@ -48,6 +48,9 @@ import {
 	unwrapSlotValue,
 	isValidHierarchySeparator,
 	isValidSlotWrapper,
+	sameTagPath,
+	tagPathInNamespace,
+	tagPathRelativeToNamespace,
 } from "../src/tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -156,6 +159,48 @@ test("matchTagKey applies the optional owner root before classifying", () => {
 	assert.equal(matchTagKey("#trellis/bp/system", rooted)?.slotIndex, 0);
 	assert.equal(matchTagKey("#trellis/title/policy", rooted)?.slotIndex, 1);
 	assert.equal(matchTagKey("#bp/system", rooted), null);
+});
+
+test("managed tag identity follows Obsidian's case-insensitive tag rules", () => {
+	const rooted: TrellisSchema = {
+		rootNamespace: "Trellis",
+		tagDefinitions: [
+			{ id: "bp", name: "Blueprint", namespace: "BP", sidebarVisible: true },
+		],
+		slots: [
+			{ id: "slot-bp", role: "tag", tagDefinitionId: "bp" },
+			{ id: "slot-name", role: "name" },
+		],
+		separators: ["-"],
+	};
+	const match = matchTagKey("#trellis/bp/N/e/03", rooted);
+	assert.equal(match?.tagDefinitionId, "bp");
+	assert.equal(match?.fullNamespace, "Trellis/BP");
+	assert.equal(match?.keyPath, "N/e/03");
+	assert.equal(tagToTagkey("#TRELLIS/BP/N/E/03", rooted), "NE03");
+	assert.equal(sameTagPath("#Trellis/BP", "trellis/bp"), true);
+	assert.equal(tagPathInNamespace("TRELLIS/bp/N/03", "trellis/BP"), true);
+	assert.equal(
+		tagPathRelativeToNamespace("TRELLIS/bp/N/03", "trellis/BP"),
+		"N/03"
+	);
+});
+
+test("schema normalization merges case-only duplicate tag definitions by stable id", () => {
+	const duplicate: TrellisSchema = {
+		tagDefinitions: [
+			{ id: "bp-lower", name: "Blueprint", namespace: "bp", sidebarVisible: true },
+			{ id: "bp-upper", name: "Duplicate", namespace: "BP", sidebarVisible: true },
+		],
+		slots: [
+			{ id: "slot-1", role: "tag", tagDefinitionId: "bp-upper" },
+			{ id: "slot-2", role: "name" },
+		],
+		separators: ["-"],
+	};
+	const normalized = normalizeSchemaModel(duplicate);
+	assert.deepEqual(normalized.tagDefinitions?.map((definition) => definition.id), ["bp-lower"]);
+	assert.equal(normalized.slots[0].tagDefinitionId, "bp-lower");
 });
 
 test("duplicateLocationGroups flags a namespace carrying 2+ location tags", () => {
@@ -353,6 +398,13 @@ test("normalizeTagList handles string, array, and junk", () => {
 	assert.deepEqual(normalizeTagList("trel/S88"), ["trel/S88"]);
 	assert.deepEqual(normalizeTagList(undefined), []);
 	assert.deepEqual(normalizeTagList([1, "ok", null]), ["ok"]);
+});
+
+test("normalizeTagList deduplicates case-only variants while preserving first casing", () => {
+	assert.deepEqual(normalizeTagList(["BP/N/03", "bp/n/03", "status/open"]), [
+		"BP/N/03",
+		"status/open",
+	]);
 });
 
 test("expandTagPrefixes yields every level, deduped and sorted", () => {
@@ -908,6 +960,7 @@ test("isValidNamespace allows plain names, rejects path/traversal/control/YAML c
 	assert.equal(isValidNamespace("tree"), true);
 	assert.equal(isValidNamespace("proj-2"), true);
 	assert.equal(isValidNamespace("key_2"), true);
+	assert.equal(isValidNamespace("청사진-2"), true);
 	assert.equal(isValidNamespace(""), false);
 	assert.equal(isValidNamespace("a/b"), false); // path separator
 	assert.equal(isValidNamespace("../x"), false); // traversal
@@ -915,6 +968,9 @@ test("isValidNamespace allows plain names, rejects path/traversal/control/YAML c
 	assert.equal(isValidNamespace("x]\ntags: [evil"), false); // YAML/newline injection
 	assert.equal(isValidNamespace("a,b"), false); // tag list separator
 	assert.equal(isValidNamespace("#trel"), false); // hash
+	assert.equal(isValidNamespace("bp.name"), false); // punctuation is not namespace identity
+	assert.equal(isValidNamespace("name!"), false);
+	assert.equal(isValidNamespace("１２３"), false); // numeric-only in any script
 });
 
 test("isValidSeparator accepts parse-safe symbols, rejects filename-hostile ones", () => {
@@ -925,9 +981,15 @@ test("isValidSeparator accepts parse-safe symbols, rejects filename-hostile ones
 	assert.equal(isValidSeparator("·"), true);
 	assert.equal(isValidSeparator("~"), true);
 	assert.equal(isValidSeparator("=="), true);
+	assert.equal(isValidSeparator("🙂"), true); // portable Unicode symbol
 	assert.equal(isValidSeparator(""), false); // empty
 	assert.equal(isValidSeparator("a"), false); // letter blurs the boundary
 	assert.equal(isValidSeparator("1"), false); // digit
+	assert.equal(isValidSeparator("가"), false); // letters in any script
+	assert.equal(isValidSeparator("é"), false);
+	assert.equal(isValidSeparator("１"), false); // full-width digit
+	assert.equal(isValidSeparator("١"), false); // Arabic-Indic digit
+	assert.equal(isValidSeparator("-----"), false); // custom symbols stay compact
 	assert.equal(isValidSeparator("/"), false); // path separator
 	assert.equal(isValidSeparator("\\"), false); // backslash
 	assert.equal(isValidSeparator(":"), false); // filesystem-illegal
