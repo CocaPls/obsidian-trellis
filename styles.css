@@ -306,3 +306,67 @@ button.trellis-destructive:hover {
 	min-width: 7rem;
 	max-width: 12rem;
 }
+
+/* 0.5 settings: registered tag definitions and filename slots are separate
+   cards so users can see what a tag is versus where it appears in a name. */
+.trellis-section-description {
+	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-4);
+}
+
+.trellis-definition-card,
+.trellis-slot-card {
+	margin: var(--size-4-3) 0;
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.trellis-definition-card > .setting-item,
+.trellis-slot-card > .setting-item {
+	padding-inline: 0;
+}
+
+.trellis-filename-preview {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin: var(--size-4-3) 0 var(--size-4-4);
+	padding: var(--size-4-3);
+	border-radius: var(--radius-m);
+	background: var(--background-primary-alt);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.trellis-filename-preview-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trellis-filename-preview code {
+	font-size: var(--font-ui-medium);
+	overflow-wrap: anywhere;
+}
+
+.trellis-gap-row {
+	margin-inline: var(--size-4-3);
+	padding-inline-start: var(--size-4-3);
+	border-inline-start: 2px solid var(--background-modifier-border);
+}
+
+@media (max-width: 600px) {
+	.trellis-definition-card .setting-item,
+	.trellis-slot-card .setting-item,
+	.trellis-gap-row {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.trellis-definition-card .setting-item-control,
+	.trellis-slot-card .setting-item-control,
+	.trellis-gap-row .setting-item-control {
+		width: 100%;
+		justify-content: flex-start;
+		flex-wrap: wrap;
+	}
+}

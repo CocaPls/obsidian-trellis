@@ -42,6 +42,7 @@ import {
 	syncedBasenameMulti,
 	isValidTagSegmentForSlot,
 	isValidTagPath,
+	isValidNamespace,
 	tagNamespaces,
 	separatorConflicts,
 	schemaMigratedName,
@@ -57,6 +58,8 @@ import {
 	legacySchemeFromValueRule,
 	valueRuleFromLegacyScheme,
 	slotValueRule,
+	type TrellisTagDefinition,
+	type TagValueRule,
 	isValidHierarchySeparator,
 	isValidSlotWrapper,
 } from "./tagkey";
@@ -112,6 +115,10 @@ function isPlainObject(value: unknown): value is PlainObject {
 
 function sameStrings(a: string[], b: string[]): boolean {
 	return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function hashedTagList(raw: unknown): string[] {
+	return normalizeTagList(raw).map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
 }
 
 /**
@@ -191,10 +198,6 @@ interface TrellisSettings {
 	settingsVersion: number;
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
-	/** Advanced mode (0.2.0, experimental): expose the multi-key slot editor. */
-	advancedMode: boolean;
-	/** Suppress the confirm dialog when applying an advanced-mode schema edit. */
-	suppressSchemaConfirm: boolean;
 	treeViewEnabled: boolean;
 	/** Custom tab title for the tree view; "" = the localized default. */
 	treeViewName: string;
@@ -231,8 +234,6 @@ interface TrellisSettings {
 const DEFAULT_SETTINGS: TrellisSettings = {
 	settingsVersion: CURRENT_SETTINGS_VERSION,
 	schema: defaultSchema(),
-	advancedMode: false,
-	suppressSchemaConfirm: false,
 	treeViewEnabled: true,
 	treeViewName: "",
 	headerButtons: {
@@ -608,6 +609,8 @@ export default class TrellisPlugin extends Plugin {
 			normalizeSchemaFormatting(this.settings.schema)
 		);
 		this.settings.settingsVersion = CURRENT_SETTINGS_VERSION;
+		delete (this.settings as unknown as Record<string, unknown>).advancedMode;
+		delete (this.settings as unknown as Record<string, unknown>).suppressSchemaConfirm;
 		// Own copy of headerButtons so a toggle never mutates the shared default;
 		// missing keys (older saved data) fall back to visible.
 		this.settings.headerButtons = {
@@ -616,6 +619,16 @@ export default class TrellisPlugin extends Plugin {
 				? (data.headerButtons as Partial<HeaderButtonVisibility>)
 				: {}),
 		};
+		const schemaChanged =
+			JSON.stringify(loaded.schema ?? null) !== JSON.stringify(this.settings.schema);
+		if (
+			loaded.settingsVersion !== CURRENT_SETTINGS_VERSION ||
+			schemaChanged ||
+			"advancedMode" in data ||
+			"suppressSchemaConfirm" in data
+		) {
+			await this.saveSettings();
+		}
 	}
 
 	// --- Single-key view of the schema (settings-tab read/write helpers) ----
@@ -655,6 +668,85 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	/** Managed tag branches are independent from filename slots in 0.5. */
+	tagDefinitions(): TrellisTagDefinition[] {
+		return this.settings.schema.tagDefinitions ?? [];
+	}
+
+	private nextDefinitionId(namespace: string): string {
+		const used = new Set(this.tagDefinitions().map((definition) => definition.id));
+		const hint = namespace
+			.normalize("NFKD")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "") || "tag";
+		let id = `tag-${hint}`;
+		let suffix = 2;
+		while (used.has(id)) id = `tag-${hint}-${suffix++}`;
+		return id;
+	}
+
+	async addTagDefinition(namespace: string, name: string): Promise<string | null> {
+		const clean = namespace.trim().replace(/^#/, "").replace(/\/$/, "");
+		if (!isValidNamespace(clean)) return null;
+		if (this.tagDefinitions().some((definition) => definition.namespace === clean)) {
+			return null;
+		}
+		const definition: TrellisTagDefinition = {
+			id: this.nextDefinitionId(clean),
+			name: name.trim() || clean,
+			namespace: clean,
+			sidebarVisible: true,
+		};
+		if (!this.settings.schema.tagDefinitions) this.settings.schema.tagDefinitions = [];
+		this.settings.schema.tagDefinitions.push(definition);
+		await this.saveSettings();
+		this.rebuildTrees();
+		return definition.id;
+	}
+
+	async updateTagDefinition(
+		id: string,
+		changes: Partial<Pick<TrellisTagDefinition, "name" | "sidebarVisible" | "color">> & {
+			valueRule?: TagValueRule | null;
+		}
+	): Promise<void> {
+		const definition = this.tagDefinitions().find((candidate) => candidate.id === id);
+		if (!definition) return;
+		if (changes.name !== undefined) definition.name = changes.name.trim();
+		if (changes.sidebarVisible !== undefined) {
+			definition.sidebarVisible = changes.sidebarVisible;
+		}
+		if (changes.color !== undefined) {
+			if (changes.color) definition.color = changes.color;
+			else delete definition.color;
+		}
+		if (changes.valueRule !== undefined) {
+			if (changes.valueRule === null) delete definition.valueRule;
+			else definition.valueRule = { ...changes.valueRule };
+		}
+		await this.saveSettings();
+		this.rebuildTrees();
+	}
+
+	async removeTagDefinition(id: string): Promise<boolean> {
+		const definition = this.tagDefinitions().find((candidate) => candidate.id === id);
+		if (!definition) return false;
+		if (
+			this.settings.schema.slots.some(
+				(slot) => slot.role === "tag" && slot.tagDefinitionId === id
+			)
+		) return false;
+		const full = nsPath(this.settings.schema, definition.namespace);
+		if (this.managedNoteCountForNamespace(full) > 0) return false;
+		this.settings.schema.tagDefinitions = this.tagDefinitions().filter(
+			(candidate) => candidate.id !== id
+		);
+		await this.saveSettings();
+		this.rebuildTrees();
+		return true;
+	}
+
 	private schemaHasNameKey(): boolean {
 		return this.settings.schema.slots.some((slot) => slot.role === "name");
 	}
@@ -673,7 +765,7 @@ export default class TrellisPlugin extends Plugin {
 		if (this.schemaHasNameKey()) return;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
-			if (cache && this.hasManagedTagValue(getAllTags(cache) ?? [])) {
+			if (cache && this.hasManagedTagValue(hashedTagList(cache.frontmatter?.tags))) {
 				this.noNameManagedPaths.add(file.path);
 			}
 		}
@@ -1029,24 +1121,25 @@ export default class TrellisPlugin extends Plugin {
 
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return;
-		const tags = getAllTags(cache) ?? [];
-		this.trackNoNameManagement(file, tags);
+		const fmTags = hashedTagList(cache.frontmatter?.tags);
+		this.trackNoNameManagement(file, fmTags);
 
 		// One note = one location per namespace. Warn once (lightly) if a note
 		// carries duplicate location tags; the user resolves them in bulk via the
 		// "check duplicate location tags" command. Detection uses frontmatter tags
 		// only — that's what the cleanup can actually remove (inline body tags
 		// aren't touched). We still sync from the first match (pickTagkey) so
-		// behavior stays deterministic.
-		const fmTags = normalizeTagList(cache.frontmatter?.tags).map((tg) => "#" + tg);
+		// synchronization stops until the ambiguity is resolved. Trellis never
+		// silently chooses one value from a single-valued managed tag definition.
 		const dupGroups = duplicateLocationGroups(fmTags, this.settings.schema);
 		if (dupGroups.length > 0) {
 			if (!this.multiWarned.has(file.path)) {
 				this.multiWarned.add(file.path);
 				const n = dupGroups.reduce((sum, g) => sum + g.tags.length, 0);
 				new Notice(t("notice.multiLocation", { name: file.basename, n }));
-				console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
-			}
+					console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
+				}
+				return;
 		} else {
 			this.multiWarned.delete(file.path);
 		}
@@ -1055,9 +1148,9 @@ export default class TrellisPlugin extends Plugin {
 		// its own namespace; the 2-slot single-key path stays the default.
 		let newBasename: string | null;
 		if (isMultiKey(this.settings.schema)) {
-			newBasename = syncedBasenameMulti(file.basename, tags, this.settings.schema);
+			newBasename = syncedBasenameMulti(file.basename, fmTags, this.settings.schema);
 		} else {
-			const tagkey = pickTagkey(tags, this.settings.schema);
+			const tagkey = pickTagkey(fmTags, this.settings.schema);
 			if (tagkey === null) return; // no location tag → never touch the file
 			newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
 		}
@@ -1139,7 +1232,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tag = (getAllTags(cache) ?? []).find(
+			const tag = hashedTagList(cache.frontmatter?.tags).find(
 				(t) => t.startsWith(prefix) || t === exact
 			);
 			if (!tag) continue;
@@ -1163,20 +1256,28 @@ export default class TrellisPlugin extends Plugin {
 		if (this.tagTreeCache) return this.tagTreeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
 		const untagged: string[] = [];
+		const visibleDefinitions = new Set(
+			this.tagDefinitions()
+				.filter((definition) => definition.sidebarVisible)
+				.map((definition) => definition.id)
+		);
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
-			const tags = cache ? getAllTags(cache) ?? [] : [];
+			const tags = cache ? hashedTagList(cache.frontmatter?.tags) : [];
+			const allManaged = tags
+				.map((tag) => matchTagKey(tag, this.settings.schema))
+				.filter((match) => match !== null);
 			const managed = [
 				...new Set(
-					tags.flatMap((tag) => {
-						const match = matchTagKey(tag, this.settings.schema);
-						return match ? [`#${match.tagPath}`] : [];
+					allManaged.flatMap((match) => {
+						return match.tagDefinitionId && visibleDefinitions.has(match.tagDefinitionId)
+							? [`#${match.tagPath}`]
+							: [];
 					})
 				),
 			];
-			if (managed.length === 0) {
+			if (allManaged.length === 0) {
 				untagged.push(file.path);
-				continue;
 			}
 			for (const tag of managed) {
 				entries.push({ tagPath: tag.replace(/^#/, ""), notePath: file.path });
@@ -1293,7 +1394,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tag = (getAllTags(cache) ?? []).find(
+			const tag = hashedTagList(cache.frontmatter?.tags).find(
 				(t) => t.startsWith(prefix) || t === exact
 			);
 			if (!tag) continue;
@@ -1457,9 +1558,10 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
 		const full = primaryNsPath(this.settings.schema);
+		if (!full) return null;
 		const prefix = `#${full}/`;
 		const exact = `#${full}`;
-		const tag = (getAllTags(cache) ?? []).find(
+		const tag = hashedTagList(cache.frontmatter?.tags).find(
 			(t) => t === exact || t.startsWith(prefix)
 		);
 		return tag ? tag.replace(/^#/, "") : null;
@@ -1477,7 +1579,11 @@ export default class TrellisPlugin extends Plugin {
 		) {
 			return requested;
 		}
-		return primaryNamespace(this.settings.schema);
+		return (
+			this.tagDefinitions().find((definition) => definition.sidebarVisible)?.namespace ??
+			this.tagDefinitions()[0]?.namespace ??
+			primaryNamespace(this.settings.schema)
+		);
 	}
 
 	async setTreeTagKeyNamespace(namespace: string) {
@@ -1490,7 +1596,7 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
 		const full = nsPath(this.settings.schema, this.treeTagKeyNamespace());
-		const tag = (getAllTags(cache) ?? []).find(
+		const tag = hashedTagList(cache.frontmatter?.tags).find(
 			(value) => value === `#${full}` || value.startsWith(`#${full}/`)
 		);
 		return tag ? tag.replace(/^#/, "") : null;
@@ -1502,7 +1608,7 @@ export default class TrellisPlugin extends Plugin {
 		if (!cache) return [];
 		return [
 			...new Set(
-				(getAllTags(cache) ?? []).flatMap((tag) => {
+					hashedTagList(cache.frontmatter?.tags).flatMap((tag) => {
 					const match = matchTagKey(tag, this.settings.schema);
 					return match && match.keyPath !== "" ? [match.tagPath] : [];
 				})
@@ -1765,29 +1871,62 @@ export default class TrellisPlugin extends Plugin {
 	/** Rename the simple-mode namespace together with every managed frontmatter
 	 * tag. A setting-only flip would make the existing tags invisible to TRELLIS. */
 	requestPrimaryNamespaceChange(newNamespace: string, onDone: () => void) {
+		const primary = this.settings.schema.slots.find((slot) => slot.role === "tag");
+		if (!primary?.tagDefinitionId) {
+			onDone();
+			return;
+		}
+		this.requestTagDefinitionNamespaceChange(
+			primary.tagDefinitionId,
+			newNamespace,
+			onDone
+		);
+	}
+
+	/** Rename any managed tag branch while preserving its stable definition ID. */
+	requestTagDefinitionNamespaceChange(
+		definitionId: string,
+		newNamespace: string,
+		onDone: () => void
+	) {
+		if (!isValidNamespace(newNamespace)) {
+			new Notice(t("notice.nsBadChar"));
+			onDone();
+			return;
+		}
 		const oldSchema = cloneSchema(this.settings.schema);
-		const oldNamespace = primaryNamespace(oldSchema);
-		if (newNamespace === oldNamespace) {
+		const oldDefinition = tagDefinitionById(oldSchema, definitionId);
+		if (!oldDefinition || newNamespace === oldDefinition.namespace) {
+			onDone();
+			return;
+		}
+		if (
+			schemaTagDefinitions(oldSchema).some(
+				(definition) =>
+					definition.id !== definitionId && definition.namespace === newNamespace
+			)
+		) {
+			new Notice(t("notice.advNsDup"));
 			onDone();
 			return;
 		}
 		const newSchema = cloneSchema(oldSchema);
-		const primary = newSchema.slots.find((slot) => slot.role === "tag");
-		const definition = primary
-			? tagDefinitionById(newSchema, primary.tagDefinitionId)
-			: undefined;
-		if (!primary || !definition) return;
-		definition.namespace = newNamespace;
-		const from = primaryNsPath(oldSchema);
-		const to = primaryNsPath(newSchema);
-		const rows = this.previewCascade(from, to);
+		const newDefinition = tagDefinitionById(newSchema, definitionId);
+		if (!newDefinition) {
+			onDone();
+			return;
+		}
+		newDefinition.namespace = newNamespace;
+		const to = nsPath(newSchema, newNamespace);
+		const oldPath = nsPath(oldSchema, oldDefinition.namespace);
+		const rows = this.previewCascade(oldPath, to);
 		if (rows.length === 0) {
 			void this.applyNamespaceMigration(oldSchema, newSchema, rows, false).finally(
 				onDone
 			);
 			return;
 		}
-		new CascadePreviewModal(this.app, from, to, rows, () => {
+		new CascadePreviewModal(this.app, oldPath, to, rows, () => {
 			void this.applyNamespaceMigration(oldSchema, newSchema, rows, false).finally(
 				onDone
 			);
@@ -1814,7 +1953,7 @@ export default class TrellisPlugin extends Plugin {
 			rows.length > 0 ? new BulkProgressModal(this.app, operation) : null;
 		progress?.open();
 		try {
-			this.settings.schema = cloneSchema(targetSchema);
+			this.settings.schema = normalizeSchemaModel(cloneSchema(targetSchema));
 			await this.saveSettings();
 			for (let i = 0; i < rows.length; i++) {
 				if (progress && !(await progress.gate())) break;
@@ -1873,7 +2012,7 @@ export default class TrellisPlugin extends Plugin {
 
 			if (progress?.wasCancelled || failed.length > 0) {
 				const { restored, remaining } = await this.revertCascadeRecords(records);
-				this.settings.schema = cloneSchema(sourceSchema);
+				this.settings.schema = normalizeSchemaModel(cloneSchema(sourceSchema));
 				this.settings.lastNamespaceChange = previousUndo;
 				await this.saveSettings();
 				this.rebuildTrees();
@@ -2052,7 +2191,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tags = getAllTags(cache) ?? [];
+			const tags = hashedTagList(cache.frontmatter?.tags);
 			const newName = schemaMigratedName(file.basename, tags, oldSchema, newSchema);
 			if (newName !== null) out.push({ path: file.path, oldName: file.basename, newName });
 		}
@@ -2074,7 +2213,7 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tags = getAllTags(cache) ?? [];
+			const tags = hashedTagList(cache.frontmatter?.tags);
 			const oldKeys = slotTagkeys(tags, oldSchema);
 			if (!oldKeys.some(Boolean)) continue;
 			if (extractNameMulti(file.basename, oldKeys, oldSchema) !== "") count++;
@@ -2259,7 +2398,7 @@ export default class TrellisPlugin extends Plugin {
 						outcome: "rolled-back",
 					});
 				} else {
-					this.settings.schema = cloneSchema(newSchema);
+					this.settings.schema = normalizeSchemaModel(cloneSchema(newSchema));
 					this.settings.lastSeparatorChange =
 						renames.length > 0
 							? {
@@ -2329,7 +2468,7 @@ export default class TrellisPlugin extends Plugin {
 					return schema;
 				})();
 		try {
-			this.settings.schema = oldSchema;
+			this.settings.schema = normalizeSchemaModel(oldSchema);
 			this.separatorMigrationRunning = true;
 			const { undone, remaining } = await this.revertSeparatorRenames(rec.renames);
 			this.settings.lastSeparatorChange =

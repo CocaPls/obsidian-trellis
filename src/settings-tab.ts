@@ -7,32 +7,24 @@ import {
 	getAllTags,
 } from "obsidian";
 import {
-	KeySlot,
-	SCHEME_IDS,
-	SchemeId,
-	SegmentSeparator,
 	SeparatorSpacing,
 	TrellisSchema,
-	isMultiKey,
+	type KeySlot,
+	type SlotWrapperKind,
+	type TagValueRule,
+	type TrellisTagDefinition,
+	assembleBasenameMulti,
+	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
+	isValidSlotWrapper,
+	normalizeTagList,
 	nsPath,
-	primaryNamespace,
-	primarySeparator,
-	primarySeparatorSymbol,
 	renderSeparator,
-	schemaFromLegacy,
+	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
-	tagNamespaces,
-	tagPosition,
-	normalizeTagList,
 	tagDefinitionById,
-	slotNamespace,
-	legacySchemeFromValueRule,
-	valueRuleFromLegacyScheme,
-	isValidHierarchySeparator,
-	isValidSlotWrapper,
 } from "./tagkey";
 import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
@@ -40,10 +32,12 @@ import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
 import type TrellisPlugin from "./main";
 
-const DEFAULT_NAMESPACE_PLACEHOLDER = "trel";
 const ROOT_NAMESPACE_PLACEHOLDER = "trellis";
-const SEGMENT_SEPARATORS: SegmentSeparator[] = ["", ".", "-", "_"];
-const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
+const DASHED_DATE_FORMAT = "YYYY-MM-DD";
+const SEGMENT_PRESETS = ["", ".", "-", "_"];
+const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
+const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
+const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
@@ -63,11 +57,33 @@ function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	};
 }
 
-/** Settings: namespace, separator, key position. */
+function nextSlotId(schema: TrellisSchema): string {
+	const used = new Set(schema.slots.map((slot) => slot.id));
+	let index = schema.slots.length + 1;
+	while (used.has(`slot-${index}`)) index++;
+	return `slot-${index}`;
+}
+
+function defaultRule(kind: string): TagValueRule | undefined {
+	if (kind === "alternating") {
+		return {
+			kind,
+			firstLevel: "alphabet",
+			letterCase: "upper",
+			numberWidth: 2,
+		};
+	}
+	if (kind === "sequence") return { kind, start: 1, numberWidth: "auto" };
+	if (kind === "date") return { kind, dateFormat: "YYYYMMDD" };
+	if (kind === "timestamp") {
+		return { kind, timestampPrecision: "second", timezone: "local" };
+	}
+	return undefined;
+}
+
 export class TrellisSettingTab extends PluginSettingTab {
 	private readonly plugin: TrellisPlugin;
-	/** Keep the experimental disclosure open across our own settings re-renders. */
-	private experimentalOpen: boolean | null = null;
+	private draftSchema: TrellisSchema | null = null;
 	private tagInventory: TagInventory | null = null;
 	private inventorySchemaFingerprint = "";
 	private statsEl: HTMLElement | null = null;
@@ -90,21 +106,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 		super.hide();
 	}
 
-	/** Imperative render of the settings tab. Our own re-render triggers call
-	 *  this directly instead of the framework's deprecated display() entry. */
 	private render() {
 		const { containerEl } = this;
 		containerEl.empty();
 		this.ensureTagInventory();
 
-		// ── General ──────────────────────────────────────────────────────────
 		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
-
 		new Setting(containerEl)
 			.setName(t("setting.langName"))
 			.setDesc(t("setting.langDesc"))
-			.addDropdown((dd) =>
-				dd
+			.addDropdown((dropdown) =>
+				dropdown
 					.addOption("auto", t("setting.langAuto"))
 					.addOption("ko", "한국어")
 					.addOption("en", "English")
@@ -115,313 +127,774 @@ export class TrellisSettingTab extends PluginSettingTab {
 						setLang(this.plugin.settings.language);
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
-						this.plugin.applyTreeViewName(); // re-localize the tab title
-						this.render(); // re-render this tab in the new language
-					})
-			);
-
-		// ── Filename scheme ──────────────────────────────────────────────────
-		new Setting(containerEl).setName(t("setting.section.scheme")).setHeading();
-
-		this.renderStats(containerEl);
-
-		// Simple (single-key) schema knobs. Hidden in advanced mode — the slot
-		// editor covers namespace/separator/position as slot properties.
-		if (!this.plugin.settings.advancedMode) {
-			// Namespace: staged in the field, committed on the Apply button — no
-			// silent per-keystroke changes to the source-of-truth namespace.
-			{
-				let pending = primaryNamespace(this.plugin.settings.schema);
-				new Setting(containerEl)
-					.setName(t("setting.nsName"))
-					.setDesc(t("setting.nsDesc"))
-					.addText((text) =>
-						text
-							.setPlaceholder(DEFAULT_NAMESPACE_PLACEHOLDER)
-							.setValue(pending)
-							.onChange((v) => (pending = v))
-					)
-					.addButton((b) =>
-						b.setButtonText(t("setting.apply")).onClick(() => {
-							const v = pending.trim().replace(/^#/, "").replace(/\/$/, "");
-							if (v === "") {
-								new Notice(t("notice.nsEmpty"));
-								return;
-							}
-							if (!isValidNamespace(v)) {
-								new Notice(t("notice.nsBadChar"));
-								return;
-							}
-							if (v === primaryNamespace(this.plugin.settings.schema)) return;
-							this.plugin.requestPrimaryNamespaceChange(v, () => this.render());
-						})
-					);
-			}
-
-			// Filename formatting is staged as one transaction: boundary symbol,
-			// boundary spacing, and the tag hierarchy's visible segment joiner.
-			{
-				const schema = this.plugin.settings.schema;
-				const currentSymbol = primarySeparatorSymbol(schema);
-				const presetSymbols = ["-", "_", ".", "·"];
-				let pendingSymbol = currentSymbol;
-				let pendingSpacing = separatorSpacingAt(schema, 0);
-				let pendingSegment =
-					schema.slots.find((slot) => slot.role === "tag")?.segmentSeparator ?? "";
-				let customInput: HTMLInputElement | null = null;
-				let previewEl: HTMLElement | null = null;
-				const updatePreview = () => {
-					if (!previewEl) return;
-					const key = pendingSegment ? `S88${pendingSegment}A01` : "S88A01";
-					previewEl.setText(
-						t("setting.formatPreview", {
-							name: `${key}${renderSeparator(pendingSymbol, pendingSpacing)}Sample note`,
-						})
-					);
-				};
-				new Setting(containerEl)
-					.setName(t("setting.sepName"))
-					.setDesc(t("setting.sepDesc"))
-					.addDropdown((dropdown) =>
-						dropdown
-							.addOption("-", "-")
-							.addOption("_", "_")
-							.addOption(".", ".")
-							.addOption("·", "·")
-							.addOption("custom", t("setting.sepCustom"))
-							.setValue(presetSymbols.includes(currentSymbol) ? currentSymbol : "custom")
-							.onChange((value) => {
-								if (value === "custom") {
-									pendingSymbol = customInput?.value ?? "";
-									customInput?.classList.remove("trellis-hidden");
-									customInput?.focus();
-								} else {
-									pendingSymbol = value;
-									customInput?.classList.add("trellis-hidden");
-								}
-								updatePreview();
-							})
-					)
-					.addText((text) => {
-						customInput = text.inputEl;
-						text
-							.setPlaceholder("~")
-							.setValue(presetSymbols.includes(currentSymbol) ? "" : currentSymbol)
-							.onChange((value) => {
-								pendingSymbol = value;
-								updatePreview();
-							});
-						text.inputEl.classList.toggle(
-							"trellis-hidden",
-							presetSymbols.includes(currentSymbol)
-						);
-					});
-
-				new Setting(containerEl)
-					.setName(t("setting.sepSpacingName"))
-					.setDesc(t("setting.sepSpacingDesc"))
-					.addDropdown((dropdown) => {
-						for (const spacing of SEPARATOR_SPACING)
-							dropdown.addOption(spacing, t(`spacing.${spacing}`));
-						dropdown.setValue(pendingSpacing).onChange((value) => {
-							pendingSpacing = SEPARATOR_SPACING.includes(value as SeparatorSpacing)
-								? (value as SeparatorSpacing)
-								: "none";
-							updatePreview();
-						});
-					});
-
-				new Setting(containerEl)
-					.setName(t("setting.segmentSepName"))
-					.setDesc(t("setting.segmentSepDesc"))
-					.addDropdown((dropdown) => {
-						dropdown.addOption("", t("segmentSep.hidden"));
-						for (const separator of SEGMENT_SEPARATORS.slice(1))
-							dropdown.addOption(separator, separator);
-						dropdown.setValue(pendingSegment).onChange((value) => {
-							pendingSegment = SEGMENT_SEPARATORS.includes(value)
-								? value
-								: "";
-							updatePreview();
-						});
-					});
-
-				previewEl = containerEl.createDiv({ cls: "setting-item-description" });
-				updatePreview();
-				new Setting(containerEl)
-					.setName(t("setting.formatApplyName"))
-					.setDesc(t("setting.formatApplyDesc"))
-					.addButton((button) =>
-						button.setButtonText(t("setting.apply")).onClick(() => {
-							if (!isValidSeparator(pendingSymbol)) {
-								new AlertModal(
-									this.app,
-									t("modal.badSep.title"),
-									t("modal.badSep.desc")
-								).open();
-								return;
-							}
-							this.plugin.requestPrimaryFormattingChange(
-								pendingSymbol,
-								pendingSpacing,
-								pendingSegment,
-								() => this.render()
-							);
-						})
-					);
-			}
-
-			new Setting(containerEl)
-				.setName(t("setting.posName"))
-				.setDesc(t("setting.posDesc"))
-				.addDropdown((dd) =>
-					dd
-						.addOption("prefix", t("setting.posPrefix"))
-						.addOption("suffix", t("setting.posSuffix"))
-						.setValue(tagPosition(this.plugin.settings.schema))
-						.onChange((value) => {
-							const staged = cloneSchema(this.plugin.settings.schema);
-							const tag = staged.slots.find((slot) => slot.role === "tag");
-							const name = staged.slots.find((slot) => slot.role === "name");
-							if (!tag) return;
-							staged.slots = (
-								value === "suffix" ? [name, tag] : [tag, name]
-							).filter((slot): slot is KeySlot => slot !== undefined);
-							this.plugin.requestSchemaChange(staged, () => this.render());
-						})
-				);
-
-		}
-
-		// Optional schema features stay physically out of the primary path. Keeping
-		// them available but collapsed prevents a single-key setup from reading like
-		// a schema editor. The disclosure remembers its state during local re-renders.
-		const experimental = containerEl.createEl("details", {
-			cls: "trellis-settings-disclosure",
-		});
-		experimental.open = this.experimentalOpen ?? this.plugin.settings.advancedMode;
-		experimental.addEventListener("toggle", () => {
-			this.experimentalOpen = experimental.open;
-		});
-		experimental.createEl("summary", { text: t("setting.experimentalName") });
-		experimental.createEl("p", {
-			cls: "setting-item-description trellis-settings-disclosure-desc",
-			text: t("setting.experimentalDesc"),
-		});
-
-		// ID scheme preset for the primary tag slot (0.3.0, experimental). In
-		// advanced mode the per-slot dropdown in the editor covers this.
-		if (!this.plugin.settings.advancedMode) {
-			new Setting(experimental)
-				.setName(t("setting.schemeName"))
-				.setDesc(t("setting.schemeDesc"))
-				.addDropdown((dd) => {
-					dd.addOption("", t("scheme.none"));
-					for (const id of SCHEME_IDS) dd.addOption(id, t(`scheme.${id}`));
-					dd.setValue(this.plugin.getPrimaryScheme()).onChange(async (v) => {
-						this.plugin.setPrimaryScheme(
-							(SCHEME_IDS as string[]).includes(v) ? (v as SchemeId) : ""
-						);
-						await this.plugin.saveSettings();
-					});
-				});
-		}
-
-		// Root namespace (0.3.0, experimental — B25). Applies to every slot, so
-		// it lives outside the simple/advanced split. Staged + Apply: committing
-		// runs a vault-wide tag migration behind a confirm (undoable).
-		{
-			let pending = (this.plugin.settings.schema.rootNamespace ?? "").trim();
-			new Setting(experimental)
-				.setName(t("setting.rootName"))
-				.setDesc(t("setting.rootDesc"))
-				.addText((text) =>
-					text
-						.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
-						.setValue(pending)
-						.onChange((v) => (pending = v))
-				)
-				.addButton((b) =>
-					b.setButtonText(t("setting.apply")).onClick(() => {
-						const v = pending.trim().replace(/^#/, "").replace(/\/$/, "");
-						if (v !== "" && !isValidNamespace(v)) {
-							new Notice(t("notice.rootBadChar"));
-							return;
-						}
-						this.plugin.requestRootChange(v, () => this.render());
-					})
-				);
-		}
-
-		// Advanced mode (0.2.0, experimental): the multi-key slot editor.
-		new Setting(experimental)
-			.setName(t("setting.advName"))
-			.setDesc(t("setting.advDesc"))
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.advancedMode)
-					.onChange(async (value) => {
-						this.draftSchema = null; // drop any staged (unapplied) edits
-						if (value) {
-							this.plugin.settings.advancedMode = true;
-							await this.plugin.saveSettings();
-							this.render();
-							return;
-						}
-						if (isMultiKey(this.plugin.settings.schema)) {
-							// Simple mode keeps the single-key invariant: collapse to
-							// the primary tag slot + a name slot, primary separator.
-							// Root + primary scheme survive the collapse — losing the
-							// root here would silently orphan every managed tag.
-							const old = this.plugin.settings.schema;
-							const ns = primaryNamespace(old) || "trel";
-							const sep = primarySeparator(old) || "-";
-							const pos = tagPosition(old);
-							const oldTagSlot = old.slots.find((slot) => slot.role === "tag");
-							const valueRule = oldTagSlot
-								? tagDefinitionById(old, oldTagSlot.tagDefinitionId)?.valueRule
-								: undefined;
-							const next = schemaFromLegacy(ns, sep, pos);
-							next.rootNamespace = old.rootNamespace;
-							const tagSlot = next.slots.find((s) => s.role === "tag");
-							const definition = tagSlot
-								? tagDefinitionById(next, tagSlot.tagDefinitionId)
-								: undefined;
-							if (definition && valueRule) definition.valueRule = { ...valueRule };
-							this.plugin.requestSchemaChange(next, () => {
-								if (
-									JSON.stringify(this.plugin.settings.schema) ===
-									JSON.stringify(next)
-								) {
-									this.plugin.settings.advancedMode = false;
-									void this.plugin.saveSettings();
-									new Notice(t("notice.advReset"));
-								}
-								this.render();
-							});
-							return;
-						}
-						this.plugin.settings.advancedMode = false;
-						await this.plugin.saveSettings();
-						this.plugin.rebuildTrees();
+						this.plugin.applyTreeViewName();
 						this.render();
 					})
 			);
-		if (this.plugin.settings.advancedMode) this.renderSlotEditor(experimental);
 
-		// ── Sidebar tree view ────────────────────────────────────────────────
+		this.renderTagDefinitions(containerEl);
+		this.renderFilenameStructure(containerEl);
+		this.renderSidebar(containerEl);
+
+		new Setting(containerEl).setName(t("setting.section.status")).setHeading();
+		this.renderStats(containerEl);
+	}
+
+	private resetDraft() {
+		this.draftSchema = null;
+		this.inventorySchemaFingerprint = "";
+	}
+
+	private renderTagDefinitions(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("setting.section.tags")).setHeading();
+		containerEl.createEl("p", {
+			cls: "setting-item-description trellis-section-description",
+			text: t("setting.tagsDesc"),
+		});
+
+		let pendingRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
+		new Setting(containerEl)
+			.setName(t("setting.rootName"))
+			.setDesc(t("setting.rootDesc"))
+			.addText((text) =>
+				text
+					.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
+					.setValue(pendingRoot)
+					.onChange((value) => (pendingRoot = value))
+			)
+			.addButton((button) =>
+				button.setButtonText(t("setting.apply")).onClick(() => {
+					const next = pendingRoot.trim().replace(/^#/, "").replace(/\/$/, "");
+					if (next && !isValidNamespace(next)) {
+						new Notice(t("notice.rootBadChar"));
+						return;
+					}
+					this.resetDraft();
+					this.plugin.requestRootChange(next, () => this.render());
+				})
+			);
+
+		for (const definition of this.plugin.tagDefinitions()) {
+			this.renderTagDefinition(containerEl, definition);
+		}
+
+		let newName = "";
+		let newNamespace = "";
+		new Setting(containerEl)
+			.setName(t("setting.tagAdd"))
+			.setDesc(t("setting.tagAddDesc"))
+			.addText((text) =>
+				text
+					.setPlaceholder(t("setting.tagNamePlaceholder"))
+					.onChange((value) => (newName = value))
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder(t("setting.tagNamespacePlaceholder"))
+					.onChange((value) => (newNamespace = value))
+			)
+			.addButton((button) =>
+				button.setButtonText(t("setting.add")).onClick(async () => {
+					const clean = newNamespace.trim().replace(/^#/, "").replace(/\/$/, "");
+					if (!isValidNamespace(clean)) {
+						new Notice(t("notice.nsBadChar"));
+						return;
+					}
+					const id = await this.plugin.addTagDefinition(clean, newName);
+					if (!id) {
+						new Notice(t("notice.tagDefinitionExists"));
+						return;
+					}
+					this.resetDraft();
+					this.render();
+				})
+			);
+	}
+
+	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
+		const card = containerEl.createDiv({ cls: "trellis-definition-card" });
+		new Setting(card)
+			.setName(definition.name || definition.namespace)
+			.setDesc(`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`)
+			.setHeading();
+
+		let pendingName = definition.name;
+		new Setting(card)
+			.setName(t("setting.tagDisplayName"))
+			.setDesc(t("setting.tagDisplayNameDesc"))
+			.addText((text) => {
+				text.setValue(definition.name).onChange((value) => (pendingName = value));
+				text.inputEl.addEventListener("change", () => {
+					void this.plugin.updateTagDefinition(definition.id, { name: pendingName });
+				});
+			});
+
+		let pendingNamespace = definition.namespace;
+		new Setting(card)
+			.setName(t("setting.tagNamespace"))
+			.setDesc(t("setting.tagNamespaceDesc"))
+			.addText((text) =>
+				text
+					.setValue(definition.namespace)
+					.onChange((value) => (pendingNamespace = value))
+			)
+			.addButton((button) =>
+				button.setButtonText(t("setting.apply")).onClick(() => {
+					const clean = pendingNamespace
+						.trim()
+						.replace(/^#/, "")
+						.replace(/\/$/, "");
+					if (!isValidNamespace(clean)) {
+						new Notice(t("notice.nsBadChar"));
+						return;
+					}
+					this.resetDraft();
+					this.plugin.requestTagDefinitionNamespaceChange(
+						definition.id,
+						clean,
+						() => this.render()
+					);
+				})
+			);
+
+		new Setting(card)
+			.setName(t("setting.tagSidebarVisible"))
+			.setDesc(t("setting.tagSidebarVisibleDesc"))
+			.addToggle((toggle) =>
+				toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
+					await this.plugin.updateTagDefinition(definition.id, {
+						sidebarVisible: value,
+					});
+				})
+			);
+
+		new Setting(card)
+			.setName(t("setting.tagColor"))
+			.setDesc(t("setting.tagColorDesc"))
+			.addColorPicker((picker) =>
+				picker
+					.setValue(definition.color ?? "#7c6df2")
+					.onChange((value) =>
+						void this.plugin.updateTagDefinition(definition.id, { color: value })
+					)
+			)
+			.addExtraButton((button) =>
+				button
+					.setIcon("rotate-ccw")
+					.setTooltip(t("setting.colorReset"))
+					.onClick(() => {
+						void this.plugin
+							.updateTagDefinition(definition.id, { color: "" })
+							.then(() => this.render());
+					})
+			);
+
+		new Setting(card)
+			.setName(t("setting.valueRule"))
+			.setDesc(t("setting.valueRuleDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("", t("scheme.none"))
+					.addOption("alternating", t("valueRule.alternating"))
+					.addOption("sequence", t("valueRule.sequence"))
+					.addOption("date", t("valueRule.date"))
+					.addOption("timestamp", t("valueRule.timestamp"))
+					.setValue(definition.valueRule?.kind ?? "")
+					.onChange(async (value) => {
+						await this.plugin.updateTagDefinition(definition.id, {
+							valueRule: defaultRule(value) ?? null,
+						});
+						this.render();
+					})
+			);
+		if (definition.valueRule) this.renderValueRuleOptions(card, definition);
+
+		new Setting(card)
+			.setName(t("setting.tagRemove"))
+			.setDesc(t("setting.tagRemoveDesc"))
+			.addButton((button) =>
+				button
+					.setButtonText(t("adv.remove"))
+					.setClass("trellis-destructive")
+					.onClick(async () => {
+						if (!(await this.plugin.removeTagDefinition(definition.id))) {
+							new Notice(t("notice.tagDefinitionInUse"));
+							return;
+						}
+						this.resetDraft();
+						this.render();
+					})
+			);
+	}
+
+	private renderValueRuleOptions(containerEl: HTMLElement, definition: TrellisTagDefinition) {
+		const rule = definition.valueRule;
+		if (!rule) return;
+		const save = (next: TagValueRule) =>
+			void this.plugin.updateTagDefinition(definition.id, { valueRule: next });
+
+		if (rule.kind === "alternating") {
+			new Setting(containerEl)
+				.setName(t("valueRule.firstLevel"))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("alphabet", t("valueRule.alphabet"))
+						.addOption("number", t("valueRule.number"))
+						.setValue(rule.firstLevel ?? "alphabet")
+						.onChange((value) =>
+							save({
+								...rule,
+								firstLevel: value === "number" ? "number" : "alphabet",
+							})
+						)
+				)
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("upper", t("valueRule.upper"))
+						.addOption("lower", t("valueRule.lower"))
+						.setValue(rule.letterCase ?? "upper")
+						.onChange((value) =>
+							save({ ...rule, letterCase: value === "lower" ? "lower" : "upper" })
+						)
+				);
+			this.renderNumberWidth(containerEl, rule, save);
+		} else if (rule.kind === "sequence") {
+			new Setting(containerEl)
+				.setName(t("valueRule.sequenceStart"))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("0", "0")
+						.addOption("1", "1")
+						.setValue(String(rule.start ?? 1))
+						.onChange((value) => save({ ...rule, start: value === "0" ? 0 : 1 }))
+				);
+			this.renderNumberWidth(containerEl, rule, save);
+		} else if (rule.kind === "date") {
+			new Setting(containerEl)
+				.setName(t("valueRule.dateFormat"))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("YYYYMMDD", "YYYYMMDD")
+						.addOption(DASHED_DATE_FORMAT, DASHED_DATE_FORMAT)
+						.addOption("YYMMDD", "YYMMDD")
+						.setValue(rule.dateFormat ?? "YYYYMMDD")
+						.onChange((value) =>
+							save({
+								...rule,
+								dateFormat:
+									value === "YYYY-MM-DD" || value === "YYMMDD"
+										? value
+										: "YYYYMMDD",
+							})
+						)
+				);
+		} else {
+			new Setting(containerEl)
+				.setName(t("valueRule.timestampFormat"))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("minute", t("valueRule.minute"))
+						.addOption("second", t("valueRule.second"))
+						.addOption("millisecond", t("valueRule.millisecond"))
+						.setValue(rule.timestampPrecision ?? "second")
+						.onChange((value) =>
+							save({
+								...rule,
+								timestampPrecision:
+									value === "minute" || value === "millisecond"
+										? value
+										: "second",
+							})
+						)
+				)
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption("local", t("valueRule.local"))
+						.addOption("utc", "UTC")
+						.setValue(rule.timezone ?? "local")
+						.onChange((value) =>
+							save({ ...rule, timezone: value === "utc" ? "utc" : "local" })
+						)
+				);
+		}
+		new Setting(containerEl)
+			.setName(t("valueRule.example"))
+			.setDesc(this.valueRuleExample(rule));
+	}
+
+	private renderNumberWidth(
+		containerEl: HTMLElement,
+		rule: TagValueRule,
+		save: (next: TagValueRule) => void
+	) {
+		new Setting(containerEl)
+			.setName(t("valueRule.numberWidth"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("auto", t("valueRule.auto"))
+					.addOption("1", "1")
+					.addOption("2", "2")
+					.addOption("3", "3")
+					.addOption("4", "4")
+					.setValue(String(rule.numberWidth ?? "auto"))
+					.onChange((value) => {
+						const width = value === "auto" ? "auto" : Number(value);
+						save({
+							...rule,
+							numberWidth:
+								width === "auto" || width === 1 || width === 2 || width === 3 || width === 4
+									? width
+									: "auto",
+						});
+					})
+			);
+	}
+
+	private valueRuleExample(rule: TagValueRule): string {
+		if (rule.kind === "alternating") {
+			const letter = rule.letterCase === "lower" ? "a" : "A";
+			const width = rule.numberWidth === "auto" ? 1 : (rule.numberWidth ?? 2);
+			const number = "1".padStart(width, "0");
+			return rule.firstLevel === "number"
+				? `${number} → ${letter} → ${String(2).padStart(width, "0")}`
+				: `${letter} → ${number} → ${rule.letterCase === "lower" ? "b" : "B"}`;
+		}
+		if (rule.kind === "sequence") {
+			const start = rule.start ?? 1;
+			const width = rule.numberWidth === "auto" ? 1 : (rule.numberWidth ?? 1);
+			return [start, start + 1, start + 2]
+				.map((value) => String(value).padStart(width, "0"))
+				.join(" → ");
+		}
+		if (rule.kind === "date") return rule.dateFormat ?? "YYYYMMDD";
+		return `${rule.timezone === "utc" ? "UTC" : t("valueRule.local")} · ${t(
+			`valueRule.${rule.timestampPrecision ?? "second"}`
+		)}`;
+	}
+
+	private draft(): TrellisSchema {
+		if (!this.draftSchema) {
+			this.draftSchema = cloneSchema(this.plugin.settings.schema);
+			this.ensureSeparators(this.draftSchema);
+		} else {
+			const live = cloneSchema(this.plugin.settings.schema);
+			this.draftSchema.rootNamespace = live.rootNamespace;
+			this.draftSchema.tagDefinitions = live.tagDefinitions;
+		}
+		return this.draftSchema;
+	}
+
+	private draftDirty(): boolean {
+		return (
+			this.draftSchema !== null &&
+			JSON.stringify(this.draftSchema) !== JSON.stringify(this.plugin.settings.schema)
+		);
+	}
+
+	private renderFilenameStructure(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("setting.section.filenameStructure")).setHeading();
+		containerEl.createEl("p", {
+			cls: "setting-item-description trellis-section-description",
+			text: t("setting.filenameStructureDesc"),
+		});
+		const schema = this.draft();
+		this.ensureSeparators(schema);
+
+		const preview = containerEl.createDiv({ cls: "trellis-filename-preview" });
+		preview.createDiv({ cls: "trellis-filename-preview-label", text: t("setting.preview") });
+		preview.createEl("code", { text: this.filenamePreview(schema) });
+
+		schema.slots.forEach((slot, index) => {
+			this.renderFilenameSlot(containerEl, schema, slot, index);
+			if (index < schema.slots.length - 1) {
+				this.renderGap(containerEl, schema, index);
+			}
+		});
+
+		const usedDefinitions = new Set(
+			schema.slots
+				.filter((slot) => slot.role === "tag")
+				.map((slot) => slot.tagDefinitionId)
+		);
+		const available = schemaTagDefinitions(schema).find(
+			(definition) => !usedDefinitions.has(definition.id)
+		);
+		const hasName = schema.slots.some((slot) => slot.role === "name");
+		new Setting(containerEl)
+			.setName(t("setting.slotAdd"))
+			.setDesc(t("setting.slotAddDesc"))
+			.addButton((button) =>
+				button
+					.setButtonText(t("setting.addTagSlot"))
+					.setDisabled(!available)
+					.onClick(() => {
+						if (!available) return;
+						schema.slots.push({
+							id: nextSlotId(schema),
+							role: "tag",
+							tagDefinitionId: available.id,
+						});
+						this.ensureSeparators(schema);
+						this.render();
+					})
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(t("setting.addNameSlot"))
+					.setDisabled(hasName)
+					.onClick(() => {
+						if (hasName) return;
+						schema.slots.push({ id: nextSlotId(schema), role: "name" });
+						this.ensureSeparators(schema);
+						this.render();
+					})
+			);
+
+		if (this.draftDirty()) {
+			new Setting(containerEl)
+				.setName(t("adv.pending"))
+				.setDesc(t("setting.pendingDesc"))
+				.addButton((button) =>
+					button
+						.setButtonText(t("adv.apply"))
+						.setCta()
+						.onClick(() => {
+							const error = this.validateDraft(schema);
+							if (error) {
+								new AlertModal(this.app, t("adv.invalidTitle"), error).open();
+								return;
+							}
+							const staged = cloneSchema(schema);
+							staged.rootNamespace = this.plugin.settings.schema.rootNamespace;
+							staged.tagDefinitions = cloneSchema(
+								this.plugin.settings.schema
+							).tagDefinitions;
+							this.plugin.requestSchemaChange(staged, () => {
+								if (
+									JSON.stringify(this.plugin.settings.schema) ===
+									JSON.stringify(staged)
+								) {
+									this.draftSchema = null;
+									new Notice(t("notice.advApplied"));
+								}
+								this.render();
+							});
+						})
+				)
+				.addButton((button) =>
+					button.setButtonText(t("adv.revert")).onClick(() => {
+						this.draftSchema = null;
+						this.render();
+					})
+				);
+		}
+	}
+
+	private filenamePreview(schema: TrellisSchema): string {
+		const values = schema.slots.map((slot) => {
+			if (slot.role === "name") return t("setting.previewName");
+			return ["N", "W", "03"].join(slot.segmentSeparator ?? "");
+		});
+		return assembleBasenameMulti(values, schema) || t("setting.previewUnmanaged");
+	}
+
+	private renderFilenameSlot(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		slot: KeySlot,
+		index: number
+	) {
+		const card = containerEl.createDiv({ cls: "trellis-slot-card" });
+		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+		new Setting(card)
+			.setName(
+				t("setting.slotTitle", {
+					n: index + 1,
+					type: slot.role === "tag" ? t("adv.roleTag") : t("adv.roleName"),
+				})
+			)
+			.setDesc(
+				slot.role === "tag" && definition
+					? `${definition.name || definition.namespace} · #${nsPath(
+							schema,
+							definition.namespace
+						)}/…`
+					: t("setting.nameSlotDesc")
+			)
+			.setHeading();
+
+		if (slot.role === "tag") {
+			new Setting(card)
+				.setName(t("setting.slotSource"))
+				.setDesc(t("setting.slotSourceDesc"))
+				.addDropdown((dropdown) => {
+					for (const candidate of schemaTagDefinitions(schema)) {
+						dropdown.addOption(
+							candidate.id,
+							`${candidate.name || candidate.namespace} · #${candidate.namespace}`
+						);
+					}
+					dropdown.setValue(slot.tagDefinitionId ?? "").onChange((value) => {
+						slot.tagDefinitionId = value;
+						this.render();
+					});
+				});
+			this.renderHierarchySetting(card, slot);
+		}
+		this.renderWrapperSetting(card, slot);
+
+		new Setting(card)
+			.setName(t("setting.slotActions"))
+			.addButton((button) =>
+				button
+					.setButtonText(t("adv.moveUp"))
+					.setDisabled(index === 0)
+					.onClick(() => {
+						if (index === 0) return;
+						[schema.slots[index - 1], schema.slots[index]] = [
+							schema.slots[index],
+							schema.slots[index - 1],
+						];
+						this.render();
+					})
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(t("adv.moveDown"))
+					.setDisabled(index === schema.slots.length - 1)
+					.onClick(() => {
+						if (index === schema.slots.length - 1) return;
+						[schema.slots[index], schema.slots[index + 1]] = [
+							schema.slots[index + 1],
+							schema.slots[index],
+						];
+						this.render();
+					})
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(t("adv.remove"))
+					.setClass("trellis-destructive")
+					.onClick(() => {
+						this.removeSlot(schema, index);
+						this.render();
+					})
+			);
+	}
+
+	private renderHierarchySetting(containerEl: HTMLElement, slot: KeySlot) {
+		const current = slot.segmentSeparator ?? "";
+		let customInput: HTMLInputElement | null = null;
+		new Setting(containerEl)
+			.setName(t("setting.segmentSepName"))
+			.setDesc(t("setting.segmentSepDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("", t("segmentSep.hidden"))
+					.addOption(".", ".")
+					.addOption("-", "-")
+					.addOption("_", "_")
+					.addOption("custom", t("setting.sepCustom"))
+					.setValue(SEGMENT_PRESETS.includes(current) ? current : "custom")
+					.onChange((value) => {
+						if (value === "custom") {
+							customInput?.classList.remove("trellis-hidden");
+							customInput?.focus();
+							return;
+						}
+						slot.segmentSeparator = value;
+						customInput?.classList.add("trellis-hidden");
+						this.render();
+					})
+			)
+			.addText((text) => {
+				customInput = text.inputEl;
+				text
+					.setPlaceholder("~")
+					.setValue(SEGMENT_PRESETS.includes(current) ? "" : current)
+					.onChange((value) => (slot.segmentSeparator = value));
+				text.inputEl.addEventListener("change", () => this.render());
+				text.inputEl.classList.toggle("trellis-hidden", SEGMENT_PRESETS.includes(current));
+			});
+	}
+
+	private renderWrapperSetting(containerEl: HTMLElement, slot: KeySlot) {
+		const current = slot.wrapper?.kind ?? "none";
+		let leftInput: HTMLInputElement | null = null;
+		let rightInput: HTMLInputElement | null = null;
+		const toggleCustom = (visible: boolean) => {
+			leftInput?.classList.toggle("trellis-hidden", !visible);
+			rightInput?.classList.toggle("trellis-hidden", !visible);
+		};
+		new Setting(containerEl)
+			.setName(t("setting.wrapperName"))
+			.setDesc(t("setting.wrapperDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("none", t("wrapper.none"))
+					.addOption("round", t("wrapper.round"))
+					.addOption("custom", t("wrapper.custom"))
+					.setValue(WRAPPER_OPTIONS.includes(current) ? current : "none")
+					.onChange((value) => {
+						const kind: SlotWrapperKind =
+							value === "round" || value === "custom" ? value : "none";
+						if (kind === "none") delete slot.wrapper;
+						else if (kind === "round") slot.wrapper = { kind };
+						else {
+							slot.wrapper = {
+								kind,
+								left: leftInput?.value ?? "",
+								right: rightInput?.value ?? "",
+							};
+						}
+						toggleCustom(kind === "custom");
+						this.render();
+					})
+			)
+			.addText((text) => {
+				leftInput = text.inputEl;
+				text
+					.setPlaceholder("〈")
+					.setValue(slot.wrapper?.kind === "custom" ? (slot.wrapper.left ?? "") : "")
+					.onChange((value) => {
+						if (slot.wrapper?.kind === "custom") slot.wrapper.left = value;
+					});
+			})
+			.addText((text) => {
+				rightInput = text.inputEl;
+				text
+					.setPlaceholder("〉")
+					.setValue(slot.wrapper?.kind === "custom" ? (slot.wrapper.right ?? "") : "")
+					.onChange((value) => {
+						if (slot.wrapper?.kind === "custom") slot.wrapper.right = value;
+					});
+			});
+		toggleCustom(current === "custom");
+	}
+
+	private renderGap(containerEl: HTMLElement, schema: TrellisSchema, index: number) {
+		const current = schema.separators[index] ?? "-";
+		let customInput: HTMLInputElement | null = null;
+		const row = new Setting(containerEl)
+			.setName(t("adv.sep", { n: index + 1, a: index + 1, b: index + 2 }))
+			.setDesc(
+				t("setting.gapPreview", {
+					value: renderSeparator(current, separatorSpacingAt(schema, index)),
+				})
+			)
+			.addDropdown((dropdown) => {
+				for (const preset of BOUNDARY_PRESETS) dropdown.addOption(preset, preset);
+				dropdown
+					.addOption("custom", t("setting.sepCustom"))
+					.setValue(BOUNDARY_PRESETS.includes(current) ? current : "custom")
+					.onChange((value) => {
+						if (value === "custom") {
+							customInput?.classList.remove("trellis-hidden");
+							customInput?.focus();
+						} else {
+							schema.separators[index] = value;
+							customInput?.classList.add("trellis-hidden");
+							this.render();
+						}
+					});
+			})
+			.addText((text) => {
+				customInput = text.inputEl;
+				text
+					.setPlaceholder("~")
+					.setValue(BOUNDARY_PRESETS.includes(current) ? "" : current)
+					.onChange((value) => (schema.separators[index] = value));
+				text.inputEl.classList.toggle("trellis-hidden", BOUNDARY_PRESETS.includes(current));
+			})
+			.addDropdown((dropdown) => {
+				for (const spacing of SPACING_OPTIONS) {
+					dropdown.addOption(spacing, t(`spacing.${spacing}`));
+				}
+				dropdown.setValue(separatorSpacingAt(schema, index)).onChange((value) => {
+					if (!schema.separatorSpacing) schema.separatorSpacing = [];
+					schema.separatorSpacing[index] = SPACING_OPTIONS.includes(
+						value as SeparatorSpacing
+					)
+						? (value as SeparatorSpacing)
+						: "none";
+					this.render();
+				});
+			});
+		row.settingEl.addClass("trellis-gap-row");
+	}
+
+	private removeSlot(schema: TrellisSchema, index: number) {
+		schema.slots.splice(index, 1);
+		if (schema.separators.length > 0) {
+			const gap = Math.min(index, schema.separators.length - 1);
+			schema.separators.splice(gap, 1);
+			schema.separatorSpacing?.splice(gap, 1);
+		}
+		this.ensureSeparators(schema);
+	}
+
+	private validateDraft(schema: TrellisSchema): string | null {
+		if (schema.slots.filter((slot) => slot.role === "name").length > 1) {
+			return t("adv.invalid.oneName");
+		}
+		const seenDefinitions = new Set<string>();
+		for (const slot of schema.slots) {
+			if (slot.role === "tag") {
+				if (!tagDefinitionById(schema, slot.tagDefinitionId)) {
+					return t("adv.invalid.missingDefinition");
+				}
+				if (seenDefinitions.has(slot.tagDefinitionId ?? "")) {
+					return t("adv.invalid.duplicateDefinition");
+				}
+				seenDefinitions.add(slot.tagDefinitionId ?? "");
+				if (!isValidHierarchySeparator(slot.segmentSeparator ?? "")) {
+					return t("adv.invalid.segment");
+				}
+			}
+			if (!isValidSlotWrapper(slot.wrapper)) return t("adv.invalid.wrapper");
+		}
+		const needed = Math.max(0, schema.slots.length - 1);
+		for (let index = 0; index < needed; index++) {
+			if (!isValidSeparator(schema.separators[index] ?? "")) {
+				return t("adv.invalid.sep", { n: index + 1 });
+			}
+			if (!SPACING_OPTIONS.includes(separatorSpacingAt(schema, index))) {
+				return t("adv.invalid.spacing", { n: index + 1 });
+			}
+		}
+		if (separatorConflicts(schema).length > 0) return t("adv.invalid.conflict");
+		return null;
+	}
+
+	private ensureSeparators(schema: TrellisSchema) {
+		const needed = Math.max(0, schema.slots.length - 1);
+		const fill = schema.separators[schema.separators.length - 1] || "-";
+		while (schema.separators.length < needed) schema.separators.push(fill);
+		schema.separators.length = needed;
+		if (!schema.separatorSpacing) schema.separatorSpacing = [];
+		while (schema.separatorSpacing.length < needed) {
+			schema.separatorSpacing.push("none");
+		}
+		schema.separatorSpacing.length = needed;
+	}
+
+	private renderSidebar(containerEl: HTMLElement) {
 		new Setting(containerEl).setName(t("setting.section.tree")).setHeading();
-
-		const treeNamespaces = tagNamespaces(this.plugin.settings.schema);
-		if (treeNamespaces.length > 1) {
+		const visible = this.plugin
+			.tagDefinitions()
+			.filter((definition) => definition.sidebarVisible);
+		if (visible.length > 1) {
 			new Setting(containerEl)
 				.setName(t("setting.treeTagKeyName"))
 				.setDesc(t("setting.treeTagKeyDesc"))
 				.addDropdown((dropdown) => {
-					for (const namespace of treeNamespaces) {
+					for (const definition of visible) {
 						dropdown.addOption(
-							namespace,
-							`#${nsPath(this.plugin.settings.schema, namespace)}/…`
+							definition.namespace,
+							`${definition.name || definition.namespace} · #${nsPath(
+								this.plugin.settings.schema,
+								definition.namespace
+							)}/…`
 						);
 					}
 					dropdown
@@ -436,16 +909,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.setName(t("setting.treeName"))
 			.setDesc(t("setting.treeDesc"))
 			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.treeViewEnabled)
-					.onChange(async (value) => {
-						this.plugin.settings.treeViewEnabled = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyTreeViewState();
-					})
+				toggle.setValue(this.plugin.settings.treeViewEnabled).onChange(async (value) => {
+					this.plugin.settings.treeViewEnabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.applyTreeViewState();
+				})
 			);
 
-		// Custom tab title for the tree view (blank = the localized default).
 		new Setting(containerEl)
 			.setName(t("setting.treeLabelName"))
 			.setDesc(t("setting.treeLabelDesc"))
@@ -463,8 +933,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName(t("setting.sortName"))
 			.setDesc(t("setting.sortDesc"))
-			.addDropdown((dd) =>
-				dd
+			.addDropdown((dropdown) =>
+				dropdown
 					.addOption("tagkey", t("setting.sortTagkey"))
 					.addOption("mtime", t("setting.sortMtime"))
 					.addOption("ctime", t("setting.sortCtime"))
@@ -477,12 +947,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		// Nested tag mode (0.3.0, experimental — B24).
 		new Setting(containerEl)
 			.setName(t("setting.treeModeName"))
 			.setDesc(t("setting.treeModeDesc"))
-			.addDropdown((dd) =>
-				dd
+			.addDropdown((dropdown) =>
+				dropdown
 					.addOption("notes", t("setting.treeModeNotes"))
 					.addOption("tags", t("setting.treeModeTags"))
 					.setValue(this.plugin.settings.treeViewMode)
@@ -498,13 +967,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.setName(t("setting.showRootName"))
 				.setDesc(t("setting.showRootDesc"))
 				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.treeShowRoot)
-						.onChange(async (value) => {
-							this.plugin.settings.treeShowRoot = value;
-							await this.plugin.saveSettings();
-							this.plugin.rebuildTrees();
-						})
+					toggle.setValue(this.plugin.settings.treeShowRoot).onChange(async (value) => {
+						this.plugin.settings.treeShowRoot = value;
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+					})
 				);
 			new Setting(containerEl)
 				.setName(t("setting.untaggedName"))
@@ -521,8 +988,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName(t("setting.labelModeName"))
 				.setDesc(t("setting.labelModeDesc"))
-				.addDropdown((dd) =>
-					dd
+				.addDropdown((dropdown) =>
+					dropdown
 						.addOption("filename", t("setting.labelModeFilename"))
 						.addOption("tag", t("setting.labelModeTag"))
 						.setValue(this.plugin.settings.treeLabelMode)
@@ -535,8 +1002,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 				);
 		}
 
-		// Per-button visibility for the tree-view header. A hidden button's action
-		// is still reachable from the command palette (bootstrap, cascade, undo…).
 		new Setting(containerEl)
 			.setName(t("setting.headerButtonsName"))
 			.setDesc(t("setting.headerButtonsDesc"))
@@ -552,310 +1017,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 							this.plugin.rebuildTrees();
 						})
-				);
-		}
-	}
-
-	// --- Multi-key slot editor (advanced mode, 0.2.0 experimental) ----------
-	// Edits are STAGED in a draft schema (draft()) and only reach the live
-	// settings when Apply commits them — no per-keystroke writes to the schema.
-	// Guards keep a committed schema valid: ≥1 tag slot, ≤1 name slot, distinct
-	// namespaces, legal non-empty separators (slots n → separators n-1).
-
-	/** The staged schema for advanced mode. null = no pending edits (== live). */
-	private draftSchema: TrellisSchema | null = null;
-
-	private draft(): TrellisSchema {
-		if (!this.draftSchema) {
-			this.draftSchema = JSON.parse(
-				JSON.stringify(this.plugin.settings.schema)
-			) as TrellisSchema;
-			this.ensureSeparators(this.draftSchema);
-		}
-		return this.draftSchema;
-	}
-
-	private draftDirty(): boolean {
-		return (
-			this.draftSchema != null &&
-			JSON.stringify(this.draftSchema) !==
-				JSON.stringify(this.plugin.settings.schema)
-		);
-	}
-
-	private definitionForSlot(schema: TrellisSchema, slot: KeySlot) {
-		return tagDefinitionById(schema, slot.tagDefinitionId);
-	}
-
-	private addDefinition(schema: TrellisSchema, namespace: string) {
-		if (!schema.tagDefinitions) schema.tagDefinitions = [];
-		const used = new Set(schema.tagDefinitions.map((definition) => definition.id));
-		const base = `tag-${namespace.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "item"}`;
-		let id = base;
-		let suffix = 2;
-		while (used.has(id)) id = `${base}-${suffix++}`;
-		const definition = {
-			id,
-			name: namespace,
-			namespace,
-			sidebarVisible: true,
-		};
-		schema.tagDefinitions.push(definition);
-		return definition;
-	}
-
-	/** First problem with a staged schema as a human message, or null if valid. */
-	private validateDraft(schema: TrellisSchema): string | null {
-		const tags = schema.slots.filter((s) => s.role === "tag");
-		if (tags.length < 1) return t("adv.invalid.needTag");
-		if (schema.slots.filter((s) => s.role === "name").length > 1)
-			return t("adv.invalid.oneName");
-		const seen = new Set<string>();
-		for (const s of tags) {
-			const ns = slotNamespace(schema, s).trim();
-			if (ns === "") return t("adv.invalid.nsEmpty");
-			if (!isValidNamespace(ns)) return t("adv.invalid.nsBad", { ns });
-			if (seen.has(ns)) return t("adv.invalid.nsDup", { ns });
-			seen.add(ns);
-		}
-		const need = Math.max(0, schema.slots.length - 1);
-		for (let i = 0; i < need; i++) {
-			if (!isValidSeparator(schema.separators[i] ?? ""))
-				return t("adv.invalid.sep", { n: i + 1 });
-			if (!SEPARATOR_SPACING.includes(separatorSpacingAt(schema, i)))
-				return t("adv.invalid.spacing", { n: i + 1 });
-		}
-		if (separatorConflicts(schema).length > 0) return t("adv.invalid.conflict");
-		for (const slot of schema.slots) {
-			if (!isValidHierarchySeparator(slot.segmentSeparator ?? ""))
-				return t("adv.invalid.segment");
-			if (!isValidSlotWrapper(slot.wrapper)) return t("adv.invalid.wrapper");
-		}
-		return null;
-	}
-
-	private renderSlotEditor(containerEl: HTMLElement) {
-		const schema = this.draft();
-		// Re-render from the draft after a structural edit; nothing is saved until
-		// Apply. Text fields (namespace, gap separator) mutate the draft in place
-		// and are validated on Apply, so they don't re-render on every keystroke.
-		const refresh = () => {
-			this.ensureSeparators(schema);
-			this.render();
-		};
-
-		new Setting(containerEl).setName(t("setting.advSlots")).setHeading();
-
-		schema.slots.forEach((slot, i) => {
-			const row = new Setting(containerEl).setName(t("adv.slot", { n: i + 1 }));
-			row.settingEl.addClass("trellis-slot-row");
-			row.addDropdown((dd) =>
-				dd
-					.addOption("tag", t("adv.roleTag"))
-					.addOption("name", t("adv.roleName"))
-					.setValue(slot.role)
-					.onChange((v) => {
-						const role = v === "name" ? "name" : "tag";
-						if (role === slot.role) return;
-						if (role === "name") {
-							if (schema.slots.some((s, j) => j !== i && s.role === "name")) {
-								new Notice(t("notice.advOneName"));
-								this.render();
-								return;
-							}
-							if (schema.slots.filter((s) => s.role === "tag").length <= 1) {
-								new Notice(t("notice.advLastTag"));
-								this.render();
-								return;
-							}
-							slot.role = "name";
-							delete slot.tagDefinitionId;
-							delete slot.segmentSeparator;
-							delete slot.wrapper;
-						} else {
-							slot.role = "tag";
-							const definition = this.addDefinition(
-								schema,
-								this.nextFreeNamespace(schema)
-							);
-							slot.tagDefinitionId = definition.id;
-						}
-						refresh();
-					})
-			);
-			if (slot.role === "tag") {
-				const definition = this.definitionForSlot(schema, slot);
-				row.addText((text) =>
-					text
-						.setPlaceholder(t("adv.nsPh"))
-						.setValue(definition?.namespace ?? "")
-						.onChange((v) => {
-							// Staged raw; validated on Apply (no live save/re-render).
-							if (definition) {
-								definition.namespace = v.trim().replace(/^#/, "").replace(/\/$/, "");
-							}
-						})
-				);
-				// Per-slot ID scheme (0.3.0). Staged like the rest of the draft.
-				row.addDropdown((dd) => {
-					dd.addOption("", t("scheme.none"));
-					for (const id of SCHEME_IDS) dd.addOption(id, t(`scheme.${id}`));
-					dd.setValue(legacySchemeFromValueRule(definition?.valueRule) ?? "").onChange((v) => {
-						if (!definition) return;
-						if ((SCHEME_IDS as string[]).includes(v)) {
-							definition.valueRule = valueRuleFromLegacyScheme(v as SchemeId);
-						} else delete definition.valueRule;
-					});
-				});
-				row.addDropdown((dropdown) => {
-					dropdown.addOption("", t("segmentSep.hidden"));
-					for (const separator of SEGMENT_SEPARATORS.slice(1))
-						dropdown.addOption(separator, separator);
-					dropdown.setValue(slot.segmentSeparator ?? "").onChange((value) => {
-						slot.segmentSeparator = SEGMENT_SEPARATORS.includes(value)
-							? value
-							: "";
-					});
-				});
-			}
-			row.addExtraButton((b) =>
-				b
-					.setIcon("arrow-up")
-					.setTooltip(t("adv.moveUp"))
-					.setDisabled(i === 0)
-					.onClick(() => {
-						if (i === 0) return;
-						[schema.slots[i - 1], schema.slots[i]] = [schema.slots[i], schema.slots[i - 1]];
-						refresh();
-					})
-			);
-			row.addExtraButton((b) =>
-				b
-					.setIcon("arrow-down")
-					.setTooltip(t("adv.moveDown"))
-					.setDisabled(i === schema.slots.length - 1)
-					.onClick(() => {
-						if (i === schema.slots.length - 1) return;
-						[schema.slots[i], schema.slots[i + 1]] = [schema.slots[i + 1], schema.slots[i]];
-						refresh();
-					})
-			);
-			row.addExtraButton((b) =>
-				b
-					.setIcon("trash")
-					.setTooltip(t("adv.remove"))
-					.onClick(() => {
-						if (
-							slot.role === "tag" &&
-							schema.slots.filter((s) => s.role === "tag").length <= 1
-						) {
-							new Notice(t("notice.advLastTag"));
-							return;
-						}
-						schema.slots.splice(i, 1);
-						refresh();
-					})
-			);
-			// The separator between this slot and the next (slots n → seps n-1).
-			if (i < schema.slots.length - 1) {
-				const current = schema.separators[i] ?? "-";
-				const presets = ["-", "_", ".", "·"];
-				let customInput: HTMLInputElement | null = null;
-				const separatorRow = new Setting(containerEl)
-					.setName(t("adv.sep", { n: i + 1, a: i + 1, b: i + 2 }))
-					.addDropdown((dropdown) =>
-						dropdown
-							.addOption("-", "-")
-							.addOption("_", "_")
-							.addOption(".", ".")
-							.addOption("·", "·")
-							.addOption("custom", t("setting.sepCustom"))
-							.setValue(presets.includes(current) ? current : "custom")
-							.onChange((value) => {
-								if (value === "custom") {
-									customInput?.classList.remove("trellis-hidden");
-									customInput?.focus();
-								} else {
-									schema.separators[i] = value;
-									customInput?.classList.add("trellis-hidden");
-								}
-							})
-					)
-					.addText((text) => {
-						customInput = text.inputEl;
-						text
-							.setPlaceholder("~")
-							.setValue(presets.includes(current) ? "" : current)
-							.onChange((value) => (schema.separators[i] = value));
-						text.inputEl.classList.toggle("trellis-hidden", presets.includes(current));
-					})
-					.addDropdown((dropdown) => {
-						for (const spacing of SEPARATOR_SPACING)
-							dropdown.addOption(spacing, t(`spacing.${spacing}`));
-						dropdown.setValue(separatorSpacingAt(schema, i)).onChange((value) => {
-							if (!schema.separatorSpacing) schema.separatorSpacing = [];
-							schema.separatorSpacing[i] = SEPARATOR_SPACING.includes(
-								value as SeparatorSpacing
-							)
-								? (value as SeparatorSpacing)
-								: "none";
-						});
-					});
-				separatorRow.settingEl.addClass("trellis-slot-row");
-			}
-		});
-
-		// One "Add slot" button: a new slot defaults to a tag role (the safe
-		// minimum) and the per-row role dropdown converts it to a name slot if
-		// wanted — replacing the old separate add-tag / add-name buttons.
-		new Setting(containerEl).addButton((b) =>
-			b.setButtonText(t("adv.addSlot")).onClick(() => {
-				const namespace = this.nextFreeNamespace(schema);
-				const definition = this.addDefinition(schema, namespace);
-				schema.slots.push({
-					id: `slot-${Date.now().toString(36)}`,
-					role: "tag",
-					tagDefinitionId: definition.id,
-				});
-				refresh();
-			})
-		);
-
-		// Apply / Revert — the staged schema only reaches the engine here. Shown
-		// only when the draft differs from the live schema.
-		if (this.draftDirty()) {
-			new Setting(containerEl)
-				.setName(t("adv.pending"))
-				.addButton((b) =>
-					b
-						.setButtonText(t("adv.apply"))
-						.setCta()
-						.onClick(() => {
-							const err = this.validateDraft(schema);
-							if (err) {
-								new AlertModal(this.app, t("adv.invalidTitle"), err).open();
-								return;
-							}
-							this.ensureSeparators(schema);
-							schema.rootNamespace = this.plugin.settings.schema.rootNamespace;
-							const staged = cloneSchema(schema);
-							this.plugin.requestSchemaChange(staged, () => {
-								if (
-									JSON.stringify(this.plugin.settings.schema) ===
-									JSON.stringify(staged)
-								) {
-									this.draftSchema = null;
-									new Notice(t("notice.advApplied"));
-								}
-								this.render();
-							});
-						})
-				)
-				.addButton((b) =>
-					b.setButtonText(t("adv.revert")).onClick(() => {
-						this.draftSchema = null;
-						this.render();
-					})
 				);
 		}
 	}
@@ -938,7 +1099,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		this.inventorySchemaFingerprint = "";
 	}
 
-	/** Live, read-only inventory under the currently applied filename schema. */
 	private renderStats(containerEl: HTMLElement) {
 		this.statsEl = containerEl.createDiv({ cls: "trellis-tag-inventory" });
 		this.renderStatsContents();
@@ -989,20 +1149,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 			});
 			for (const combination of snapshot.combinations.slice(0, 8)) {
 				details.createDiv({
-					text: `${combination.namespaces.map((ns) => `#${ns}`).join(" + ")} · ${combination.notes}`,
+					text: `${combination.namespaces.map((namespace) => `#${namespace}`).join(" + ")} · ${combination.notes}`,
 					cls: "setting-item-description",
 				});
 			}
 		}
 		if (snapshot.filenameCollisions.length > 0) {
-			const collisionSetting = new Setting(this.statsEl)
+			const setting = new Setting(this.statsEl)
 				.setName(t("setting.statsCollisionName"))
 				.setDesc(
 					t("setting.statsCollisionDesc", {
 						n: snapshot.filenameCollisions.length,
 					})
 				);
-			collisionSetting.settingEl.addClass("trellis-inventory-danger");
+			setting.settingEl.addClass("trellis-inventory-danger");
 			const details = this.statsEl.createEl("details", {
 				cls: "trellis-tag-inventory-paths trellis-inventory-danger-details",
 			});
@@ -1049,12 +1209,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						cls: "setting-item-description",
 					});
 				}
-				if (key.paths.length > 5) {
-					details.createDiv({
-						text: t("setting.statsMore", { n: key.paths.length - 5 }),
-						cls: "setting-item-description",
-					});
-				}
 			}
 		}
 		if (snapshot.rootOwnedUnmatchedOccurrences > 0) {
@@ -1066,26 +1220,5 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 				);
 		}
-	}
-
-	/** Keep separators aligned with the slot count (n slots → n-1 separators). */
-	private ensureSeparators(schema: TrellisSchema) {
-		const need = Math.max(0, schema.slots.length - 1);
-		const fill = schema.separators[schema.separators.length - 1] || "-";
-		while (schema.separators.length < need) schema.separators.push(fill);
-		schema.separators.length = need;
-		if (!schema.separatorSpacing) schema.separatorSpacing = [];
-		while (schema.separatorSpacing.length < need)
-			schema.separatorSpacing.push("none");
-		schema.separatorSpacing.length = need;
-	}
-
-	/** A namespace not yet used by any tag slot, for a freshly added slot. */
-	private nextFreeNamespace(schema: TrellisSchema): string {
-		const used = new Set((schema.tagDefinitions ?? []).map((definition) => definition.namespace));
-		if (!used.has("trel")) return "trel";
-		let i = 2;
-		while (used.has(`key${i}`)) i++;
-		return `key${i}`;
 	}
 }

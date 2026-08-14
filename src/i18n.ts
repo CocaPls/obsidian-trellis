@@ -71,15 +71,15 @@ const EN: Record<string, string> = {
 	"notice.retagged": "retagged {n} file(s) {from} → {to}",
 	"notice.noFilesTagged": "no files tagged {from}",
 	"notice.cascadeBadPath": "enter valid tag paths without spaces or reserved symbols",
-	"notice.cascadeOutside": "cascade is limited to children of managed tag-key namespaces: {ns}",
+	"notice.cascadeOutside": "cascade is limited to children of managed Trellis tag namespaces: {ns}",
 	"notice.cascadeDifferentKey":
-		"a cascade must stay in one tag-key namespace ({from} → {to} is not allowed)",
+		"a cascade must stay in one Trellis tag namespace ({from} → {to} is not allowed)",
 	"notice.noCascade": "no location-tag rename to undo",
 	"notice.cascadeUndone": "restored the previous tags and filenames on {n} note(s)",
 	"notice.noNamespaceChange": "no namespace change to undo",
 	"notice.namespaceUndone": "restored the previous namespace on {n} note(s)",
 	"notice.namespaceUndoStale":
-		"the schema changed after this namespace migration; restore that schema before undoing",
+		"the filename structure changed after this namespace migration; restore that filename structure before undoing",
 	"notice.bulkBusy": "finish the current Trellis change first: {active}",
 	"operation.automation": "automation apply",
 	"notice.bootstrapped":
@@ -105,6 +105,87 @@ const EN: Record<string, string> = {
 	"setting.section.general": "General",
 	"setting.section.scheme": "Filename",
 	"setting.section.tree": "Sidebar tree view",
+	"setting.section.tags": "Trellis tags",
+	"setting.section.filenameStructure": "Filename structure",
+	"setting.section.status": "Vault status",
+	"setting.tagsDesc":
+		"Register the Obsidian tag branches Trellis owns. A registered tag can be used in filenames, shown only in the sidebar, or kept hidden from both.",
+	"setting.tagDisplayName": "Display name",
+	"setting.tagDisplayNameDesc":
+		"Human-readable label used in Trellis. The tag namespace remains the stored identity.",
+	"setting.tagNamespace": "Tag namespace",
+	"setting.tagNamespaceDesc":
+		"The actual branch below the optional owner root. Applying previews and migrates existing tags.",
+	"setting.tagSidebarVisible": "Show in sidebar",
+	"setting.tagSidebarVisibleDesc":
+		"Visibility affects only the Trellis sidebar, never tags or filenames.",
+	"setting.tagColor": "Color",
+	"setting.tagColorDesc":
+		"Optional accent for this Trellis tag in the sidebar and compact property labels.",
+	"setting.colorReset": "Use Obsidian default color",
+	"setting.tagRemove": "Remove Trellis tag definition",
+	"setting.tagRemoveDesc":
+		"Available only when no filename slot or note still uses this tag branch.",
+	"setting.tagAdd": "Add Trellis tag",
+	"setting.tagAddDesc": "Give the branch a human label and its actual tag namespace.",
+	"setting.tagNamePlaceholder": "Display name, e.g. BLUEPRINT",
+	"setting.tagNamespacePlaceholder": "Namespace, e.g. bp",
+	"setting.add": "Add",
+	"notice.tagDefinitionExists": "That tag namespace is invalid or already registered.",
+	"notice.tagDefinitionInUse":
+		"Remove this tag from filename slots and notes before deleting its definition.",
+	"setting.valueRule": "Tag value suggestion",
+	"setting.valueRuleDesc":
+		"Suggests the next child value for new notes. It never repairs or rewrites existing tags.",
+	"valueRule.alternating": "Alternating alphabet and number",
+	"valueRule.sequence": "Sequence",
+	"valueRule.date": "Date",
+	"valueRule.timestamp": "Timestamp",
+	"valueRule.firstLevel": "Alternating format",
+	"valueRule.alphabet": "First level: alphabet",
+	"valueRule.number": "First level: number",
+	"valueRule.upper": "Uppercase",
+	"valueRule.lower": "Lowercase",
+	"valueRule.numberWidth": "Number width",
+	"valueRule.auto": "Auto",
+	"valueRule.sequenceStart": "Sequence start",
+	"valueRule.dateFormat": "Date format",
+	"valueRule.timestampFormat": "Timestamp format",
+	"valueRule.minute": "Minute",
+	"valueRule.second": "Second",
+	"valueRule.millisecond": "Millisecond",
+	"valueRule.local": "Local time",
+	"valueRule.example": "Example",
+	"setting.filenameStructureDesc":
+		"Arrange tag and name slots. Changes stay staged until preview, collision checks, and Apply complete.",
+	"setting.preview": "Preview",
+	"setting.previewName": "Sample note",
+	"setting.previewUnmanaged": "No filename slots — Trellis will not rename files",
+	"setting.slotTitle": "Slot {n} · {type}",
+	"setting.nameSlotDesc": "Free text preserved from the note filename.",
+	"setting.slotSource": "Trellis tag source",
+	"setting.slotSourceDesc": "Choose which registered tag branch is projected here.",
+	"setting.wrapperName": "Wrap slot",
+	"setting.wrapperDesc":
+		"Wrap non-empty values only. Custom pairs use the same portable safe-character rules as separators.",
+	"wrapper.none": "None",
+	"wrapper.round": "Round parentheses (…) ",
+	"wrapper.custom": "Custom pair…",
+	"setting.slotActions": "Slot actions",
+	"setting.slotAdd": "Add slot",
+	"setting.slotAddDesc":
+		"Each Trellis tag can appear once. The free name slot is optional and limited to one.",
+	"setting.addTagSlot": "Add tag slot",
+	"setting.addNameSlot": "Add name slot",
+	"setting.gapPreview": "Rendered boundary: {value}",
+	"setting.pendingDesc": "Review the preview above, then apply or discard the staged layout.",
+	"adv.invalid.missingDefinition": "A tag slot does not reference a registered Trellis tag.",
+	"adv.invalid.duplicateDefinition":
+		"The same Trellis tag cannot be projected by more than one filename slot.",
+	"adv.invalid.segment":
+		"A hierarchy display contains a character that is unsafe in portable filenames.",
+	"adv.invalid.wrapper":
+		"A custom wrapper needs a safe, non-empty opening and closing symbol.",
 	"setting.formatPreview": "Preview: {name}",
 	"setting.formatApplyName": "Apply filename formatting",
 	"setting.formatApplyDesc":
@@ -137,7 +218,7 @@ const EN: Record<string, string> = {
 		"Moves this location and everything under it. Filename codes follow automatically.",
 	"modal.namespaceBlocked.title": "Namespace is still in use",
 	"modal.namespaceBlocked.desc":
-		"This schema would stop managing these namespaces: {items}. Migrate or remove those tags first; nothing was changed.",
+		"This filename structure would stop managing these namespaces: {items}. Migrate or remove those tags first; nothing was changed.",
 	"modal.cascade.fromName": "From",
 	"modal.cascade.fromDesc": "Existing tag — type to search, ↑↓ + Enter to pick",
 	"modal.cascade.toName": "To",
@@ -210,9 +291,9 @@ const EN: Record<string, string> = {
 	"setting.treeName": "Sidebar tree view",
 	"setting.treeDesc":
 		"Show a collapsible tree of the location-tag hierarchy in the sidebar (ribbon icon + command).",
-	"setting.treeTagKeyName": "Classic tree tag-key",
+	"setting.treeTagKeyName": "Classic tree Trellis tag",
 	"setting.treeTagKeyDesc":
-		"Choose the single tag-key used by the notes-only tree. The nested tag tree still shows every tag-key.",
+		"Choose the single Trellis tag used by the notes-only tree. The nested tag tree still shows every Trellis tag.",
 	"setting.treeLabelName": "Sidebar view name",
 	"setting.treeLabelDesc":
 		"Custom title for the tree view's tab. Leave blank for the default. Avoid reusing the core File explorer's name.",
@@ -286,15 +367,15 @@ const EN: Record<string, string> = {
 	// advanced multi-key slot editor (0.2.0, experimental)
 	"setting.advName": "Advanced — multi-key slots (experimental)",
 	"setting.advDesc":
-		"Edit the filename as an array of key slots. Each tag-key slot syncs from its own namespace; the name slot stays free. Applying shows an exact rename preview and runs as one undoable batch.",
+		"Edit the filename as an array of key slots. Each Trellis tag slot syncs from its own namespace; the name slot stays free. Applying shows an exact rename preview and runs as one undoable batch.",
 	"setting.advSlots": "Slots",
 	"adv.slot": "Slot {n}",
 	"adv.roleTag": "Tag key",
 	"adv.roleName": "Name key (free title)",
 	"adv.nsPh": "namespace, e.g. trel",
 	"adv.sep": "Separator {n} (between slot {a} and slot {b})",
-	"adv.addTag": "Add tag-key slot",
-	"adv.addName": "Add name-key slot",
+	"adv.addTag": "Add Trellis tag slot",
+	"adv.addName": "Add name slot slot",
 	"adv.moveUp": "Move up",
 	"adv.moveDown": "Move down",
 	"adv.remove": "Remove slot",
@@ -302,9 +383,9 @@ const EN: Record<string, string> = {
 	"adv.pending": "Pending changes",
 	"adv.apply": "Apply",
 	"adv.revert": "Revert",
-	"adv.invalidTitle": "Invalid schema",
-	"adv.invalid.needTag": "At least one tag-key slot is required.",
-	"adv.invalid.oneName": "Only one name-key slot is supported.",
+	"adv.invalidTitle": "Invalid filename structure",
+	"adv.invalid.needTag": "At least one Trellis tag slot is required.",
+	"adv.invalid.oneName": "Only one name slot slot is supported.",
 	"adv.invalid.nsEmpty": "A tag slot namespace cannot be empty.",
 	"adv.invalid.nsBad": "Namespace '{ns}' has illegal characters — use letters, digits, '-' or '_'.",
 	"adv.invalid.nsDup": "Namespace '{ns}' is used by more than one tag slot.",
@@ -312,7 +393,7 @@ const EN: Record<string, string> = {
 	"adv.invalid.spacing": "Separator {n} has an invalid spacing mode.",
 	"adv.invalid.conflict":
 		"A tag hierarchy separator matches an adjacent boundary symbol with no spacing. Change one of them or add boundary spacing.",
-	"notice.advApplied": "schema applied",
+	"notice.advApplied": "filename structure applied",
 	"modal.ok": "OK",
 	"modal.confirm.dontAsk": "Don't ask again",
 	"modal.confirm.ok": "Apply",
@@ -321,41 +402,41 @@ const EN: Record<string, string> = {
 	"modal.badSep.desc": "A separator cannot be empty and cannot contain letters, digits, spaces, or characters illegal in filenames. Try a symbol like -, _, . or ~.",
 	"modal.badSep.conflict":
 		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
-	"modal.applySchema.title": "Apply schema changes?",
-	"modal.applySchema.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
-	"modal.schemaNameLoss":
-		"Removing the name-key discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
-	"modal.schemaCollision.title": "Filename collisions in this schema",
-	"modal.schemaCollision.desc":
-		"This schema creates {n} exact-path collision group(s), so nothing was applied. Resolve or redesign these targets first: {items}",
+	"modal.applyFilename structure.title": "Apply filename structure changes?",
+	"modal.applyFilename structure.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
+	"modal.filename structureNameLoss":
+		"Removing the name slot discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
+	"modal.filename structureCollision.title": "Filename collisions in this filename structure",
+	"modal.filename structureCollision.desc":
+		"This filename structure creates {n} exact-path collision group(s), so nothing was applied. Resolve or redesign these targets first: {items}",
 	"setting.statsName": "Live vault status",
 	"setting.statsDesc":
 		"{managed} of {total} notes · {tags} managed tag value(s) · {paths} unique path(s). Updates while settings are open.",
 	"setting.statsGeneralName": "Ordinary tags",
 	"setting.statsGeneralDesc": "{tags} explicit use(s) · {unique} unique tag(s)",
-	"setting.statsCombinationsName": "Tag-key combinations",
+	"setting.statsCombinationsName": "Trellis tag combinations",
 	"setting.statsCombinationsDesc":
-		"{n} active combination(s) · {unmanaged} note(s) have no managed tag-key",
+		"{n} active combination(s) · {unmanaged} note(s) have no managed Trellis tag",
 	"setting.statsCombinationsShow": "Top combinations ({n})",
 	"setting.statsCollisionName": "Filename collisions",
 	"setting.statsCollisionDesc":
-		"{n} exact target path(s) are requested by more than one note under the current schema.",
+		"{n} exact target path(s) are requested by more than one note under the current filename structure.",
 	"setting.statsCollisionShow": "Collision targets ({n})",
-	"setting.statsKeyName": "Slot {n} tag-key · #{ns}/…",
+	"setting.statsKeyName": "Slot {n} Trellis tag · #{ns}/…",
 	"setting.statsKeyDesc":
 		"{notes} note(s) · {tags} value(s) · {paths} unique path(s) · {duplicates} duplicate note(s) · {inline} inline-only note(s) · {roots} namespace-node note(s)",
 	"setting.statsPaths": "Top paths ({n})",
 	"setting.statsMore": "+ {n} more path(s)",
 	"setting.statsRootUnknownName": "Unrecognized owner-root tags",
 	"setting.statsRootUnknownDesc":
-		"{n} explicit tag(s) are under the owner root but do not match any tag-key namespace.",
-	"notice.advLastTag": "at least one tag-key slot is required",
-	"notice.advOneName": "only one name-key slot is supported",
+		"{n} explicit tag(s) are under the owner root but do not match any Trellis tag namespace.",
+	"notice.advLastTag": "at least one Trellis tag slot is required",
+	"notice.advOneName": "only one name slot slot is supported",
 	"notice.advNsEmpty": "tag slot namespace cannot be empty",
 	"notice.advNsDup": "tag slot namespaces must be distinct",
-	"notice.advReset": "schema reset to single-key (tag + name)",
+	"notice.advReset": "filename structure reset to single-key (tag + name)",
 	"notice.noNameUnmanaged":
-		"{name}: the final Trellis tag-key was removed. The current filename was preserved and the note is now unmanaged.",
+		"{name}: the final Trellis Trellis tag was removed. The current filename was preserved and the note is now unmanaged.",
 	"setting.experimentalName": "Experimental filename features",
 	"setting.experimentalDesc":
 		"Optional tools for vaults that need an owner root, automatic ID suggestions, or more than one managed key. Most vaults can leave this closed.",
@@ -437,15 +518,15 @@ const KO: Record<string, string> = {
 	"notice.retagged": "{n}개 파일 재태그 {from} → {to}",
 	"notice.noFilesTagged": "{from} 태그가 붙은 파일 없음",
 	"notice.cascadeBadPath": "공백이나 예약 문자가 없는 올바른 태그 경로를 입력하세요",
-	"notice.cascadeOutside": "하위 전체 변경은 관리 태그키 네임스페이스 안에서만 가능합니다: {ns}",
+	"notice.cascadeOutside": "하위 전체 변경은 관리 트렐리 태그 네임스페이스 안에서만 가능합니다: {ns}",
 	"notice.cascadeDifferentKey":
-		"하위 전체 변경은 하나의 태그키 안에서만 가능합니다 ({from} → {to} 이동 불가)",
+		"하위 전체 변경은 하나의 트렐리 태그 안에서만 가능합니다 ({from} → {to} 이동 불가)",
 	"notice.noCascade": "되돌릴 위치 태그 이름 변경이 없습니다",
 	"notice.cascadeUndone": "{n}개 노트의 이전 태그와 파일명을 복원했습니다",
 	"notice.noNamespaceChange": "되돌릴 네임스페이스 변경이 없습니다",
 	"notice.namespaceUndone": "{n}개 노트를 이전 네임스페이스로 복원했습니다",
 	"notice.namespaceUndoStale":
-		"네임스페이스 변경 뒤 스키마가 달라졌습니다. 해당 스키마를 먼저 복원하세요",
+		"네임스페이스 변경 뒤 파일명 구조가 달라졌습니다. 해당 파일명 구조를 먼저 복원하세요",
 	"notice.bulkBusy": "현재 Trellis 변경을 먼저 끝내세요: {active}",
 	"operation.automation": "자동화 적용",
 	"notice.bootstrapped":
@@ -471,6 +552,87 @@ const KO: Record<string, string> = {
 	"setting.section.general": "일반",
 	"setting.section.scheme": "파일명",
 	"setting.section.tree": "사이드바 트리 뷰",
+	"setting.section.tags": "트렐리 태그",
+	"setting.section.filenameStructure": "파일명 구조",
+	"setting.section.status": "볼트 현황",
+	"setting.tagsDesc":
+		"트렐리가 소유할 옵시디언 태그 분기를 등록합니다. 등록한 태그는 파일명에 넣거나, 사이드바에서만 보이거나, 양쪽 모두에서 숨길 수 있습니다.",
+	"setting.tagDisplayName": "표시 이름",
+	"setting.tagDisplayNameDesc":
+		"트렐리 화면에서 사람이 읽는 이름입니다. 실제 저장 식별은 태그 네임스페이스가 맡습니다.",
+	"setting.tagNamespace": "태그 네임스페이스",
+	"setting.tagNamespaceDesc":
+		"선택적 공통 루트 아래의 실제 태그 분기입니다. 적용 전 기존 태그 이관 내용을 미리 보여줍니다.",
+	"setting.tagSidebarVisible": "사이드바에 표시",
+	"setting.tagSidebarVisibleDesc":
+		"사이드바 표시만 바꾸며 실제 태그와 파일명에는 영향을 주지 않습니다.",
+	"setting.tagColor": "색상",
+	"setting.tagColorDesc":
+		"사이드바와 속성 축약 표시에 사용할 선택적 강조색입니다.",
+	"setting.colorReset": "옵시디언 기본 색상 사용",
+	"setting.tagRemove": "트렐리 태그 정의 삭제",
+	"setting.tagRemoveDesc":
+		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
+	"setting.tagAdd": "트렐리 태그 추가",
+	"setting.tagAddDesc": "사람용 이름과 실제 태그 네임스페이스를 입력하세요.",
+	"setting.tagNamePlaceholder": "표시 이름, 예: BLUEPRINT",
+	"setting.tagNamespacePlaceholder": "네임스페이스, 예: bp",
+	"setting.add": "추가",
+	"notice.tagDefinitionExists": "잘못된 네임스페이스이거나 이미 등록되어 있습니다.",
+	"notice.tagDefinitionInUse":
+		"파일명 슬롯과 노트에서 이 태그를 제거한 뒤 정의를 삭제하세요.",
+	"setting.valueRule": "태그 값 제안",
+	"setting.valueRuleDesc":
+		"새 노트의 다음 하위 값을 제안합니다. 기존 태그를 교정하거나 자동 수정하지 않습니다.",
+	"valueRule.alternating": "알파벳·숫자 교대",
+	"valueRule.sequence": "순번",
+	"valueRule.date": "날짜",
+	"valueRule.timestamp": "타임스탬프",
+	"valueRule.firstLevel": "교대 형식",
+	"valueRule.alphabet": "첫 단계: 알파벳",
+	"valueRule.number": "첫 단계: 숫자",
+	"valueRule.upper": "대문자",
+	"valueRule.lower": "소문자",
+	"valueRule.numberWidth": "숫자 자릿수",
+	"valueRule.auto": "자동",
+	"valueRule.sequenceStart": "순번 시작값",
+	"valueRule.dateFormat": "날짜 형식",
+	"valueRule.timestampFormat": "타임스탬프 형식",
+	"valueRule.minute": "분",
+	"valueRule.second": "초",
+	"valueRule.millisecond": "밀리초",
+	"valueRule.local": "로컬 시간",
+	"valueRule.example": "예시",
+	"setting.filenameStructureDesc":
+		"태그 슬롯과 이름 슬롯을 배치합니다. 변경은 미리보기·충돌 검사·적용을 거치기 전까지 실제 설정에 반영되지 않습니다.",
+	"setting.preview": "미리보기",
+	"setting.previewName": "나무위키",
+	"setting.previewUnmanaged": "파일명 슬롯 없음 — 트렐리가 파일명을 바꾸지 않음",
+	"setting.slotTitle": "슬롯 {n} · {type}",
+	"setting.nameSlotDesc": "노트 파일명에서 보존하는 자유 입력 이름입니다.",
+	"setting.slotSource": "트렐리 태그 원천",
+	"setting.slotSourceDesc": "이 슬롯에 옮겨 적을 등록 태그 분기를 고릅니다.",
+	"setting.wrapperName": "슬롯 감싸기",
+	"setting.wrapperDesc":
+		"값이 있을 때만 감쌉니다. 사용자 지정 쌍은 구분자와 같은 휴대 가능한 안전 문자만 허용합니다.",
+	"wrapper.none": "없음",
+	"wrapper.round": "둥근 괄호 (…) ",
+	"wrapper.custom": "사용자 지정 쌍…",
+	"setting.slotActions": "슬롯 조작",
+	"setting.slotAdd": "슬롯 추가",
+	"setting.slotAddDesc":
+		"트렐리 태그 하나당 태그 슬롯 하나를 둘 수 있습니다. 자유 이름 슬롯은 선택 사항이며 최대 하나입니다.",
+	"setting.addTagSlot": "태그 슬롯 추가",
+	"setting.addNameSlot": "이름 슬롯 추가",
+	"setting.gapPreview": "실제 경계: {value}",
+	"setting.pendingDesc": "위 미리보기를 확인한 뒤 변경을 적용하거나 폐기하세요.",
+	"adv.invalid.missingDefinition": "등록된 트렐리 태그를 참조하지 않는 태그 슬롯이 있습니다.",
+	"adv.invalid.duplicateDefinition":
+		"같은 트렐리 태그를 둘 이상의 파일명 슬롯에 넣을 수 없습니다.",
+	"adv.invalid.segment":
+		"계층 표시에 휴대 가능한 파일명에서 안전하지 않은 문자가 있습니다.",
+	"adv.invalid.wrapper":
+		"사용자 지정 감싸기에는 안전하고 비어 있지 않은 여는 기호와 닫는 기호가 필요합니다.",
 	"setting.formatPreview": "미리보기: {name}",
 	"setting.formatApplyName": "파일명 형식 적용",
 	"setting.formatApplyDesc":
@@ -503,7 +665,7 @@ const KO: Record<string, string> = {
 		"이 위치와 그 하위 전체를 옮깁니다. 파일명 코드는 자동으로 따라갑니다.",
 	"modal.namespaceBlocked.title": "사용 중인 네임스페이스입니다",
 	"modal.namespaceBlocked.desc":
-		"이 스키마를 적용하면 다음 네임스페이스가 관리 밖으로 빠집니다: {items}. 먼저 해당 태그를 이관하거나 제거하세요. 변경된 내용은 없습니다.",
+		"이 파일명 구조를 적용하면 다음 네임스페이스가 관리 밖으로 빠집니다: {items}. 먼저 해당 태그를 이관하거나 제거하세요. 변경된 내용은 없습니다.",
 	"modal.cascade.fromName": "변경 전",
 	"modal.cascade.fromDesc": "기존 태그 — 입력해 검색, ↑↓ + Enter로 선택",
 	"modal.cascade.toName": "변경 후",
@@ -532,7 +694,7 @@ const KO: Record<string, string> = {
 	"modal.bootstrap.summary":
 		"{assign}개 파일에 태그 부여 예정 · {already}개 이미 태그됨 (건너뜀) · {none}개 파일명 코드 인식 불가 (건너뜀). 아무것도 기록하지 않습니다.",
 	"modal.bootstrap.segmentWarning":
-		"표시형 계층 구분자가 켜져 있습니다. 부트스트랩은 태그키 안의 해당 기호를 모두 계층 경계로 해석하므로, 원래 세그먼트 자체에 그 기호가 있었을 수 있는 이름은 직접 검토하세요.",
+		"표시형 계층 구분자가 켜져 있습니다. 부트스트랩은 트렐리 태그 안의 해당 기호를 모두 계층 경계로 해석하므로, 원래 세그먼트 자체에 그 기호가 있었을 수 있는 이름은 직접 검토하세요.",
 	"modal.bootstrap.willAssign": "부여 예정 ({n})",
 	"modal.bootstrap.noTagkey": "파일명 코드 인식 불가 — 건너뜀 ({n})",
 	"modal.bootstrap.apply": "적용 — {n}개 파일 태그",
@@ -575,9 +737,9 @@ const KO: Record<string, string> = {
 	"setting.treeName": "사이드바 트리 뷰",
 	"setting.treeDesc":
 		"위치 태그 계층을 사이드바에 접을 수 있는 트리로 표시합니다 (리본 아이콘 + 명령).",
-	"setting.treeTagKeyName": "기존 노트 트리 태그키",
+	"setting.treeTagKeyName": "기존 노트 트리 트렐리 태그",
 	"setting.treeTagKeyDesc":
-		"노트 전용 트리의 단일 축으로 사용할 태그키를 고릅니다. 중첩 태그 트리는 계속 모든 태그키를 표시합니다.",
+		"노트 전용 트리의 단일 축으로 사용할 트렐리 태그를 고릅니다. 중첩 태그 트리는 계속 모든 트렐리 태그를 표시합니다.",
 	"setting.treeLabelName": "사이드바 뷰 이름",
 	"setting.treeLabelDesc":
 		"트리 뷰 탭의 표시 이름. 비우면 기본값을 씁니다. 코어 '탐색기'와 같은 이름은 피하세요.",
@@ -650,15 +812,15 @@ const KO: Record<string, string> = {
 	// advanced multi-key slot editor (0.2.0, experimental)
 	"setting.advName": "고급 — 멀티키 슬롯 (시험 기능)",
 	"setting.advDesc":
-		"파일명을 키 슬롯 배열로 편집합니다. 각 태그키 슬롯은 자기 네임스페이스에서 동기화되고 네임키는 자유 제목으로 남습니다. 적용 전 정확한 이름 변경 목록을 보여주고 한 번에 실행하며 되돌릴 수 있습니다.",
+		"파일명을 키 슬롯 배열로 편집합니다. 각 트렐리 태그 슬롯은 자기 네임스페이스에서 동기화되고 이름 슬롯는 자유 제목으로 남습니다. 적용 전 정확한 이름 변경 목록을 보여주고 한 번에 실행하며 되돌릴 수 있습니다.",
 	"setting.advSlots": "슬롯",
 	"adv.slot": "슬롯 {n}",
-	"adv.roleTag": "태그키",
-	"adv.roleName": "네임키 (자유 제목)",
+	"adv.roleTag": "트렐리 태그",
+	"adv.roleName": "이름 슬롯 (자유 제목)",
 	"adv.nsPh": "네임스페이스, 예: trel",
 	"adv.sep": "구분자 {n} (슬롯 {a}·{b} 사이)",
-	"adv.addTag": "태그키 슬롯 추가",
-	"adv.addName": "네임키 슬롯 추가",
+	"adv.addTag": "트렐리 태그 슬롯 추가",
+	"adv.addName": "이름 슬롯 슬롯 추가",
 	"adv.moveUp": "위로",
 	"adv.moveDown": "아래로",
 	"adv.remove": "슬롯 삭제",
@@ -666,9 +828,9 @@ const KO: Record<string, string> = {
 	"adv.pending": "적용 대기 중인 변경",
 	"adv.apply": "적용",
 	"adv.revert": "되돌리기",
-	"adv.invalidTitle": "잘못된 스키마",
-	"adv.invalid.needTag": "태그키 슬롯이 최소 1개 필요합니다.",
-	"adv.invalid.oneName": "네임키 슬롯은 1개까지만 지원합니다.",
+	"adv.invalidTitle": "잘못된 파일명 구조",
+	"adv.invalid.needTag": "트렐리 태그 슬롯이 최소 1개 필요합니다.",
+	"adv.invalid.oneName": "이름 슬롯 슬롯은 1개까지만 지원합니다.",
 	"adv.invalid.nsEmpty": "태그 슬롯의 네임스페이스는 비울 수 없습니다.",
 	"adv.invalid.nsBad": "네임스페이스 '{ns}' 에 사용할 수 없는 문자가 있습니다 — 영문·숫자·'-'·'_'만 됩니다.",
 	"adv.invalid.nsDup": "네임스페이스 '{ns}' 가 둘 이상의 태그 슬롯에서 쓰입니다.",
@@ -676,7 +838,7 @@ const KO: Record<string, string> = {
 	"adv.invalid.spacing": "구분자 {n} 의 공백 설정이 올바르지 않습니다.",
 	"adv.invalid.conflict":
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같습니다. 둘 중 하나를 바꾸거나 경계 공백을 추가하세요.",
-	"notice.advApplied": "스키마를 적용했습니다",
+	"notice.advApplied": "파일명 구조를 적용했습니다",
 	"modal.ok": "확인",
 	"modal.confirm.dontAsk": "다시 묻지 않기",
 	"modal.confirm.ok": "적용",
@@ -685,41 +847,41 @@ const KO: Record<string, string> = {
 	"modal.badSep.desc": "구분자는 비울 수 없고, 영문·숫자·공백이나 파일명에 쓸 수 없는 기호는 넣을 수 없습니다. -, _, ., ~ 같은 기호를 쓰세요.",
 	"modal.badSep.conflict":
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
-	"modal.applySchema.title": "스키마 변경을 적용할까요?",
-	"modal.applySchema.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
-	"modal.schemaNameLoss":
-		"네임키를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
-	"modal.schemaCollision.title": "이 스키마에서 파일명 충돌 발생",
-	"modal.schemaCollision.desc":
-		"같은 경로를 요구하는 충돌 묶음이 {n}개라 적용하지 않았습니다. 먼저 다음 대상을 정리하거나 스키마를 바꾸세요: {items}",
+	"modal.applyFilename structure.title": "파일명 구조 변경을 적용할까요?",
+	"modal.applyFilename structure.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
+	"modal.filename structureNameLoss":
+		"이름 슬롯를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
+	"modal.filename structureCollision.title": "이 파일명 구조에서 파일명 충돌 발생",
+	"modal.filename structureCollision.desc":
+		"같은 경로를 요구하는 충돌 묶음이 {n}개라 적용하지 않았습니다. 먼저 다음 대상을 정리하거나 파일명 구조를 바꾸세요: {items}",
 	"setting.statsName": "현재 볼트 현황",
 	"setting.statsDesc":
 		"전체 {total}개 중 관리 노트 {managed}개 · 관리 태그값 {tags}개 · 고유 경로 {paths}개. 설정창을 연 동안 자동 갱신됩니다.",
 	"setting.statsGeneralName": "일반 태그",
 	"setting.statsGeneralDesc": "명시적 사용 {tags}개 · 고유 태그 {unique}개",
-	"setting.statsCombinationsName": "태그키 조합",
+	"setting.statsCombinationsName": "트렐리 태그 조합",
 	"setting.statsCombinationsDesc":
-		"사용 중인 조합 {n}개 · 관리 태그키가 없는 노트 {unmanaged}개",
+		"사용 중인 조합 {n}개 · 관리 트렐리 태그가 없는 노트 {unmanaged}개",
 	"setting.statsCombinationsShow": "사용량 상위 조합 ({n})",
 	"setting.statsCollisionName": "파일명 충돌",
 	"setting.statsCollisionDesc":
-		"현재 스키마에서 둘 이상의 노트가 요구하는 동일 대상 경로가 {n}개 있습니다.",
+		"현재 파일명 구조에서 둘 이상의 노트가 요구하는 동일 대상 경로가 {n}개 있습니다.",
 	"setting.statsCollisionShow": "충돌 대상 ({n})",
-	"setting.statsKeyName": "슬롯 {n} 태그키 · #{ns}/…",
+	"setting.statsKeyName": "슬롯 {n} 트렐리 태그 · #{ns}/…",
 	"setting.statsKeyDesc":
 		"노트 {notes}개 · 태그값 {tags}개 · 고유 경로 {paths}개 · 중복 노트 {duplicates}개 · 인라인 전용 노트 {inline}개 · 네임스페이스 노드 노트 {roots}개",
 	"setting.statsPaths": "사용량 상위 경로 ({n})",
 	"setting.statsMore": "외 {n}개 경로",
 	"setting.statsRootUnknownName": "루트 아래 미등록 태그",
 	"setting.statsRootUnknownDesc":
-		"공통 루트 아래 있지만 어느 태그키 네임스페이스에도 속하지 않는 명시적 태그가 {n}개 있습니다.",
-	"notice.advLastTag": "태그키 슬롯은 최소 1개 필요합니다",
-	"notice.advOneName": "네임키 슬롯은 1개까지만 지원합니다",
+		"공통 루트 아래 있지만 어느 트렐리 태그 네임스페이스에도 속하지 않는 명시적 태그가 {n}개 있습니다.",
+	"notice.advLastTag": "트렐리 태그 슬롯은 최소 1개 필요합니다",
+	"notice.advOneName": "이름 슬롯 슬롯은 1개까지만 지원합니다",
 	"notice.advNsEmpty": "태그 슬롯 네임스페이스는 비울 수 없습니다",
 	"notice.advNsDup": "태그 슬롯 네임스페이스는 서로 달라야 합니다",
-	"notice.advReset": "스키마를 단일키(태그+네임)로 재설정했습니다",
+	"notice.advReset": "파일명 구조를 단일키(태그+네임)로 재설정했습니다",
 	"notice.noNameUnmanaged":
-		"{name}: 마지막 트렐리 태그키가 제거되어 현재 파일명을 보존하고 관리 대상에서 제외했습니다.",
+		"{name}: 마지막 트렐리 트렐리 태그가 제거되어 현재 파일명을 보존하고 관리 대상에서 제외했습니다.",
 	"setting.experimentalName": "실험 기능 — 파일명 확장",
 	"setting.experimentalDesc":
 		"소유 루트, ID 자동 제안, 둘 이상의 관리 키가 꼭 필요한 볼트를 위한 선택 기능입니다. 일반적인 단일키 볼트는 닫아 두어도 됩니다.",
