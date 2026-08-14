@@ -307,86 +307,6 @@ button.trellis-destructive:disabled:hover {
 	line-height: 1.4;
 }
 
-.trellis-settings-metrics {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: var(--size-4-2);
-	margin-bottom: var(--size-4-4);
-}
-
-.trellis-settings-metric {
-	min-width: 0;
-	padding: var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
-}
-
-.trellis-settings-metric.is-warning {
-	border-color: var(--color-yellow);
-}
-
-.trellis-settings-metric.is-danger {
-	border-color: var(--text-error);
-}
-
-.trellis-settings-metric-value {
-	font-size: var(--font-ui-large);
-	font-weight: var(--font-semibold);
-	font-variant-numeric: tabular-nums;
-}
-
-.trellis-settings-metric-label {
-	margin-top: var(--size-4-1);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.trellis-settings-card {
-	overflow: hidden;
-	margin: var(--size-4-4) 0;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-primary);
-}
-
-.trellis-tag-editor-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-3);
-	padding: var(--size-4-3) var(--size-4-4);
-	border-bottom: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
-}
-
-.trellis-tag-editor-identity {
-	display: flex;
-	min-width: 0;
-	align-items: center;
-	gap: var(--size-4-3);
-}
-
-.trellis-tag-editor-title {
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.trellis-tag-editor-title .trellis-tag-definition-name {
-	font-size: var(--font-ui-medium);
-	font-weight: var(--font-semibold);
-}
-
-.trellis-settings-card-body {
-	padding: 0 var(--size-4-4) var(--size-4-2);
-}
-
-.trellis-settings-card-body > .setting-item:last-child {
-	border-bottom: 0;
-}
-
 .trellis-tag-definition-list {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -498,16 +418,15 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-settings-details {
-	margin-top: var(--size-4-5);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
+	margin-top: var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .trellis-settings-details-summary {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-2);
-	padding: var(--size-4-3) var(--size-4-4);
+	padding: var(--size-4-3) 0;
 	cursor: pointer;
 	list-style: none;
 }
@@ -545,7 +464,7 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-settings-details > .trellis-tag-inventory {
 	margin: 0;
-	padding: 0 var(--size-4-4) var(--size-4-4);
+	padding: 0 0 var(--size-4-3);
 }
 
 .trellis-inventory-danger .setting-item-name,
@@ -558,160 +477,22 @@ button.trellis-destructive:disabled:hover {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
-.trellis-filename-result {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-4);
-	margin: var(--size-4-4) 0;
-	padding: var(--size-4-3) var(--size-4-4);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-secondary);
-}
-
-.trellis-filename-result-copy {
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.trellis-filename-result-label {
-	color: var(--text-normal);
-	font-weight: var(--font-semibold);
-}
-
-.trellis-filename-result-hint {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.trellis-filename-result > code {
+.trellis-filename-example-code {
 	overflow: hidden;
-	max-width: 55%;
-	padding: var(--size-4-2) var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
+	max-width: 100%;
+	padding: 3px 8px;
 	border-radius: var(--radius-s);
-	background: var(--background-primary);
+	background: var(--background-secondary);
 	color: var(--text-normal);
-	font-size: var(--font-ui-large);
-	font-weight: var(--font-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.trellis-filename-workspace {
-	display: grid;
-	grid-template-columns: minmax(180px, 210px) minmax(0, 1fr);
-	align-items: start;
-	gap: var(--size-4-3);
-	margin-bottom: var(--size-4-4);
-}
-
-.trellis-filename-outline {
-	overflow: hidden;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-primary);
-}
-
-.trellis-filename-outline-title {
-	padding: var(--size-4-3);
-	border-bottom: 1px solid var(--background-modifier-border);
-	background: var(--background-secondary);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	font-weight: var(--font-semibold);
-}
-
-.trellis-filename-sequence {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: var(--size-4-1);
-}
-
-.trellis-filename-outline button.trellis-filename-sequence-slot,
-.trellis-filename-outline button.trellis-filename-sequence-gap {
-	width: 100%;
-	height: auto;
-	border: 0;
-	border-radius: var(--radius-s);
-	box-shadow: none;
-	background: transparent;
-	color: var(--text-muted);
-	text-align: start;
-}
-
-.trellis-filename-outline button.trellis-filename-sequence-slot {
-	display: flex;
-	min-height: 52px;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 2px;
-	padding: var(--size-4-2) var(--size-4-3);
-}
-
-.trellis-filename-outline button.trellis-filename-sequence-gap {
-	display: grid;
-	min-height: 40px;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
-	gap: var(--size-4-2);
-	padding: var(--size-4-2) var(--size-4-3);
-}
-
-.trellis-filename-outline button.trellis-filename-sequence-slot:hover,
-.trellis-filename-outline button.trellis-filename-sequence-gap:hover {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
-
-.trellis-filename-outline button.trellis-filename-sequence-slot.is-selected,
-.trellis-filename-outline button.trellis-filename-sequence-gap.is-selected {
-	background: var(--background-modifier-hover);
-	box-shadow: inset 3px 0 0 var(--interactive-accent);
-	color: var(--text-normal);
-}
-
-.trellis-filename-sequence-title {
-	overflow: hidden;
-	font-weight: var(--font-medium);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.trellis-filename-sequence-gap code {
-	padding: 2px 6px;
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
-	color: var(--text-normal);
-}
-
-.trellis-filename-sequence-meta {
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-}
-
-.trellis-filename-selection {
-	min-width: 0;
-	margin: 0;
-	padding: 0 var(--size-4-4) var(--size-4-2);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-primary);
-}
-
-.trellis-filename-selection:empty {
-	display: none;
+.trellis-settings-panel > .setting-item-heading.trellis-filename-part-heading {
+	margin-top: var(--size-4-4);
 }
 
 @media (max-width: 600px) {
-	.trellis-settings-metrics {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
 	.trellis-tag-definition-list {
 		grid-template-columns: 1fr;
 	}
@@ -720,37 +501,17 @@ button.trellis-destructive:disabled:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-filename-result {
-		align-items: flex-start;
-		flex-direction: column;
-	}
-
-	.trellis-filename-result > code {
-		max-width: 100%;
-	}
-
-	.trellis-filename-workspace {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.trellis-settings-card .setting-item,
-	.trellis-tag-definition-add,
-	.trellis-filename-selection .setting-item {
+	.trellis-tag-definition-add {
 		align-items: flex-start;
 		flex-wrap: wrap;
 	}
 
-	.trellis-settings-card .setting-item-control,
-	.trellis-tag-definition-add .setting-item-control,
-	.trellis-filename-selection .setting-item:not(.setting-item-heading) .setting-item-control {
+	.trellis-tag-definition-add .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;
 		flex-wrap: wrap;
 	}
 
-	.trellis-filename-selection .setting-item-heading .setting-item-control {
-		margin-inline-start: auto;
-	}
 }
 .trellis-tag-accent {
 	color: var(--trellis-tag-color);
