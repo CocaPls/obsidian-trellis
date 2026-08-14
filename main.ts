@@ -401,6 +401,7 @@ export default class TrellisPlugin extends Plugin {
 		} catch (e) {
 			console.warn("TRELLIS: tree view type already registered (stale instance?)", e);
 		}
+		await this.rehydrateStaleTreeViews();
 		this.ribbonEl = this.addRibbonIcon("list-tree", this.treeDisplayName(), () =>
 			void this.activateTreeView()
 		);
@@ -1249,6 +1250,9 @@ export default class TrellisPlugin extends Plugin {
 	private async activateTreeView() {
 		const { workspace } = this.app;
 		let leaf = workspace.getLeavesOfType(TRELLIS_TREE_VIEW)[0];
+		if (leaf && !(leaf.view instanceof TrellisTreeView)) {
+			await this.rehydrateTreeLeaf(leaf);
+		}
 		if (!leaf) {
 			const left = workspace.getLeftLeaf(false);
 			if (!left) return;
@@ -1256,6 +1260,26 @@ export default class TrellisPlugin extends Plugin {
 			await leaf.setViewState({ type: TRELLIS_TREE_VIEW, active: true });
 		}
 		this.revealTreeLeaf(leaf);
+	}
+
+	/**
+	 * Obsidian hot-updates plugins by disabling and enabling them in place. An
+	 * already-open custom-view leaf can survive that cycle as an UnknownView,
+	 * even after the replacement view factory has been registered. Recreate only
+	 * those stale leaves so an ordinary plugin update does not require an app
+	 * restart or manual tab repair.
+	 */
+	private async rehydrateStaleTreeViews() {
+		for (const leaf of this.app.workspace.getLeavesOfType(TRELLIS_TREE_VIEW)) {
+			if (!(leaf.view instanceof TrellisTreeView)) {
+				await this.rehydrateTreeLeaf(leaf);
+			}
+		}
+	}
+
+	private async rehydrateTreeLeaf(leaf: WorkspaceLeaf) {
+		await leaf.setViewState({ type: "empty", active: false });
+		await leaf.setViewState({ type: TRELLIS_TREE_VIEW, active: false });
 	}
 
 	private revealTreeLeaf(leaf: WorkspaceLeaf) {
