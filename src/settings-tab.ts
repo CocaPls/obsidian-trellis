@@ -332,7 +332,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.setDesc(t("setting.tagRemoveDesc"))
 			.addButton((button) =>
 				button
-					.setButtonText(t("adv.remove"))
+					.setButtonText(t("setting.tagRemoveButton"))
 					.setClass("trellis-destructive")
 					.onClick(async () => {
 						if (!(await this.plugin.removeTagDefinition(definition.id))) {

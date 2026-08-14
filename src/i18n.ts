@@ -132,6 +132,7 @@ const EN: Record<string, string> = {
 		"Optional accent for this Trellis tag in the sidebar and compact property labels.",
 	"setting.colorReset": "Use Obsidian default color",
 	"setting.tagRemove": "Remove Trellis tag definition",
+	"setting.tagRemoveButton": "Remove definition",
 	"setting.tagRemoveDesc":
 		"Available only when no filename slot or note still uses this tag branch.",
 	"setting.tagAdd": "Add Trellis tag",
@@ -614,6 +615,7 @@ const KO: Record<string, string> = {
 		"사이드바와 속성 축약 표시에 사용할 선택적 강조색입니다.",
 	"setting.colorReset": "옵시디언 기본 색상 사용",
 	"setting.tagRemove": "트렐리 태그 정의 삭제",
+	"setting.tagRemoveButton": "정의 삭제",
 	"setting.tagRemoveDesc":
 		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
 	"setting.tagAdd": "트렐리 태그 추가",
