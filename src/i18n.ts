@@ -125,7 +125,7 @@ const EN: Record<string, string> = {
 	"setting.section.general": "Basics",
 	"setting.section.scheme": "Filename",
 	"setting.section.tree": "Sidebar",
-	"setting.section.tags": "Tags",
+	"setting.section.tags": "Managed tags",
 	"setting.section.filenameStructure": "Filename composition",
 	"setting.section.status": "Status",
 	"setting.section.views": "Tag and sidebar display",
@@ -176,6 +176,7 @@ const EN: Record<string, string> = {
 	"setting.valueRuleDesc":
 		"Suggests the next child value for new notes. It never repairs or rewrites existing tags.",
 	"valueRule.alternating": "Alternating alphabet and number",
+	"valueRule.none": "No suggestion",
 	"valueRule.sequence": "Sequence",
 	"valueRule.date": "Date",
 	"valueRule.timestamp": "Timestamp",
@@ -630,7 +631,7 @@ const KO: Record<string, string> = {
 	"setting.section.general": "기본",
 	"setting.section.scheme": "파일명",
 	"setting.section.tree": "사이드바",
-	"setting.section.tags": "태그",
+	"setting.section.tags": "관리 태그",
 	"setting.section.filenameStructure": "파일명 구성",
 	"setting.section.status": "상태",
 	"setting.section.views": "태그와 사이드바 표시",
@@ -681,6 +682,7 @@ const KO: Record<string, string> = {
 	"setting.valueRuleDesc":
 		"새 노트의 다음 하위 값을 제안합니다. 기존 태그를 교정하거나 자동 수정하지 않습니다.",
 	"valueRule.alternating": "알파벳·숫자 교대",
+	"valueRule.none": "제안 안 함",
 	"valueRule.sequence": "순번",
 	"valueRule.date": "날짜",
 	"valueRule.timestamp": "타임스탬프",

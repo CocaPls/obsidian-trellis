@@ -295,22 +295,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		this.inventorySchemaFingerprint = "";
 	}
 
-	private renderCard(
-		containerEl: HTMLElement,
-		title: string,
-		meta: string
-	): HTMLElement {
-		const card = containerEl.createDiv({
-			cls: "trellis-settings-card",
-		});
-		const header = card.createDiv({
-			cls: "trellis-settings-card-header",
-		});
-		header.createSpan({ cls: "trellis-settings-card-title", text: title });
-		header.createEl("code", { cls: "trellis-settings-card-meta", text: meta });
-		return card.createDiv({ cls: "trellis-settings-card-body" });
-	}
-
 	private renderTagDefinitions(containerEl: HTMLElement) {
 		const heading = new Setting(containerEl)
 			.setName(t("setting.section.tags"))
@@ -483,11 +467,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
-		const card = this.renderCard(
-			containerEl,
-			definition.name || definition.namespace,
-			`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`
-		);
+		const editor = containerEl.createDiv({ cls: "trellis-settings-card" });
+		const card = editor.createDiv({ cls: "trellis-settings-card-body" });
 
 		let pendingName = definition.name;
 		new Setting(card)
@@ -576,8 +557,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.setName(t("setting.valueRule"))
 			.setDesc(t("setting.valueRuleDesc"))
 			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("", t("scheme.none"))
+					dropdown
+						.addOption("", t("valueRule.none"))
 					.addOption("alternating", t("valueRule.alternating"))
 					.addOption("sequence", t("valueRule.sequence"))
 					.addOption("date", t("valueRule.date"))

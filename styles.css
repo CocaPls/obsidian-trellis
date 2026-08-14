@@ -237,6 +237,13 @@ button.trellis-destructive {
 button.trellis-destructive:hover {
 	background-color: var(--background-modifier-error-hover);
 }
+
+button.trellis-destructive:disabled,
+button.trellis-destructive:disabled:hover {
+	background-color: var(--interactive-normal);
+	color: var(--text-faint);
+	opacity: 0.65;
+}
 .trellis-hidden {
 	display: none;
 }
@@ -342,31 +349,13 @@ button.trellis-destructive:hover {
 	padding: var(--size-4-2) var(--size-4-3);
 }
 
-.trellis-settings-card-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-3);
-	padding: var(--size-4-2) 0 var(--size-4-1);
-	color: var(--text-normal);
-}
-
-.trellis-settings-card-title {
-	font-weight: var(--font-semibold);
-}
-
-.trellis-settings-card-meta {
-	color: var(--text-muted);
-	font-size: var(--font-ui-small);
-}
-
 .trellis-settings-card-body > .setting-item:last-child {
 	border-bottom: 0;
 }
 
 .trellis-tag-definition-list {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
 	gap: var(--size-4-2);
 	margin: var(--size-4-3) 0;
 }
@@ -526,9 +515,12 @@ button.trellis-destructive:hover {
 }
 
 @media (max-width: 600px) {
-	.trellis-settings-metrics,
-	.trellis-tag-definition-list {
+	.trellis-settings-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.trellis-tag-definition-list {
+		grid-template-columns: 1fr;
 	}
 
 	.trellis-settings-toggle-grid {
