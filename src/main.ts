@@ -330,6 +330,9 @@ export default class TrellisPlugin extends Plugin {
 	private activeBulkOperation: string | null = null;
 	/** Paths whose frontmatter + filename are currently owned by a bulk pass. */
 	private bulkApplying = new Set<string>();
+	/** Managed notes remembered while the active schema has no name-key. This
+	 * identifies the direct-edit transition where the final tag-key disappears. */
+	private noNameManagedPaths = new Set<string>();
 
 	/** Cached note tree; null = stale, rebuilt on next sortedNoteTree(). */
 	private treeCache: NoteTreeNode[] | null = null;
@@ -356,6 +359,7 @@ export default class TrellisPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		setLang(this.settings.language);
+		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
 
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
@@ -453,6 +457,9 @@ export default class TrellisPlugin extends Plugin {
 				this.multiWarned.delete(oldPath); // stale warning key at the old path
 				this.collisionWarned.delete(oldPath);
 				this.portabilityWarned.delete(oldPath);
+				if (this.noNameManagedPaths.delete(oldPath) && file instanceof TFile) {
+					this.noNameManagedPaths.add(file.path);
+				}
 				if (file instanceof TFile && file.extension === "md") {
 					// Bulk/AI transactions own and record their own final paths. Ordinary
 					// user renames (including the live-sync correction they trigger) must
@@ -475,6 +482,7 @@ export default class TrellisPlugin extends Plugin {
 				this.multiWarned.delete(file.path); // drop warning key for a gone file
 				this.collisionWarned.delete(file.path);
 				this.portabilityWarned.delete(file.path);
+				this.noNameManagedPaths.delete(file.path);
 				this.scheduleTreeRefresh();
 			})
 		);
@@ -624,6 +632,44 @@ export default class TrellisPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private schemaHasNameKey(): boolean {
+		return this.settings.schema.slots.some((slot) => slot.role === "name");
+	}
+
+	private hasManagedTagValue(tags: string[]): boolean {
+		return tags.some((tag) => {
+			const match = matchTagKey(tag, this.settings.schema);
+			return match !== null && match.keyPath !== "";
+		});
+	}
+
+	/** Rebuild the direct-edit baseline after load or a committed schema-shape
+	 * change. Cache-missing notes join on their next metadata event. */
+	private refreshNoNameManagedPaths() {
+		this.noNameManagedPaths.clear();
+		if (this.schemaHasNameKey()) return;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache && this.hasManagedTagValue(getAllTags(cache) ?? [])) {
+				this.noNameManagedPaths.add(file.path);
+			}
+		}
+	}
+
+	private trackNoNameManagement(file: TFile, tags: string[]) {
+		if (this.schemaHasNameKey()) {
+			this.noNameManagedPaths.delete(file.path);
+			return;
+		}
+		if (this.hasManagedTagValue(tags)) {
+			this.noNameManagedPaths.add(file.path);
+			return;
+		}
+		if (this.noNameManagedPaths.delete(file.path)) {
+			new Notice(t("notice.noNameUnmanaged", { name: file.basename }));
+		}
 	}
 
 	/** Keep every path-bearing undo journal attached to a user-renamed note. */
@@ -933,6 +979,10 @@ export default class TrellisPlugin extends Plugin {
 			}
 		}
 			this.rebuildTrees();
+			if (verifiedPlan.request.allowUnmanaged) {
+				this.noNameManagedPaths.delete(verifiedPlan.expected.path);
+				this.noNameManagedPaths.delete(verifiedPlan.next.path);
+			}
 			return {
 				ok: true,
 				value: {
@@ -959,6 +1009,7 @@ export default class TrellisPlugin extends Plugin {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return;
 		const tags = getAllTags(cache) ?? [];
+		this.trackNoNameManagement(file, tags);
 
 		// One note = one location per namespace. Warn once (lightly) if a note
 		// carries duplicate location tags; the user resolves them in bulk via the
@@ -2174,6 +2225,7 @@ export default class TrellisPlugin extends Plugin {
 								}
 							: undefined;
 					await this.saveSettings();
+					this.refreshNoNameManagedPaths();
 					this.rebuildTrees();
 					progress?.finish({
 						processed: undone,
@@ -2257,6 +2309,7 @@ export default class TrellisPlugin extends Plugin {
 			this.settings.lastSeparatorChange =
 				remaining.length > 0 ? { ...rec, renames: remaining } : undefined;
 			await this.saveSettings();
+			this.refreshNoNameManagedPaths();
 			this.rebuildTrees();
 			new Notice(t("notice.sepReverted", { n: undone }));
 		} finally {

@@ -354,6 +354,8 @@ const EN: Record<string, string> = {
 	"notice.advNsEmpty": "tag slot namespace cannot be empty",
 	"notice.advNsDup": "tag slot namespaces must be distinct",
 	"notice.advReset": "schema reset to single-key (tag + name)",
+	"notice.noNameUnmanaged":
+		"{name}: the final Trellis tag-key was removed. The current filename was preserved and the note is now unmanaged.",
 	"setting.experimentalName": "Experimental filename features",
 	"setting.experimentalDesc":
 		"Optional tools for vaults that need an owner root, automatic ID suggestions, or more than one managed key. Most vaults can leave this closed.",
@@ -716,6 +718,8 @@ const KO: Record<string, string> = {
 	"notice.advNsEmpty": "태그 슬롯 네임스페이스는 비울 수 없습니다",
 	"notice.advNsDup": "태그 슬롯 네임스페이스는 서로 달라야 합니다",
 	"notice.advReset": "스키마를 단일키(태그+네임)로 재설정했습니다",
+	"notice.noNameUnmanaged":
+		"{name}: 마지막 트렐리 태그키가 제거되어 현재 파일명을 보존하고 관리 대상에서 제외했습니다.",
 	"setting.experimentalName": "실험 기능 — 파일명 확장",
 	"setting.experimentalDesc":
 		"소유 루트, ID 자동 제안, 둘 이상의 관리 키가 꼭 필요한 볼트를 위한 선택 기능입니다. 일반적인 단일키 볼트는 닫아 두어도 됩니다.",
