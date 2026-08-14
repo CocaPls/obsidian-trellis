@@ -302,27 +302,121 @@ button.trellis-destructive:hover {
 	color: var(--text-error);
 }
 
-/* 0.5 settings: registered tag definitions and filename slots are separate
+/* 0.5 settings: registered tag definitions and filename parts are separate
    cards so users can see what a tag is versus where it appears in a name. */
 .trellis-section-description {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
-.trellis-slot-card {
-	margin: var(--size-4-2) 0;
-	padding: var(--size-4-2) var(--size-4-3);
+.trellis-filename-sync {
+	margin-bottom: var(--size-4-4);
+}
+
+.trellis-filename-builder {
+	display: flex;
+	flex-direction: column;
+	margin: 0 0 var(--size-4-3);
+}
+
+.trellis-filename-part {
+	position: relative;
+	overflow: hidden;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
 }
 
-.trellis-slot-card > .setting-item {
-	padding-inline: 0;
+.trellis-filename-part-header.setting-item {
+	margin: 0;
+	padding: var(--size-4-3);
+	border: 0;
+	border-radius: 0;
+	background: var(--background-secondary);
 }
 
-.trellis-gap-row {
-	margin-inline: var(--size-4-3);
-	padding-inline-start: var(--size-4-3);
-	border-inline-start: 2px solid var(--background-modifier-border);
+.trellis-filename-part-header .setting-item-name {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.trellis-filename-part-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 24px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-part-title {
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-part-header .setting-item-description {
+	margin-inline-start: 32px;
+}
+
+.trellis-filename-part > .setting-item:not(.trellis-filename-part-header) {
+	margin: 0 var(--size-4-3);
+	padding: var(--size-4-3) 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+.trellis-filename-part > .setting-item:not(.trellis-filename-part-header):last-child {
+	border-bottom: 0;
+}
+
+.trellis-filename-connector.setting-item {
+	position: relative;
+	margin: 0 0 0 25px;
+	padding: var(--size-4-3) var(--size-4-3) var(--size-4-3) 31px;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+.trellis-filename-connector::before {
+	content: "";
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	width: 1px;
+	background: var(--background-modifier-border);
+}
+
+.trellis-filename-connector::after {
+	content: "";
+	position: absolute;
+	inset-block-start: 50%;
+	inset-inline-start: -3px;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	transform: translateY(-50%);
+	box-shadow: 0 0 0 3px var(--background-primary);
+}
+
+.trellis-filename-connector .setting-item-name {
+	font-size: var(--font-ui-small);
+}
+
+.trellis-filename-add.setting-item {
+	margin-top: var(--size-4-3);
+	border: 1px dashed var(--background-modifier-border);
+	background: transparent;
+}
+
+.trellis-filename-actions.setting-item {
+	margin-top: var(--size-4-3);
+	border-inline-start: 3px solid var(--interactive-accent);
 }
 
 @media (max-width: 600px) {
@@ -331,18 +425,22 @@ button.trellis-destructive:hover {
 	}
 
 	.trellis-settings-card .setting-item,
-	.trellis-slot-card .setting-item,
-	.trellis-gap-row {
+	.trellis-filename-part .setting-item,
+	.trellis-filename-connector {
 		align-items: flex-start;
 		flex-wrap: wrap;
 	}
 
 	.trellis-settings-card .setting-item-control,
-	.trellis-slot-card .setting-item-control,
-	.trellis-gap-row .setting-item-control {
+	.trellis-filename-part > .setting-item:not(.trellis-filename-part-header) .setting-item-control,
+	.trellis-filename-connector .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;
 		flex-wrap: wrap;
+	}
+
+	.trellis-filename-part-header .setting-item-control {
+		margin-inline-start: auto;
 	}
 }
 .trellis-tag-accent {

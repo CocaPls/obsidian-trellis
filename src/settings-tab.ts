@@ -543,7 +543,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.filenameStructureDesc"),
 		});
-		new Setting(containerEl)
+		const syncSetting = new Setting(containerEl)
 			.setName(t("setting.filenameSyncName"))
 			.setDesc(
 				this.plugin.settings.filenameSyncEnabled
@@ -558,9 +558,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 			);
+		syncSetting.settingEl.addClass("trellis-filename-sync");
+		syncSetting.settingEl.addClass(
+			this.plugin.settings.filenameSyncEnabled ? "is-enabled" : "is-disabled"
+		);
 		const schema = this.draft();
 		this.ensureSeparators(schema);
-		const editor = containerEl;
+		const editor = containerEl.createDiv({ cls: "trellis-filename-builder" });
 
 		schema.slots.forEach((slot, index) => {
 			this.renderFilenameSlot(editor, schema, slot, index);
@@ -582,6 +586,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			const addSlot = new Setting(editor)
 				.setName(t("setting.slotAdd"))
 				.setDesc(t("setting.slotAddDesc"));
+			addSlot.settingEl.addClass("trellis-filename-add");
 			if (available) {
 				addSlot.addButton((button) =>
 					button.setButtonText(t("setting.addTagSlot")).onClick(() => {
@@ -607,7 +612,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 
 		if (this.draftDirty()) {
-			new Setting(editor)
+			const actions = new Setting(editor)
 				.setName(t("setting.filenamePending"))
 				.setDesc(t("setting.pendingDesc"))
 				.addButton((button) =>
@@ -643,6 +648,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 				);
+			actions.settingEl.addClass("trellis-filename-actions");
 		}
 	}
 
@@ -652,18 +658,14 @@ export class TrellisSettingTab extends PluginSettingTab {
 		slot: KeySlot,
 		index: number
 	) {
-		const card = containerEl.createDiv({ cls: "trellis-slot-card" });
+		const card = containerEl.createDiv({ cls: "trellis-filename-part" });
 		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+		const partType =
+			slot.role === "tag"
+				? t("setting.filenamePartTag")
+				: t("setting.filenamePartName");
 		const heading = new Setting(card)
-			.setName(
-				t("setting.slotTitle", {
-					n: index + 1,
-					type:
-						slot.role === "tag"
-							? t("setting.filenamePartTag")
-							: t("setting.filenamePartName"),
-				})
-			)
+			.setName(partType)
 			.setDesc(
 				slot.role === "tag" && definition
 					? `${definition.name || definition.namespace} · #${nsPath(
@@ -673,11 +675,21 @@ export class TrellisSettingTab extends PluginSettingTab {
 					: t("setting.nameSlotDesc")
 			)
 			.setHeading();
+		heading.settingEl.addClass("trellis-filename-part-header");
+		heading.nameEl.empty();
+		heading.nameEl.createSpan({
+			cls: "trellis-filename-part-number",
+			text: String(index + 1),
+		});
+		heading.nameEl.createSpan({
+			cls: "trellis-filename-part-title",
+			text: partType,
+		});
 		heading
 			.addExtraButton((button) =>
 				button
-					.setIcon("arrow-up")
-					.setTooltip(t("adv.moveUp"))
+					.setIcon("chevron-up")
+					.setTooltip(t("setting.partMoveUp"))
 					.setDisabled(index === 0)
 					.onClick(() => {
 						if (index === 0) return;
@@ -690,8 +702,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 			)
 			.addExtraButton((button) =>
 				button
-					.setIcon("arrow-down")
-					.setTooltip(t("adv.moveDown"))
+					.setIcon("chevron-down")
+					.setTooltip(t("setting.partMoveDown"))
 					.setDisabled(index === schema.slots.length - 1)
 					.onClick(() => {
 						if (index === schema.slots.length - 1) return;
@@ -705,7 +717,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.addExtraButton((button) =>
 				button
 					.setIcon("trash-2")
-					.setTooltip(t("adv.remove"))
+					.setTooltip(t("setting.partRemove"))
 					.onClick(() => {
 						this.removeSlot(schema, index);
 						this.render();
@@ -867,7 +879,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					this.render();
 				});
 			});
-		row.settingEl.addClass("trellis-gap-row");
+		row.settingEl.addClass("trellis-filename-connector");
 	}
 
 	private removeSlot(schema: TrellisSchema, index: number) {
