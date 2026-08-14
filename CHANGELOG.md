@@ -8,6 +8,19 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
+## Unreleased
+
+- Classify ordinary tags and every configured tag-key through one root-aware
+  matcher instead of treating the first tag-key as the global managed axis.
+- Allow subtree moves in any managed tag-key namespace while keeping moves
+  between tag-keys and ordinary-tag rewrites outside the command's scope.
+- Show a live, per-tag-key vault inventory in settings while that tab is open,
+  including duplicate, inline-only, and namespace-node counts.
+- Let the classic notes-only tree choose one tag-key as its axis; the nested tag
+  tree continues to show every configured tag-key. Reverse import remains tied
+  to the primary outer filename code because arbitrary multi-key filenames are
+  not always reversibly parseable.
+
 ## 0.4.2 — Cross-platform filename safety
 
 - Reject generated filenames that would fail on another supported platform,

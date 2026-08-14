@@ -90,8 +90,10 @@ single-code path remains the default.
 - **Segment presets** can suggest the next sequence number, date, Zettelkasten
   timestamp, or alternating letter/number segment when creating a note.
 
-Tree, import, and subtree operations use the first tag slot while multi-key mode
-is enabled.
+Filename sync, the nested tag tree, and subtree moves recognize every configured
+tag-key. The classic notes-only tree lets you choose one tag-key as its axis.
+Import existing filenames still reads the primary outer code because arbitrary
+multi-key filenames are not always reversibly parseable without their tags.
 
 ## Screenshots
 
@@ -112,7 +114,7 @@ is enabled.
 ![Settings tab](screenshots/settings.png)
 
 The everyday controls cover the managed location namespace, filename-code
-format, tree behavior, visible header actions, language, and a read-only managed
+format, tree behavior, visible header actions, language, and a live per-tag-key
 note count. Multi-key slots, root namespaces, and segment presets remain in the
 collapsed experimental section.
 
