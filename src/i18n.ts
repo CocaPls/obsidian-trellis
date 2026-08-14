@@ -93,6 +93,7 @@ const EN: Record<string, string> = {
 	"notice.fillBoth": "fill in both fields",
 	"notice.parentRequired": "parent is required",
 	"notice.segmentRequired": "segment is required",
+	"notice.tagValueExists": "'{value}' already exists directly below this tag path",
 	"notice.segmentBadChar":
 		"segment contains characters a tag can't hold (spaces, '/', or symbols like , [ ] # \" ')",
 	"notice.parentBadChar":
@@ -564,6 +565,7 @@ const KO: Record<string, string> = {
 	"notice.fillBoth": "두 칸 모두 입력하세요",
 	"notice.parentRequired": "부모가 필요합니다",
 	"notice.segmentRequired": "세그먼트가 필요합니다",
+	"notice.tagValueExists": "이 태그 경로 바로 아래에 '{value}' 값이 이미 있습니다",
 	"notice.segmentBadChar":
 		"세그먼트에 태그로 쓸 수 없는 문자가 있습니다 (공백·'/'·, [ ] # \" ' 같은 기호)",
 	"notice.parentBadChar":

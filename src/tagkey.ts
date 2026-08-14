@@ -1286,6 +1286,88 @@ function nextNumberRun(siblings: string[]): string {
 	return String(max + 1).padStart(width, "0");
 }
 
+function formattedNumber(value: number, width: TagValueRule["numberWidth"]): string {
+	return width === undefined || width === "auto"
+		? String(value)
+		: String(value).padStart(width, "0");
+}
+
+function nextConfiguredNumber(
+	siblings: string[],
+	start: number,
+	width: TagValueRule["numberWidth"]
+): string | null {
+	if (siblings.some((segment) => !/^[0-9]+$/.test(segment))) return null;
+	const max = siblings.reduce((value, segment) => Math.max(value, Number(segment)), start - 1);
+	const automaticWidth = siblings.reduce(
+		(value, segment) => Math.max(value, segment.length),
+		1
+	);
+	return width === undefined || width === "auto"
+		? String(max + 1).padStart(automaticWidth, "0")
+		: formattedNumber(max + 1, width);
+}
+
+function dateParts(now: Date, timezone: TagValueRule["timezone"]) {
+	const utc = timezone === "utc";
+	return {
+		year: utc ? now.getUTCFullYear() : now.getFullYear(),
+		month: (utc ? now.getUTCMonth() : now.getMonth()) + 1,
+		day: utc ? now.getUTCDate() : now.getDate(),
+		hour: utc ? now.getUTCHours() : now.getHours(),
+		minute: utc ? now.getUTCMinutes() : now.getMinutes(),
+		second: utc ? now.getUTCSeconds() : now.getSeconds(),
+		millisecond: utc ? now.getUTCMilliseconds() : now.getMilliseconds(),
+	};
+}
+
+/** Detailed 0.5 tag-value suggestion. `parentDepth` is relative to the managed
+ * namespace (0 = creating its first child). Mixed sibling formats return null
+ * instead of guessing; the new-note field then remains manual. */
+export function suggestTagValue(
+	rule: TagValueRule,
+	parentDepth: number,
+	siblings: string[],
+	now: Date
+): string | null {
+	if (rule.kind === "alternating") {
+		const first = rule.firstLevel ?? "alphabet";
+		const alphabetLevel = parentDepth % 2 === 0 ? first === "alphabet" : first !== "alphabet";
+		if (alphabetLevel) {
+			if (siblings.some((segment) => !/^[A-Za-z]+$/.test(segment))) return null;
+			const lower = rule.letterCase === "lower";
+			if (siblings.length === 0) return lower ? "a" : "A";
+			const ordered = [...siblings].sort((a, b) =>
+				a.length !== b.length
+					? a.length - b.length
+					: a.toUpperCase().localeCompare(b.toUpperCase())
+			);
+			const next = nextLetterRun(ordered[ordered.length - 1]);
+			return lower ? next.toLowerCase() : next.toUpperCase();
+		}
+		return nextConfiguredNumber(siblings, 1, rule.numberWidth ?? "auto");
+	}
+	if (rule.kind === "sequence") {
+		return nextConfiguredNumber(siblings, rule.start ?? 1, rule.numberWidth ?? "auto");
+	}
+	const parts = dateParts(now, rule.kind === "timestamp" ? rule.timezone : "local");
+	const year = String(parts.year);
+	const date = `${year}${pad2(parts.month)}${pad2(parts.day)}`;
+	if (rule.kind === "date") {
+		if (rule.dateFormat === "YYYY-MM-DD") {
+			return `${year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+		}
+		if (rule.dateFormat === "YYMMDD") return date.slice(2);
+		return date;
+	}
+	let timestamp = `${date}${pad2(parts.hour)}${pad2(parts.minute)}`;
+	if (rule.timestampPrecision !== "minute") timestamp += pad2(parts.second);
+	if (rule.timestampPrecision === "millisecond") {
+		timestamp += String(parts.millisecond).padStart(3, "0");
+	}
+	return timestamp;
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /**

@@ -28,7 +28,7 @@ import {
 	syncedBasename,
 	renameTagPath,
 	rootMigratedTag,
-	suggestSegment,
+	suggestTagValue,
 	scaffoldingPaths,
 	normalizeTagList,
 	buildNoteTree,
@@ -41,6 +41,7 @@ import {
 	isMultiKey,
 	syncedBasenameMulti,
 	isValidTagSegmentForSlot,
+	isValidTagSegment,
 	isValidTagPath,
 	isValidNamespace,
 	tagNamespaces,
@@ -52,7 +53,6 @@ import {
 	matchTagKey,
 	CURRENT_SETTINGS_VERSION,
 	normalizeSchemaModel,
-	slotNamespace,
 	tagDefinitionById,
 	schemaTagDefinitions,
 	legacySchemeFromValueRule,
@@ -1563,40 +1563,26 @@ export default class TrellisPlugin extends Plugin {
 		this.openNewNoteModal(parent);
 	}
 
-	/** The index of the tag slot whose (root-aware) namespace path contains this
-	 *  tag path, or -1 when no slot owns it. Lets note creation and segment
-	 *  suggestion work on EVERY namespace branch the nested view renders, not
-	 *  just the primary one. */
-	private slotForTagPath(tagPath: string): number {
-		return matchTagKey(tagPath, this.settings.schema)?.slotIndex ?? -1;
-	}
-
 	/** Direct-child segments already in use under a parent tag path. The
-	 *  namespace is derived from the parent itself (any slot), root-aware. */
+	 * registered tag definition is derived from the parent itself, including
+	 * definitions that are shown in the sidebar but not projected to filenames. */
 	private childSegmentsOf(parentTagPath: string): string[] {
-		const segs: string[] = [];
-		const idx = this.slotForTagPath(parentTagPath);
-		const slot = idx >= 0 ? this.settings.schema.slots[idx] : null;
-		const namespace = slot ? slotNamespace(this.settings.schema, slot) : "";
-		const full = namespace
-			? nsPath(this.settings.schema, namespace)
-			: primaryNsPath(this.settings.schema);
-		const prefix = `#${full}/`;
-		const exact = `#${full}`;
+		const parentMatch = matchTagKey(parentTagPath, this.settings.schema);
+		if (!parentMatch?.tagDefinitionId) return [];
+		const segs = new Set<string>();
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (!cache) continue;
-			const tag = hashedTagList(cache.frontmatter?.tags).find(
-				(t) => t.startsWith(prefix) || t === exact
-			);
-			if (!tag) continue;
-			const path = tag.replace(/^#/, "");
-			if (path.startsWith(parentTagPath + "/")) {
-				const rest = path.slice(parentTagPath.length + 1);
-				if (!rest.includes("/")) segs.push(rest); // direct child only
+			for (const tag of hashedTagList(cache.frontmatter?.tags)) {
+				const match = matchTagKey(tag, this.settings.schema);
+				if (match?.tagDefinitionId !== parentMatch.tagDefinitionId) continue;
+				if (match.tagPath.startsWith(parentTagPath + "/")) {
+					const rest = match.tagPath.slice(parentTagPath.length + 1);
+					if (!rest.includes("/")) segs.add(rest);
+				}
 			}
 		}
-		return segs;
+		return [...segs];
 	}
 
 	/** Create a new note as a child of parentTagPath with the given segment.
@@ -1618,29 +1604,32 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const tagPath = `${parentTagPath}/${segment}`;
-		const idx = this.slotForTagPath(tagPath);
+		const match = matchTagKey(tagPath, schema);
+		const idx = match?.slotIndex ?? -1;
 		const slot = idx >= 0 ? schema.slots[idx] : null;
-		const namespace = slot ? slotNamespace(schema, slot) : "";
-		if (!slot || !namespace) {
+		if (!match?.tagDefinitionId) {
 			new Notice(t("notice.noTagkey"));
 			return;
 		}
-		if (!isValidTagSegmentForSlot(segment, slot)) {
+		if (
+			(slot && !isValidTagSegmentForSlot(segment, slot)) ||
+			(!slot && !isValidTagSegment(segment))
+		) {
 			new Notice(t("notice.segmentBadChar"));
 			return;
 		}
-		const full = nsPath(schema, namespace);
-		const rest = tagPath === full ? "" : tagPath.slice(full.length + 1);
-		const tagkey = rest.split("/").join(slot.segmentSeparator ?? "");
-		if (!tagkey) {
-			new Notice(t("notice.noTagkey"));
+		if (this.childSegmentsOf(parentTagPath).includes(segment)) {
+			new Notice(t("notice.tagValueExists", { value: segment }));
 			return;
 		}
+		const tagkey = slot
+			? match.keyPath.split("/").join(slot.segmentSeparator ?? "")
+			: "";
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
 		const values = schema.slots.map((s, i) =>
 			i === idx ? tagkey : s.role === "name" ? safeTitle : null
 		);
-		const base = assembleBasenameMulti(values, schema);
+		const base = assembleBasenameMulti(values, schema) || safeTitle || segment;
 		if (portableBasenameIssue(base)) {
 			new Notice(t("notice.filenameNotPortable", { name: base }));
 			return;
@@ -1651,7 +1640,7 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.exists", { base }));
 			return;
 		}
-		const body = `# ${safeTitle || tagkey}\n`;
+		const body = `# ${safeTitle || tagkey || segment}\n`;
 		try {
 			const file = await this.app.vault.create(path, body);
 			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
@@ -1850,13 +1839,13 @@ export default class TrellisPlugin extends Plugin {
 		const fromKey = matchTagKey(from, this.settings.schema);
 		const toKey = matchTagKey(to, this.settings.schema);
 		if (!fromKey || !toKey || fromKey.keyPath === "" || toKey.keyPath === "") {
-			const namespaces = tagNamespaces(this.settings.schema)
-				.map((namespace) => nsPath(this.settings.schema, namespace))
+			const namespaces = this.tagDefinitions()
+				.map((definition) => nsPath(this.settings.schema, definition.namespace))
 				.join(", ");
 			new Notice(t("notice.cascadeOutside", { ns: namespaces || "—" }));
 			return;
 		}
-		if (fromKey.slotIndex !== toKey.slotIndex) {
+		if (fromKey.tagDefinitionId !== toKey.tagDefinitionId) {
 			new Notice(
 				t("notice.cascadeDifferentKey", {
 					from: fromKey.fullNamespace,
@@ -1991,10 +1980,12 @@ export default class TrellisPlugin extends Plugin {
 					);
 					if (stale) throw new Error("cascade preview became stale");
 					records.push(record);
-					const nextPath = this.syncedPathForTags(
-						abstract,
-						row.afterTags.map((tag) => `#${tag}`)
-					);
+					const nextPath = this.settings.filenameSyncEnabled
+						? this.syncedPathForTags(
+								abstract,
+								row.afterTags.map((tag) => `#${tag}`)
+							)
+						: null;
 					if (nextPath !== null) {
 						guarded.add(nextPath);
 						this.bulkApplying.add(nextPath);
@@ -3074,16 +3065,16 @@ export default class TrellisPlugin extends Plugin {
 	 *  namespace branch). null = no scheme (the modal stays fully manual). */
 	segmentSuggestionFor(parent: string): string | null {
 		if (!parent) return null;
-		const idx = this.slotForTagPath(parent);
-		const slot =
-			idx >= 0
-				? this.settings.schema.slots[idx]
-				: this.settings.schema.slots.find((candidate) => candidate.role === "tag");
-		const scheme = slot
-			? legacySchemeFromValueRule(slotValueRule(this.settings.schema, slot))
-			: undefined;
-		if (!scheme) return null;
-		const parentSeg = parent.split("/").pop() ?? "";
-		return suggestSegment(scheme, parentSeg, this.childSegmentsOf(parent), new Date());
+		const match = matchTagKey(parent, this.settings.schema);
+		if (!match?.tagDefinitionId) return null;
+		const definition = tagDefinitionById(this.settings.schema, match.tagDefinitionId);
+		if (!definition?.valueRule) return null;
+		const parentDepth = match.keyPath ? match.keyPath.split("/").length : 0;
+		return suggestTagValue(
+			definition.valueRule,
+			parentDepth,
+			this.childSegmentsOf(parent),
+			new Date()
+		);
 	}
 }

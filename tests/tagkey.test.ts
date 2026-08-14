@@ -899,6 +899,7 @@ import {
 	rootMigratedTag,
 	scaffoldingPaths,
 	suggestSegment,
+	suggestTagValue,
 	schemeSegments,
 } from "../src/tagkey.ts";
 
@@ -1003,6 +1004,46 @@ test("tagkeyToTagPath with a zettel scheme accepts a single digit run", () => {
 test("suggestSegment spark: base-26 length-first max — Z vs AA never re-suggests AA", () => {
 	assert.equal(suggestSegment("spark", "88", ["Y", "Z", "AA"], NOW), "AB");
 	assert.equal(suggestSegment("spark", "88", ["Z", "AA", "AB"], NOW), "AC");
+});
+
+test("detailed alternating suggestion follows depth, case and configured width", () => {
+	const rule = {
+		kind: "alternating" as const,
+		firstLevel: "alphabet" as const,
+		letterCase: "lower" as const,
+		numberWidth: 3 as const,
+	};
+	assert.equal(suggestTagValue(rule, 0, [], new Date(0)), "a");
+	assert.equal(suggestTagValue(rule, 0, ["a", "z", "aa"], new Date(0)), "ab");
+	assert.equal(suggestTagValue(rule, 1, [], new Date(0)), "001");
+	assert.equal(suggestTagValue(rule, 1, ["001", "009"], new Date(0)), "010");
+	assert.equal(suggestTagValue(rule, 1, ["001", "x"], new Date(0)), null);
+});
+
+test("detailed sequence, date and UTC timestamp suggestions honor their formats", () => {
+	const now = new Date("2026-08-14T05:06:07.089Z");
+	assert.equal(
+		suggestTagValue(
+			{ kind: "sequence", start: 0, numberWidth: 2 },
+			0,
+			[],
+			now
+		),
+		"00"
+	);
+	assert.equal(
+		suggestTagValue({ kind: "date", dateFormat: "YYMMDD" }, 0, [], now),
+		"260814"
+	);
+	assert.equal(
+		suggestTagValue(
+			{ kind: "timestamp", timestampPrecision: "millisecond", timezone: "utc" },
+			0,
+			[],
+			now
+		),
+		"20260814050607089"
+	);
 });
 
 test("isValidTagSegment: unicode-friendly deny-list for one hierarchy level", () => {
