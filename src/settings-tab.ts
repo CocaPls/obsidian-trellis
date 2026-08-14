@@ -1369,10 +1369,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 					this.plugin.settings.treeViewEnabled = value;
 					await this.plugin.saveSettings();
 					this.plugin.applyTreeViewState();
+					this.render();
 				})
 			);
 
-		const options = containerEl;
+		const options = containerEl.createDiv({ cls: "trellis-sidebar-options" });
+		if (!this.plugin.settings.treeViewEnabled) {
+			options.addClass("is-disabled");
+			options.setAttribute("aria-disabled", "true");
+			options.createEl("p", {
+				cls: "setting-item-description trellis-sidebar-disabled-note",
+				text: t("setting.treeOptionsDisabled"),
+			});
+		}
 		const visible = this.plugin
 			.tagDefinitions()
 			.filter((definition) => definition.sidebarVisible);
@@ -1521,6 +1530,15 @@ export class TrellisSettingTab extends PluginSettingTab {
 							this.plugin.rebuildTrees();
 						})
 				);
+		}
+		if (!this.plugin.settings.treeViewEnabled) {
+			options
+				.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
+					"input, select, button"
+				)
+				.forEach((control) => {
+					control.disabled = true;
+				});
 		}
 	}
 

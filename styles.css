@@ -443,6 +443,15 @@ button.trellis-destructive:disabled:hover {
 	padding-block: var(--size-4-2);
 }
 
+.trellis-sidebar-options.is-disabled {
+	opacity: 0.55;
+}
+
+.trellis-sidebar-disabled-note {
+	margin: 0;
+	padding: var(--size-4-3) 0;
+}
+
 /* Live tag inventory stays compact; path samples are subordinate and indented
    so this read-only status does not compete with the actual schema controls. */
 .trellis-tag-inventory {
