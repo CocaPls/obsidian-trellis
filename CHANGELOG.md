@@ -144,13 +144,13 @@ development milestones; `0.1.0` is the first public release.
   a bare tagkey (character-class runs that round-trip), the tagkey is prepended
   and the name is preserved (`trellisupgradecheck` → `ZZ99-trellisupgradecheck`
   instead of `ZZ99`). Names that DO look like a stale tagkey (index notes,
-  e.g. `S88`) are still replaced.
+  e.g. `PRJ01`) are still replaced.
 
 Hardening from a multi-angle code review, before any real-vault use:
 
 - **Multi-key name extraction is boundary-aware** — a tag slot is consumed only
   when its value sits on a separator boundary, so a title that coincidentally
-  ends/begins with a tag slot's text (`S88B07-ideaP09Z01`) is preserved whole
+  ends/begins with a tag slot's text (`PRJ01DOC01-ideaENG02`) is preserved whole
   instead of being truncated.
 - **Multi-key tagkey-only filenames stay intact** — a bare index note whose name
   is exactly its tagkey (`BT01`, no separator, no title) no longer folds the
@@ -195,8 +195,8 @@ Hardening from a multi-angle code review, before any real-vault use:
 
 ## 0.1.3 — Separator migration hotfix
 
-- Fix separator batch-change producing mixed boundaries such as `S88_-Title`,
-  `S88-_Title`, or repeated variants like `S88_-_Title` when moving between
+- Fix separator batch-change producing mixed boundaries such as `PRJ01_-Title`,
+  `PRJ01-_Title`, or repeated variants like `PRJ01_-_Title` when moving between
   separators. The migration now treats any contiguous run of old/new separators
   immediately next to the tagkey as boundary residue and normalizes it to the
   new separator, while preserving separators inside the title.
@@ -247,7 +247,7 @@ i18n) plus two tree-view customization options.
   a not-fully-unloaded prior instance (e.g. plugin files replaced without an
   Obsidian restart) no longer aborts the whole plugin load.
 - Bootstrap decomposition is now scheme-general — it splits a filename prefix
-  at letter/digit boundaries (`S88B07` → `S/88/B/07`, `PROJ123` → `PROJ/123`)
+  at letter/digit boundaries (`PRJ01DOC02` → `PRJ/01/DOC/02`, `CASE123` → `CASE/123`)
   instead of assuming one fixed pattern, and skips prefixes it can't round-trip.
 - Dropped the demo `test-vault/` from the repo (local scratch only).
 
@@ -320,7 +320,7 @@ i18n) plus two tree-view customization options.
 
 - **Bootstrap an existing vault** (filename tagkey prefixes, no tags yet):
   decompose a filename tagkey into a hierarchical location tag
-  (`S88B07` → `#trel/S88/B/07`). Placeholder slots (`0`/`00`) are kept as tag
+  (`PRJ01DOC01` → `#projects/PRJ/01/DOC/01`). Placeholder slots (`0`/`00`) are kept as tag
   segments so the tag ↔ tagkey round-trip stays exact.
 - **Dry-run preview** command — lists every file's proposed tag (and files
   skipped because they're already tagged or have no recognizable tagkey).

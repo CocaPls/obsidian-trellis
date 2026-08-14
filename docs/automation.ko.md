@@ -42,7 +42,7 @@ console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled
 검사는 읽기 전용입니다.
 
 ```js
-const inspected = automation.inspectNote("Projects/S88B07-회의록.md");
+const inspected = automation.inspectNote("Projects/PRJ01DOC01-회의록.md");
 
 if (!inspected.ok) {
   console.error(inspected.error.code, inspected.error.message);
@@ -62,9 +62,9 @@ if (!inspected.ok) {
 
 ```js
 const planned = automation.planChange({
-  path: "Projects/S88B07-회의록.md",
+  path: "Projects/PRJ01DOC01-회의록.md",
   tagChanges: [
-    { tagDefinitionId: "tag-trel", tagPath: "trel/S88/B99" },
+    { tagDefinitionId: "tag-projects", tagPath: "projects/PRJ/01/DOC/02" },
   ],
   nameChange: "회의록",
 });
@@ -81,7 +81,7 @@ if (planned.ok) console.log(planned.value);
   `would-unmanage-note`로 차단하며, 명시한 경우 현재 파일명을 보존합니다.
 - `namespace`도 호환 조회용으로 남지만 안정적인 `tagDefinitionId`를 권장합니다.
   ID 방식은 파일명 슬롯이 없는 사이드바 전용 트렐리 태그도 바꿀 수 있습니다.
-- 루트가 설정돼 있다면 `tagPath`에는 `zettel/trel/S88/B99`처럼 루트까지
+- 루트가 설정돼 있다면 `tagPath`에는 `work/projects/PRJ/01/DOC/02`처럼 루트까지
   포함합니다.
 - 인덱스 노트는 빈 `nameChange`도 허용됩니다.
 

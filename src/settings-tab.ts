@@ -32,7 +32,7 @@ import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
 import type TrellisPlugin from "./main";
 
-const ROOT_NAMESPACE_PLACEHOLDER = "trellis";
+const ROOT_NAMESPACE_PLACEHOLDER = "work";
 const DASHED_DATE_FORMAT = "YYYY-MM-DD";
 const SEGMENT_PRESETS = ["", ".", "-", "_"];
 const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
@@ -185,11 +185,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
 		});
-		const exampleDefinition = this.plugin.tagDefinitions()[0];
-		const exampleName = exampleDefinition?.name || exampleDefinition?.namespace || "Trellis";
-		const examplePath = exampleDefinition
-			? `${nsPath(this.plugin.settings.schema, exampleDefinition.namespace)}/N/E/03`
-			: "tag/N/E/03";
+		// Keep display-mode examples neutral and stable. Using the first live
+		// definition here leaked a user's own taxonomy into screenshots and made
+		// the four choices harder to compare after a namespace rename.
+		const exampleName = "Projects";
+		const examplePath = "projects/website/design";
+		const exampleTerminal = "design";
 		new Setting(containerEl)
 			.setName(t("setting.propertyTagDisplayName"))
 			.setDesc(t("setting.propertyTagDisplayDesc"))
@@ -197,8 +198,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 				dropdown
 					.addOption("full", t("propertyTagDisplay.full", { path: examplePath }))
 					.addOption("name", t("propertyTagDisplay.name", { name: exampleName }))
-					.addOption("name-terminal", t("propertyTagDisplay.nameTerminal", { name: exampleName }))
-					.addOption("terminal", t("propertyTagDisplay.terminal"))
+					.addOption(
+						"name-terminal",
+						t("propertyTagDisplay.nameTerminal", {
+							name: exampleName,
+							terminal: exampleTerminal,
+						})
+					)
+					.addOption(
+						"terminal",
+						t("propertyTagDisplay.terminal", { terminal: exampleTerminal })
+					)
 					.setValue(this.plugin.settings.propertyTagDisplay)
 					.onChange((value) => {
 						const mode =
@@ -676,7 +686,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private filenamePreview(schema: TrellisSchema): string {
 		const values = schema.slots.map((slot) => {
 			if (slot.role === "name") return t("setting.previewName");
-			return ["N", "W", "03"].join(slot.segmentSeparator ?? "");
+			return ["PRJ", "DOC", "01"].join(slot.segmentSeparator ?? "");
 		});
 		return assembleBasenameMulti(values, schema) || t("setting.previewUnmanaged");
 	}

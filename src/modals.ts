@@ -41,8 +41,8 @@ export interface DedupDecision {
 /** Max notes shown in one cleanup pass — large batches are split so the modal
  *  stays usable. The user applies, then re-runs the check for the next batch. */
 const DEDUP_BATCH_LIMIT = 50;
-const TAG_PATH_PLACEHOLDER = "trel/S88";
-const NEXT_TAG_PATH_PLACEHOLDER = "trel/S99";
+const TAG_PATH_PLACEHOLDER = "projects/PRJ/01";
+const NEXT_TAG_PATH_PLACEHOLDER = "projects/PRJ/02";
 
 /** Resolve notes carrying duplicate location tags: the user picks which tag to
  *  keep per namespace, then applies (removes the rest, undoable) or defers.

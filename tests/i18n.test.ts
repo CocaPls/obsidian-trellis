@@ -42,3 +42,21 @@ test("every static translation lookup exists", () => {
 	}
 	assert.deepEqual([...missing].sort(), []);
 });
+
+test("public examples stay neutral instead of copying one vault's taxonomy", () => {
+	const publicSurfaces = [
+		"src/i18n.ts",
+		"src/settings-tab.ts",
+		"src/modals.ts",
+		"README.md",
+		"README.ko.md",
+		"docs/automation.md",
+		"docs/automation.ko.md",
+		"CHANGELOG.md",
+	];
+	const legacyFixture = /BLUEPRINT|나무위키|S88|B07|#trel|trel\//i;
+	const leaked = publicSurfaces.filter((path) =>
+		legacyFixture.test(readFileSync(join(root, path), "utf8"))
+	);
+	assert.deepEqual(leaked, []);
+});

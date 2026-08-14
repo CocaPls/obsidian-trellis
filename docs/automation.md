@@ -42,7 +42,7 @@ console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled
 Inspection is read-only:
 
 ```js
-const inspected = automation.inspectNote("Projects/S88B07-meeting-notes.md");
+const inspected = automation.inspectNote("Projects/PRJ01DOC01-meeting-notes.md");
 
 if (!inspected.ok) {
   console.error(inspected.error.code, inspected.error.message);
@@ -63,9 +63,9 @@ by `describe()`, plus the complete desired tag path without `#`:
 
 ```js
 const planned = automation.planChange({
-  path: "Projects/S88B07-meeting-notes.md",
+  path: "Projects/PRJ01DOC01-meeting-notes.md",
   tagChanges: [
-    { tagDefinitionId: "tag-trel", tagPath: "trel/S88/B99" },
+    { tagDefinitionId: "tag-projects", tagPath: "projects/PRJ/01/DOC/02" },
   ],
   nameChange: "meeting-notes",
 });
@@ -84,7 +84,7 @@ if (planned.ok) console.log(planned.value);
 - `namespace` remains as a compatibility lookup, but stable
   `tagDefinitionId` is preferred and also supports sidebar-only Trellis tags.
 - `tagPath` must include the configured root when one exists, for example
-  `zettel/trel/S88/B99`.
+  `work/projects/PRJ/01/DOC/02`.
 - An empty `nameChange` is allowed for an index note.
 
 A successful plan contains the exact before/after paths and frontmatter tags,

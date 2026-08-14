@@ -126,8 +126,8 @@ const EN: Record<string, string> = {
 		"Visual only. The full Obsidian tag remains stored and is shown on hover.",
 	"propertyTagDisplay.full": "Full path — {path}",
 	"propertyTagDisplay.name": "Trellis tag name — {name}",
-	"propertyTagDisplay.nameTerminal": "Name + terminal — {name} · 03",
-	"propertyTagDisplay.terminal": "Terminal only — 03",
+	"propertyTagDisplay.nameTerminal": "Name + terminal — {name} · {terminal}",
+	"propertyTagDisplay.terminal": "Terminal only — {terminal}",
 	"setting.tagDisplayName": "Display name",
 	"setting.tagDisplayNameDesc":
 		"Human-readable label used in Trellis. The tag namespace remains the stored identity.",
@@ -147,8 +147,8 @@ const EN: Record<string, string> = {
 		"Available only when no filename slot or note still uses this tag branch.",
 	"setting.tagAdd": "Add Trellis tag",
 	"setting.tagAddDesc": "Give the branch a human label and its actual tag namespace.",
-	"setting.tagNamePlaceholder": "Display name, e.g. BLUEPRINT",
-	"setting.tagNamespacePlaceholder": "Namespace, e.g. bp",
+	"setting.tagNamePlaceholder": "Display name, e.g. Projects",
+	"setting.tagNamespacePlaceholder": "Namespace, e.g. projects",
 	"setting.add": "Add",
 	"notice.tagDefinitionExists": "That tag namespace is invalid or already registered.",
 	"notice.tagDefinitionInUse":
@@ -183,7 +183,7 @@ const EN: Record<string, string> = {
 	"setting.filenameSyncOff":
 		"Paused. Tags, sidebar moves, and filename-structure edits keep current filenames unchanged. Turning this on previews current drift first.",
 	"setting.preview": "Preview",
-	"setting.previewName": "Sample note",
+	"setting.previewName": "Project overview",
 	"setting.previewUnmanaged": "No filename slots — Trellis will not rename files",
 	"setting.slotTitle": "Slot {n} · {type}",
 	"setting.nameSlotDesc": "Free text preserved from the note filename.",
@@ -307,25 +307,25 @@ const EN: Record<string, string> = {
 	// settings
 	"setting.nsName": "Location tag",
 	"setting.nsDesc":
-		"The tag family Trellis treats as the source of truth. For example, 'trel' manages #trel/S88/B07.",
+		"The tag family Trellis treats as the source of truth. For example, 'projects' manages #projects/PRJ/01/DOC/01.",
 	"setting.sepName": "Code–title symbol",
 	"setting.sepDesc":
 		"Symbol between the generated filename code and your title.",
 	"setting.sepCustom": "Custom…",
 	"setting.sepSpacingName": "Spaces around the symbol",
 	"setting.sepSpacingDesc": "Choose where spaces appear around the code–title symbol.",
-	"spacing.none": "None (BP-title)",
-	"spacing.before": "Before (BP -title)",
-	"spacing.after": "After (BP- title)",
-	"spacing.both": "Both (BP - title)",
+	"spacing.none": "None (PRJ01-title)",
+	"spacing.before": "Before (PRJ01 -title)",
+	"spacing.after": "After (PRJ01- title)",
+	"spacing.both": "Both (PRJ01 - title)",
 	"setting.segmentSepName": "Hierarchy shown in the filename code",
 	"setting.segmentSepDesc":
-		"Show or hide the levels of a location tag inside the generated code. Hidden keeps S88B07.",
-	"segmentSep.hidden": "Hidden (S88B07)",
+		"Show or hide the levels of a location tag inside the generated code. Hidden keeps PRJ01DOC01.",
+	"segmentSep.hidden": "Hidden (PRJ01DOC01)",
 	"setting.posName": "Filename code position",
 	"setting.posDesc": "Place the generated code before or after your title.",
-	"setting.posPrefix": "Prefix — start of filename (S88B07-title)",
-	"setting.posSuffix": "Suffix — end of filename (title-S88B07)",
+	"setting.posPrefix": "Prefix — start of filename (PRJ01DOC01-title)",
+	"setting.posSuffix": "Suffix — end of filename (title-PRJ01DOC01)",
 	"setting.treeName": "Sidebar tree view",
 	"setting.treeDesc":
 		"Show a collapsible tree of the location-tag hierarchy in the sidebar (ribbon icon + command).",
@@ -480,7 +480,7 @@ const EN: Record<string, string> = {
 	// root namespace (0.3.0 experimental, B25)
 	"setting.rootName": "Root namespace (experimental)",
 	"setting.rootDesc":
-		"A single owner root every managed tag starts with (e.g. \"trellis\" → #trellis/tree/…). Leave empty for the classic rootless shape. Applying migrates every managed tag in the vault (undoable); filenames do not change.",
+		"A single owner root every managed tag starts with (e.g. \"work\" → #work/projects/…). Leave empty for the classic rootless shape. Applying migrates every managed tag in the vault (undoable); filenames do not change.",
 	"cmd.rootUndo": "Undo last root namespace change",
 	"modal.root.title": "Change root namespace?",
 	"modal.root.desc":
@@ -498,7 +498,7 @@ const EN: Record<string, string> = {
 	"setting.schemeDesc":
 		"Optional preset for the primary tag slot. Suggests the next segment for new notes and sharpens bootstrap parsing. Live sync stays format-agnostic either way.",
 	"scheme.none": "None (format-agnostic)",
-	"scheme.spark": "Alternating letters/digits (S/88/B/07)",
+	"scheme.spark": "Alternating letters/digits (PRJ/01/DOC/01)",
 	"scheme.zettel": "Zettelkasten timestamp (YYYYMMDDHHMMSS)",
 	"scheme.date": "Date (YYYYMMDD)",
 	"scheme.seq": "Sequence number (1, 2, 3…)",
@@ -520,7 +520,7 @@ const EN: Record<string, string> = {
 	"setting.statsDriftPaused": "live sync is paused",
 	"setting.statsSidebarKeyName": "Sidebar-only Trellis tag · #{ns}",
 	"setting.showRootDesc":
-		"Show the root/namespace tags (e.g. tree) as top rows, or start directly at your hierarchy.",
+		"Show the root/namespace tags (e.g. projects) as top rows, or start directly at your hierarchy.",
 	"setting.untaggedName": "Show untagged notes (nested mode)",
 	"setting.untaggedDesc":
 		"List notes carrying no managed location tag in a section at the bottom, so onboarding misses stay visible.",
@@ -619,8 +619,8 @@ const KO: Record<string, string> = {
 		"화면 표시만 줄입니다. 실제 옵시디언 태그 전체 경로는 그대로 저장되며 마우스를 올리면 확인할 수 있습니다.",
 	"propertyTagDisplay.full": "전체 경로 — {path}",
 	"propertyTagDisplay.name": "트렐리 태그 이름 — {name}",
-	"propertyTagDisplay.nameTerminal": "이름 + 말단 — {name} · 03",
-	"propertyTagDisplay.terminal": "말단만 — 03",
+	"propertyTagDisplay.nameTerminal": "이름 + 말단 — {name} · {terminal}",
+	"propertyTagDisplay.terminal": "말단만 — {terminal}",
 	"setting.tagDisplayName": "표시 이름",
 	"setting.tagDisplayNameDesc":
 		"트렐리 화면에서 사람이 읽는 이름입니다. 실제 저장 식별은 태그 네임스페이스가 맡습니다.",
@@ -640,8 +640,8 @@ const KO: Record<string, string> = {
 		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
 	"setting.tagAdd": "트렐리 태그 추가",
 	"setting.tagAddDesc": "사람용 이름과 실제 태그 네임스페이스를 입력하세요.",
-	"setting.tagNamePlaceholder": "표시 이름, 예: BLUEPRINT",
-	"setting.tagNamespacePlaceholder": "네임스페이스, 예: bp",
+	"setting.tagNamePlaceholder": "표시 이름, 예: Projects",
+	"setting.tagNamespacePlaceholder": "네임스페이스, 예: projects",
 	"setting.add": "추가",
 	"notice.tagDefinitionExists": "잘못된 네임스페이스이거나 이미 등록되어 있습니다.",
 	"notice.tagDefinitionInUse":
@@ -676,7 +676,7 @@ const KO: Record<string, string> = {
 	"setting.filenameSyncOff":
 		"일시정지. 태그·사이드바 이동·파일명 구조 편집은 작동하지만 현재 파일명은 유지합니다. 다시 켜면 현재 차이를 먼저 보여줍니다.",
 	"setting.preview": "미리보기",
-	"setting.previewName": "나무위키",
+	"setting.previewName": "프로젝트 개요",
 	"setting.previewUnmanaged": "파일명 슬롯 없음 — 트렐리가 파일명을 바꾸지 않음",
 	"setting.slotTitle": "슬롯 {n} · {type}",
 	"setting.nameSlotDesc": "노트 파일명에서 보존하는 자유 입력 이름입니다.",
@@ -799,25 +799,25 @@ const KO: Record<string, string> = {
 	// settings
 	"setting.nsName": "위치 태그",
 	"setting.nsDesc":
-		"Trellis가 원본으로 관리할 태그 계열입니다. 예를 들어 'trel'은 #trel/S88/B07을 관리합니다.",
+		"Trellis가 원본으로 관리할 태그 계열입니다. 예를 들어 'projects'는 #projects/PRJ/01/DOC/01을 관리합니다.",
 	"setting.sepName": "코드와 제목 사이 기호",
 	"setting.sepDesc":
 		"자동 생성되는 파일명 코드와 사용자가 붙인 제목 사이의 기호입니다.",
 	"setting.sepCustom": "사용자 지정…",
 	"setting.sepSpacingName": "기호 주위 공백",
 	"setting.sepSpacingDesc": "코드와 제목 사이 기호의 어느 쪽에 공백을 둘지 정합니다.",
-	"spacing.none": "없음 (BP-제목)",
-	"spacing.before": "왼쪽 (BP -제목)",
-	"spacing.after": "오른쪽 (BP- 제목)",
-	"spacing.both": "양쪽 (BP - 제목)",
+	"spacing.none": "없음 (PRJ01-제목)",
+	"spacing.before": "왼쪽 (PRJ01 -제목)",
+	"spacing.after": "오른쪽 (PRJ01- 제목)",
+	"spacing.both": "양쪽 (PRJ01 - 제목)",
 	"setting.segmentSepName": "파일명 코드의 계층 표시",
 	"setting.segmentSepDesc":
-		"위치 태그의 각 계층을 자동 생성 코드에 표시할지 정합니다. 숨김은 S88B07 형식을 유지합니다.",
-	"segmentSep.hidden": "숨김 (S88B07)",
+		"위치 태그의 각 계층을 자동 생성 코드에 표시할지 정합니다. 숨김은 PRJ01DOC01 형식을 유지합니다.",
+	"segmentSep.hidden": "숨김 (PRJ01DOC01)",
 	"setting.posName": "파일명 코드 위치",
 	"setting.posDesc": "자동 생성 코드를 제목 앞이나 뒤에 둡니다.",
-	"setting.posPrefix": "접두 — 파일명 앞 (S88B07-제목)",
-	"setting.posSuffix": "접미 — 파일명 뒤 (제목-S88B07)",
+	"setting.posPrefix": "접두 — 파일명 앞 (PRJ01DOC01-제목)",
+	"setting.posSuffix": "접미 — 파일명 뒤 (제목-PRJ01DOC01)",
 	"setting.treeName": "사이드바 트리 뷰",
 	"setting.treeDesc":
 		"위치 태그 계층을 사이드바에 접을 수 있는 트리로 표시합니다 (리본 아이콘 + 명령).",
@@ -971,7 +971,7 @@ const KO: Record<string, string> = {
 	// root namespace (0.3.0 experimental, B25)
 	"setting.rootName": "루트 네임스페이스 (시험 기능)",
 	"setting.rootDesc":
-		'모든 관리 태그가 시작하는 단일 소유 루트 (예: "trellis" → #trellis/tree/…). 비우면 기존 무루트 형태. 적용하면 볼트의 관리 태그 전체를 마이그레이션합니다(되돌리기 가능). 파일명은 바뀌지 않습니다.',
+		'모든 관리 태그가 시작하는 단일 소유 루트 (예: "work" → #work/projects/…). 비우면 기존 무루트 형태. 적용하면 볼트의 관리 태그 전체를 마이그레이션합니다(되돌리기 가능). 파일명은 바뀌지 않습니다.',
 	"cmd.rootUndo": "마지막 루트 네임스페이스 변경 되돌리기",
 	"modal.root.title": "루트 네임스페이스를 변경할까요?",
 	"modal.root.desc":
@@ -989,7 +989,7 @@ const KO: Record<string, string> = {
 	"setting.schemeDesc":
 		"1번 태그 슬롯의 선택적 프리셋. 새 노트의 다음 세그먼트를 제안하고 부트스트랩 파싱을 정확하게 합니다. 실시간 동기화는 어느 쪽이든 형식-무지 그대로입니다.",
 	"scheme.none": "없음 (형식-무지)",
-	"scheme.spark": "영문/숫자 교대 (S/88/B/07)",
+	"scheme.spark": "영문/숫자 교대 (PRJ/01/DOC/01)",
 	"scheme.zettel": "제텔카스텐 타임스탬프 (YYYYMMDDHHMMSS)",
 	"scheme.date": "날짜 (YYYYMMDD)",
 	"scheme.seq": "순번 (1, 2, 3…)",
@@ -1011,7 +1011,7 @@ const KO: Record<string, string> = {
 	"setting.statsDriftPaused": "실시간 동기화 일시정지 중",
 	"setting.statsSidebarKeyName": "사이드바 전용 트렐리 태그 · #{ns}",
 	"setting.showRootDesc":
-		"루트/네임스페이스 태그(예: tree)를 최상위 행으로 보일지, 바로 계층부터 시작할지.",
+		"루트/네임스페이스 태그(예: projects)를 최상위 행으로 보일지, 바로 계층부터 시작할지.",
 	"setting.untaggedName": "무태그 노트 표시 (중첩 모드)",
 	"setting.untaggedDesc":
 		"관리 위치 태그가 없는 노트를 하단 섹션에 나열해 온보딩 누락을 보이게 합니다.",

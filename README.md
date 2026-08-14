@@ -11,8 +11,8 @@ when filename sync is enabled, its filename follows through Obsidian's link-safe
 rename.
 
 ```text
-tag  #trel/S88/B07  →  file  S88B07-meeting-notes.md
-tag  #trel/S88/B99  →  file  S88B99-meeting-notes.md  (automatic)
+tag  #projects/PRJ/01/DOC/01  →  file  PRJ01DOC01-meeting-notes.md
+tag  #projects/PRJ/01/DOC/02  →  file  PRJ01DOC02-meeting-notes.md  (automatic)
 ```
 
 ![Sidebar tree view](screenshots/tree-view.png)
@@ -26,9 +26,10 @@ from CLI and AI tools.
 
 ## How it works
 
-For `S88B07-meeting-notes.md`:
+For `PRJ01DOC01-meeting-notes.md`:
 
-- `S88B07` is the managed **filename code**, built from `#trel/S88/B07`.
+- `PRJ01DOC01` is the managed **filename code**, built from
+  `#projects/PRJ/01/DOC/01`.
 - `-` is the configurable boundary between the code and title.
 - `meeting-notes` is your free **title**; Trellis does not rewrite it.
 
@@ -63,8 +64,9 @@ put them in `your-vault/.obsidian/plugins/trellis/`, and enable the plugin.
 
 ## Quick start
 
-1. Add a location tag in frontmatter, for example `tags: [trel/S88/B07]`.
-2. Trellis syncs the filename code to `S88B07`.
+1. Add a location tag in frontmatter, for example
+   `tags: [projects/PRJ/01/DOC/01]`.
+2. Trellis syncs the filename code to `PRJ01DOC01`.
 3. Open the tree from the ribbon and move through the hierarchy.
 4. Use **Move location and descendants** to relocate a whole subtree.
 5. Use **Import existing filenames** to onboard notes that already have codes.
@@ -83,7 +85,7 @@ multiple optional projections without switching to a separate advanced mode.
 - **Multiple tag slots** combine more than one managed tag with one free title:
 
   ```text
-  #trel/AA/01 + #area/BB/02  →  AA01-my-note--BB02
+  #projects/PRJ/01 + #areas/ENG/02  →  PRJ01-project-overview--ENG02
   ```
 
   Each tag slot has its own registered source, hierarchy display, and optional
@@ -95,7 +97,7 @@ multiple optional projections without switching to a separate advanced mode.
   name slot shows an explicit free-name loss warning, and exact filename
   collisions block the structure change.
 - **Root namespace** places every managed tag below a shared root such as
-  `#zettel/trel/...` without adding that root to filenames. Changes are migrated
+  `#work/projects/...` without adding that root to filenames. Changes are migrated
   behind confirmation and are undoable.
 - **Value suggestions** can follow a configurable sequence, date, local/UTC
   timestamp, or alternating alphabet/number pattern when creating a note.
