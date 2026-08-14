@@ -371,6 +371,14 @@ button.trellis-destructive:hover {
 	margin: var(--size-4-3) 0;
 }
 
+.trellis-tag-definition-add {
+	margin: var(--size-4-3) 0;
+	padding-inline: var(--size-4-3);
+	border: 1px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
 .trellis-tag-definition-choice {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
@@ -528,12 +536,14 @@ button.trellis-destructive:hover {
 	}
 
 	.trellis-settings-card .setting-item,
+	.trellis-tag-definition-add,
 	.trellis-filename-selection .setting-item {
 		align-items: flex-start;
 		flex-wrap: wrap;
 	}
 
 	.trellis-settings-card .setting-item-control,
+	.trellis-tag-definition-add .setting-item-control,
 	.trellis-filename-selection .setting-item:not(.setting-item-heading) .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;

@@ -1,11 +1,11 @@
 import {
 	App,
-	ButtonComponent,
 	Notice,
 	PluginSettingTab,
 	Setting,
 	TFile,
 	getAllTags,
+	type ButtonComponent,
 } from "obsidian";
 import {
 	SeparatorSpacing,
@@ -102,6 +102,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private filenameSelection: FilenameSelection | null = null;
 	private activeSection: SettingsSection = "overview";
 	private selectedTagDefinitionId: string | null = null;
+	private addingTagDefinition = false;
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -311,7 +312,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderTagDefinitions(containerEl: HTMLElement) {
-		new Setting(containerEl).setName(t("setting.section.tags")).setHeading();
+		const heading = new Setting(containerEl)
+			.setName(t("setting.section.tags"))
+			.setHeading();
+		heading.addButton((button) =>
+			button
+				.setButtonText(t("setting.tagAdd"))
+				.onClick(() => {
+					this.addingTagDefinition = true;
+					this.render();
+				})
+		);
 		containerEl.createEl("p", {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
@@ -341,17 +352,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setButtonText(t("setting.apply"))
 					.setDisabled(true)
 					.onClick(() => {
-					const next = cleanNamespaceInput(pendingRoot);
-					if (next && !isValidNamespace(next)) {
-						new Notice(t("notice.rootBadChar"));
-						return;
-					}
-					this.resetDraft();
-					this.plugin.requestRootChange(next, () => this.render());
+						const next = cleanNamespaceInput(pendingRoot);
+						if (next && !isValidNamespace(next)) {
+							new Notice(t("notice.rootBadChar"));
+							return;
+						}
+						this.resetDraft();
+						this.plugin.requestRootChange(next, () => this.render());
 					});
 			});
 
 		const definitions = this.plugin.tagDefinitions();
+		if (this.addingTagDefinition || definitions.length === 0) {
+			this.renderTagDefinitionAdd(containerEl, definitions.length > 0);
+		}
 		if (!definitions.some((definition) => definition.id === this.selectedTagDefinitionId)) {
 			this.selectedTagDefinitionId = definitions[0]?.id ?? null;
 		}
@@ -366,9 +380,16 @@ export class TrellisSettingTab extends PluginSettingTab {
 			if (selected) this.renderTagDefinition(containerEl, selected);
 		}
 
+	}
+
+	private renderTagDefinitionAdd(containerEl: HTMLElement, cancellable: boolean) {
 		let newName = "";
 		let newNamespace = "";
-		new Setting(containerEl)
+		let addButton: ButtonComponent | null = null;
+		const updateAddButton = () => {
+			addButton?.setDisabled(!isValidNamespace(cleanNamespaceInput(newNamespace)));
+		};
+		const setting = new Setting(containerEl)
 			.setName(t("setting.tagAdd"))
 			.setDesc(t("setting.tagAddDesc"))
 			.addText((text) =>
@@ -379,25 +400,43 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder(t("setting.tagNamespacePlaceholder"))
-					.onChange((value) => (newNamespace = value))
+					.onChange((value) => {
+						newNamespace = value;
+						updateAddButton();
+					})
 			)
-			.addButton((button) =>
-				button.setButtonText(t("setting.add")).onClick(async () => {
-					const clean = newNamespace.trim().replace(/^#/, "").replace(/\/$/, "");
-					if (!isValidNamespace(clean)) {
-						new Notice(t("notice.nsBadChar"));
-						return;
-					}
-					const id = await this.plugin.addTagDefinition(clean, newName);
-					if (!id) {
-						new Notice(t("notice.tagDefinitionExists"));
-						return;
-					}
-					this.selectedTagDefinitionId = id;
-					this.resetDraft();
+			.addButton((button) => {
+				addButton = button;
+				button
+					.setButtonText(t("setting.add"))
+					.setCta()
+					.setDisabled(true)
+					.onClick(async () => {
+						const clean = cleanNamespaceInput(newNamespace);
+						if (!isValidNamespace(clean)) {
+							new Notice(t("notice.nsBadChar"));
+							return;
+						}
+						const id = await this.plugin.addTagDefinition(clean, newName);
+						if (!id) {
+							new Notice(t("notice.tagDefinitionExists"));
+							return;
+						}
+						this.selectedTagDefinitionId = id;
+						this.addingTagDefinition = false;
+						this.resetDraft();
+						this.render();
+					});
+			});
+		setting.settingEl.addClass("trellis-tag-definition-add");
+		if (cancellable) {
+			setting.addButton((button) =>
+				button.setButtonText(t("modal.confirm.cancel")).onClick(() => {
+					this.addingTagDefinition = false;
 					this.render();
 				})
 			);
+		}
 	}
 
 	private renderTagDefinitionChoice(
@@ -488,17 +527,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setButtonText(t("setting.apply"))
 					.setDisabled(true)
 					.onClick(() => {
-					const clean = cleanNamespaceInput(pendingNamespace);
-					if (!isValidNamespace(clean)) {
-						new Notice(t("notice.nsBadChar"));
-						return;
-					}
-					this.resetDraft();
-					this.plugin.requestTagDefinitionNamespaceChange(
-						definition.id,
-						clean,
-						() => this.render()
-					);
+						const clean = cleanNamespaceInput(pendingNamespace);
+						if (!isValidNamespace(clean)) {
+							new Notice(t("notice.nsBadChar"));
+							return;
+						}
+						this.resetDraft();
+						this.plugin.requestTagDefinitionNamespaceChange(
+							definition.id,
+							clean,
+							() => this.render()
+						);
 					});
 			});
 
