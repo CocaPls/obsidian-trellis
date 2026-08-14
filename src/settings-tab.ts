@@ -561,6 +561,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const editor = containerEl.createDiv({ cls: "trellis-filename-builder" });
+		editor.classList.toggle("is-scrollable", schema.slots.length > 2);
 
 		schema.slots.forEach((slot, index) => {
 			this.renderFilenameSlot(editor, schema, slot, index);

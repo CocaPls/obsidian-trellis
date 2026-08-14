@@ -311,9 +311,12 @@ button.trellis-destructive:hover {
 	display: flex;
 	align-items: stretch;
 	gap: var(--size-4-3);
-	overflow-x: auto;
 	margin-bottom: var(--size-4-3);
 	padding-bottom: var(--size-4-1);
+}
+
+.trellis-filename-builder.is-scrollable {
+	overflow-x: auto;
 }
 
 .trellis-filename-part {
@@ -355,7 +358,8 @@ button.trellis-destructive:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-filename-builder {
+	.trellis-filename-builder,
+	.trellis-filename-builder.is-scrollable {
 		flex-direction: column;
 		overflow-x: visible;
 	}
