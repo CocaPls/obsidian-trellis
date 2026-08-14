@@ -8,7 +8,7 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
-## Unreleased
+## 0.4.2 — Cross-platform filename safety
 
 - Reject generated filenames that would fail on another supported platform,
   including Windows device names and terminal dots or spaces, while preserving

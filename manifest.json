@@ -1,7 +1,7 @@
 {
 	"id": "trellis",
 	"name": "Trellis",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"minAppVersion": "1.8.7",
 	"description": "Keep hierarchical tags and filename codes in sync, with a tag-based sidebar tree and previewed, link-safe bulk changes.",
 	"author": "CocaPls",
