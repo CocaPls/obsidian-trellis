@@ -210,6 +210,8 @@ const EN: Record<string, string> = {
 	"notice.sepChanged": "separator {from} → {to} on {n} file(s)",
 	"notice.sepReverted": "reverted separator change on {n} file(s)",
 	"notice.noSepChange": "no separator change to undo",
+	"notice.sepUndoStale":
+		"this undo record no longer matches the current filename structure or files; no changes were made",
 	"notice.multiLocation":
 		"{name} has {n} location tags — using the first (one note = one location)",
 	"notice.noDuplicates": "no duplicate location tags found",
@@ -693,6 +695,8 @@ const KO: Record<string, string> = {
 	"notice.sepChanged": "구분자 {from} → {to}, {n}개 파일 변경",
 	"notice.sepReverted": "구분자 변경 {n}개 파일 되돌림",
 	"notice.noSepChange": "되돌릴 구분자 변경 없음",
+	"notice.sepUndoStale":
+		"이 실행취소 기록은 현재 파일명 구조 또는 파일과 일치하지 않습니다. 아무것도 변경하지 않았습니다",
 	"notice.multiLocation":
 		"{name} 위치 태그 {n}개 — 첫 번째 사용 (노트 하나 = 위치 하나)",
 	"notice.noDuplicates": "중복 위치 태그 없음",

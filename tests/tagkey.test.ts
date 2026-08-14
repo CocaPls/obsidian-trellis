@@ -538,6 +538,57 @@ test("an internal separator cannot be ambiguous with an adjacent unspaced bounda
 	assert.equal(isValidTagSegmentForSlot("AB", conflicting.slots[0]), true);
 });
 
+test("name schemas reject boundary separators with a prefix relationship", () => {
+	const ambiguous: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "trel" },
+			{ role: "name" },
+			{ role: "tag", namespace: "proj" },
+		],
+		separators: ["-", "--"],
+	};
+	assert.deepEqual(separatorConflicts(ambiguous), [
+		{ slotIndex: 1, gapIndex: 0, otherGapIndex: 1 },
+	]);
+	// This is the concrete lossy case the validation prevents: the title's
+	// leading "-" would otherwise be consumed as part of the longer separator.
+	assert.equal(
+		extractNameMulti("AA01--idea--BB02", ["AA01", null, "BB02"], ambiguous),
+		"idea"
+	);
+
+	assert.deepEqual(
+		separatorConflicts({ ...ambiguous, separatorSpacing: ["after", "none"] }),
+		[]
+	);
+	assert.deepEqual(
+		separatorConflicts({ ...ambiguous, separators: ["-", "-"] }),
+		[]
+	);
+});
+
+test("separator conflict validation covers the supported punctuation matrix", () => {
+	const symbols = ["-", "--", ".", "..", "_", "__", "·"];
+	for (const left of symbols) {
+		for (const right of symbols) {
+			const schema: TrellisSchema = {
+				slots: [
+					{ role: "tag", namespace: "trel" },
+					{ role: "name" },
+					{ role: "tag", namespace: "proj" },
+				],
+				separators: [left, right],
+			};
+			const expected = left !== right && (left.startsWith(right) || right.startsWith(left));
+			assert.equal(
+				separatorConflicts(schema).length > 0,
+				expected,
+				`${JSON.stringify(left)} vs ${JSON.stringify(right)}`
+			);
+		}
+	}
+});
+
 test("schema migration changes boundary formatting and internal joiner in one dry-run", () => {
 	const next: TrellisSchema = {
 		slots: [

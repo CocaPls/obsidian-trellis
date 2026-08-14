@@ -149,10 +149,16 @@ interface SeparatorRename {
 	oldBasename: string;
 }
 
+interface SeparatorUndoPlanRow {
+	currentPath: string;
+	targetPath: string;
+}
+
 /** The last separator-change pass: the renames plus the separators it moved
  *  between, so undo restores both the filenames and the setting. */
 interface SeparatorChangeRecord {
-	/** Full schemas are present on new records. Scalar fields keep old data.json undoable. */
+	/** Full schemas are required for a verifiable undo. Scalar fields are kept
+	 * only so legacy data can be loaded and safely reported as stale. */
 	oldSchema?: TrellisSchema;
 	newSchema?: TrellisSchema;
 	oldSep?: string;
@@ -2794,34 +2800,101 @@ export default class TrellisPlugin extends Plugin {
 		return { undone, remaining };
 	}
 
+	/** Resolve an undo completely before changing either filenames or settings.
+	 * Legacy scalar-only journals cannot prove which full slot schema produced
+	 * their filenames, so they are deliberately rejected instead of guessing. */
+	private separatorUndoPlan(
+		rec: SeparatorChangeRecord
+	): { oldSchema: TrellisSchema; rows: SeparatorUndoPlanRow[] } | null {
+		if (!rec.oldSchema || !rec.newSchema) return null;
+
+		const oldSchema = normalizeSchemaModel(cloneSchema(rec.oldSchema));
+		const newSchema = normalizeSchemaModel(cloneSchema(rec.newSchema));
+		const currentSchema = normalizeSchemaModel(cloneSchema(this.settings.schema));
+		const currentJson = JSON.stringify(currentSchema);
+		// A failed forward migration can leave the old schema active with a small
+		// set of filenames still at their new paths. Both recorded endpoints are
+		// safe; any third schema means the journal is stale.
+		if (
+			currentJson !== JSON.stringify(oldSchema) &&
+			currentJson !== JSON.stringify(newSchema)
+		) return null;
+
+		const seenCurrent = new Set<string>();
+		const seenTargets = new Set<string>();
+		const rows: SeparatorUndoPlanRow[] = [];
+		for (const rename of rec.renames) {
+			const file = this.app.vault.getAbstractFileByPath(rename.path);
+			if (!(file instanceof TFile) || seenCurrent.has(file.path)) return null;
+			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+			const targetPath = normalizePath(`${dir}${rename.oldBasename}.${file.extension}`);
+			if (seenTargets.has(targetPath)) return null;
+			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
+			if (occupied && occupied !== file) return null;
+			seenCurrent.add(file.path);
+			seenTargets.add(targetPath);
+			rows.push({ currentPath: file.path, targetPath });
+		}
+		return { oldSchema, rows };
+	}
+
 	/** Undo the last separator change: restore the setting AND each filename.
-	 *  Keeps the undo record if any file failed to restore, so it can be retried,
-	 *  and only clears it once every recorded rename is reverted. */
+	 *  The operation is preflighted and transactional: the schema changes only
+	 *  after every rename succeeds; cancel/failure rolls completed rows forward. */
 	private async undoSeparatorChange() {
 		const rec = this.settings.lastSeparatorChange;
 		if (!rec || rec.renames.length === 0) {
 			new Notice(t("notice.noSepChange"));
 			return;
 		}
-		const operation = t("cmd.separatorUndo");
+		const plan = this.separatorUndoPlan(rec);
+		if (!plan) {
+			new Notice(t("notice.sepUndoStale"));
+			return;
+		}
+		const operation = t("cmd.sepUndo");
 		if (!this.beginBulkOperation(operation)) return;
-		const oldSchema = rec.oldSchema
-			? cloneSchema(rec.oldSchema)
-			: (() => {
-					const schema = cloneSchema(this.settings.schema);
-					if (rec.oldSep !== undefined) schema.separators[0] = rec.oldSep;
-					return schema;
-				})();
+		const progress = new BulkProgressModal(this.app, operation);
+		progress.open();
+		const completed: SeparatorUndoPlanRow[] = [];
+		const failed: string[] = [];
 		try {
-			this.settings.schema = normalizeSchemaModel(oldSchema);
 			this.separatorMigrationRunning = true;
-			const { undone, remaining } = await this.revertSeparatorRenames(rec.renames);
-			this.settings.lastSeparatorChange =
-				remaining.length > 0 ? { ...rec, renames: remaining } : undefined;
+			for (let i = 0; i < plan.rows.length; i++) {
+				if (!(await progress.gate())) break;
+				const row = plan.rows[i];
+				const file = this.app.vault.getAbstractFileByPath(row.currentPath);
+				if (!(file instanceof TFile) || !(await this.renameGuarded(file, row.targetPath))) {
+					failed.push(row.currentPath);
+					break;
+				}
+				completed.push(row);
+				progress.report(i + 1, plan.rows.length, failed.length);
+			}
+
+			if (progress.wasCancelled || failed.length > 0) {
+				const rollbackFailed: string[] = [];
+				for (const row of [...completed].reverse()) {
+					const file = this.app.vault.getAbstractFileByPath(row.targetPath);
+					if (!(file instanceof TFile) || !(await this.renameGuarded(file, row.currentPath))) {
+						rollbackFailed.push(row.targetPath);
+					}
+				}
+				progress.finish({
+					processed: completed.length - rollbackFailed.length,
+					skipped: [...failed, ...rollbackFailed],
+					outcome: "rolled-back",
+				});
+				return;
+			}
+
+			this.settings.schema = plan.oldSchema;
+			this.settings.lastSeparatorChange = undefined;
 			await this.saveSettings();
 			this.refreshNoNameManagedPaths();
 			this.rebuildTrees();
-			new Notice(t("notice.sepReverted", { n: undone }));
+			progress.finish({ processed: completed.length, skipped: [] });
+			new Notice(t("notice.sepReverted", { n: completed.length }));
 		} finally {
 			this.separatorMigrationRunning = false;
 			this.endBulkOperation(operation);

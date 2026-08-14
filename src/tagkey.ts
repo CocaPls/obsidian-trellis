@@ -811,10 +811,18 @@ export function isValidTagSegmentForSlot(seg: string, slot: KeySlot): boolean {
 export interface SeparatorConflict {
 	slotIndex: number;
 	gapIndex: number;
+	/** Present when two rendered slot boundaries have a prefix relationship. */
+	otherGapIndex?: number;
 }
 
-/** Adjacent tag-segment and slot-boundary separators that render identically
- * without spaces make the filename schema ambiguous to parse. */
+/** Detect separator combinations that cannot round-trip without losing data.
+ *
+ * Two cases are ambiguous:
+ * - a tag hierarchy joiner is identical to an adjacent unspaced boundary;
+ * - with a name slot, one rendered boundary is a proper prefix of another.
+ *   In the latter case a title beginning/ending with the extra punctuation can
+ *   be mistaken for the longer boundary ("-" vs "--") and silently trimmed.
+ */
 export function separatorConflicts(schema: TrellisSchema): SeparatorConflict[] {
 	const conflicts: SeparatorConflict[] = [];
 	for (let slotIndex = 0; slotIndex < schema.slots.length; slotIndex++) {
@@ -828,6 +836,30 @@ export function separatorConflicts(schema: TrellisSchema): SeparatorConflict[] {
 				schema.separators[gapIndex] === slot.segmentSeparator
 			) {
 				conflicts.push({ slotIndex, gapIndex });
+			}
+		}
+	}
+
+	const nameSlotIndex = schema.slots.findIndex((slot) => slot.role === "name");
+	if (nameSlotIndex !== -1) {
+		const boundaries = schema.separators
+			.map((_, gapIndex) => ({ gapIndex, rendered: boundarySeparator(schema, gapIndex) }))
+			.filter(({ rendered }) => rendered !== "");
+		for (let i = 0; i < boundaries.length; i++) {
+			for (let j = i + 1; j < boundaries.length; j++) {
+				const left = boundaries[i];
+				const right = boundaries[j];
+				if (
+					left.rendered !== right.rendered &&
+					(left.rendered.startsWith(right.rendered) ||
+						right.rendered.startsWith(left.rendered))
+				) {
+					conflicts.push({
+						slotIndex: nameSlotIndex,
+						gapIndex: left.gapIndex,
+						otherGapIndex: right.gapIndex,
+					});
+				}
 			}
 		}
 	}
