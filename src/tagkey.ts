@@ -16,9 +16,53 @@
  */
 
 /** The role of a filename slot. */
-export type KeyRole = "tag" | "name";
-export type SegmentSeparator = "" | "." | "-" | "_";
+export type SlotType = "tag" | "name";
+/** @deprecated Internal compatibility alias for pre-0.5 callers. */
+export type KeyRole = SlotType;
+/**
+ * Visible hierarchy joiner in a filename. The empty string hides hierarchy.
+ * 0.5 accepts validated custom safe punctuation instead of a closed preset
+ * union; the actual Obsidian tag hierarchy always remains slash-delimited.
+ */
+export type SegmentSeparator = string;
 export type SeparatorSpacing = "none" | "before" | "after" | "both";
+
+export type SlotWrapperKind = "none" | "round" | "custom";
+
+/** Optional visual wrapper emitted around one non-empty filename slot. */
+export interface SlotWrapper {
+	kind: SlotWrapperKind;
+	/** Used only by custom wrappers. */
+	left?: string;
+	/** Used only by custom wrappers. */
+	right?: string;
+}
+
+export type ValueRuleKind = "alternating" | "sequence" | "date" | "timestamp";
+
+/** User-facing tag-value suggestion rule. It never rewrites existing tags. */
+export interface TagValueRule {
+	kind: ValueRuleKind;
+	firstLevel?: "alphabet" | "number";
+	letterCase?: "upper" | "lower";
+	numberWidth?: "auto" | 1 | 2 | 3 | 4;
+	start?: 0 | 1;
+	dateFormat?: "YYYYMMDD" | "YYYY-MM-DD" | "YYMMDD";
+	timestampPrecision?: "minute" | "second" | "millisecond";
+	timezone?: "local" | "utc";
+}
+
+/** A managed Obsidian tag branch, independent from filename projection. */
+export interface TrellisTagDefinition {
+	id: string;
+	/** Human-facing label. Falls back to namespace when blank. */
+	name: string;
+	/** Relative branch below rootNamespace, e.g. "bp". */
+	namespace: string;
+	sidebarVisible: boolean;
+	color?: string;
+	valueRule?: TagValueRule;
+}
 
 /**
  * ID scheme preset for a tag slot (0.3.0, experimental). Absent = the classic
@@ -40,14 +84,26 @@ export const SCHEME_IDS: SchemeId[] = ["spark", "zettel", "date", "seq"];
  * namespace it mirrors; a name-key is free user text TRELLIS never rewrites.
  */
 export interface KeySlot {
-	role: KeyRole;
-	/** Location-tag namespace for a tag slot, e.g. "trel". Absent on name slots. */
+	/** Stable settings-only identity. Never written to notes or filenames. */
+	id?: string;
+	role: SlotType;
+	/** Managed tag definition referenced by a tag slot. */
+	tagDefinitionId?: string;
+	/**
+	 * Pre-0.5 persisted namespace. Accepted only for migration/undo records; new
+	 * active schemas resolve a tagDefinitionId instead.
+	 */
 	namespace?: string;
 	/** Optional ID scheme preset (0.3.0). Absent = format-agnostic. */
 	scheme?: SchemeId;
 	/** Visible joiner for hierarchy segments in this tagkey. Absent = hidden. */
 	segmentSeparator?: SegmentSeparator;
+	/** Optional visual wrapper for this slot. */
+	wrapper?: SlotWrapper;
 }
+
+/** Preferred 0.5 name. KeySlot remains exported for source compatibility. */
+export type FilenameSlot = KeySlot;
 
 /**
  * The filename schema: slots in left-to-right order plus the separators
@@ -69,10 +125,186 @@ export interface KeySlot {
 export interface TrellisSchema {
 	/** Layer-1 owner root shared by every tag slot. ""/absent = no root. */
 	rootNamespace?: string;
+	/** Managed tag branches. Definitions need not appear in a filename slot. */
+	tagDefinitions?: TrellisTagDefinition[];
 	slots: KeySlot[];
 	separators: string[];
 	/** Whitespace rendered around each separator symbol. Absent = no spaces. */
 	separatorSpacing?: SeparatorSpacing[];
+}
+
+/** Preferred 0.5 name. The serialized shape stays compatible with 0.4. */
+export type FilenameSchema = TrellisSchema;
+
+/** Current persisted settings model. Versioning lives at the plugin-settings level. */
+export const CURRENT_SETTINGS_VERSION = 2;
+
+function idPart(value: string): string {
+	const ascii = value
+		.normalize("NFKD")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+	return ascii || "item";
+}
+
+function uniqueId(prefix: string, hint: string, used: Set<string>): string {
+	const base = `${prefix}-${idPart(hint)}`;
+	let value = base;
+	let suffix = 2;
+	while (used.has(value)) value = `${base}-${suffix++}`;
+	used.add(value);
+	return value;
+}
+
+/** Convert a legacy scheme id into the 0.5 tag-definition value rule. */
+export function valueRuleFromLegacyScheme(scheme?: SchemeId): TagValueRule | undefined {
+	if (!scheme) return undefined;
+	if (scheme === "spark") {
+		return {
+			kind: "alternating",
+			firstLevel: "alphabet",
+			letterCase: "upper",
+			numberWidth: 2,
+		};
+	}
+	if (scheme === "seq") return { kind: "sequence", start: 1, numberWidth: "auto" };
+	if (scheme === "date") return { kind: "date", dateFormat: "YYYYMMDD" };
+	return { kind: "timestamp", timestampPrecision: "second", timezone: "local" };
+}
+
+/** Compatibility projection for old Bootstrap helpers that still accept SchemeId. */
+export function legacySchemeFromValueRule(rule?: TagValueRule): SchemeId | undefined {
+	if (!rule) return undefined;
+	if (rule.kind === "alternating") return "spark";
+	if (rule.kind === "sequence") return "seq";
+	if (rule.kind === "date") return "date";
+	return "zettel";
+}
+
+/** Effective definitions, including a read-only fallback for legacy schemas. */
+export function schemaTagDefinitions(schema: TrellisSchema): TrellisTagDefinition[] {
+	if (schema.tagDefinitions && schema.tagDefinitions.length > 0) {
+		return schema.tagDefinitions;
+	}
+	const seen = new Set<string>();
+	const definitions: TrellisTagDefinition[] = [];
+	for (const slot of schema.slots) {
+		if (slot.role !== "tag" || !slot.namespace || seen.has(slot.namespace)) continue;
+		seen.add(slot.namespace);
+		definitions.push({
+			id: `legacy-${slot.namespace}`,
+			name: slot.namespace,
+			namespace: slot.namespace,
+			sidebarVisible: true,
+			valueRule: valueRuleFromLegacyScheme(slot.scheme),
+		});
+	}
+	return definitions;
+}
+
+export function tagDefinitionById(
+	schema: TrellisSchema,
+	id: string | undefined
+): TrellisTagDefinition | undefined {
+	if (!id) return undefined;
+	return schemaTagDefinitions(schema).find((definition) => definition.id === id);
+}
+
+/** Resolve the managed branch projected by a filename tag slot. */
+export function slotNamespace(schema: TrellisSchema, slot: KeySlot): string {
+	return tagDefinitionById(schema, slot.tagDefinitionId)?.namespace ?? slot.namespace ?? "";
+}
+
+export function slotValueRule(
+	schema: TrellisSchema,
+	slot: KeySlot
+): TagValueRule | undefined {
+	return tagDefinitionById(schema, slot.tagDefinitionId)?.valueRule ??
+		valueRuleFromLegacyScheme(slot.scheme);
+}
+
+/**
+ * Upgrade one active schema to the 0.5 ID-based model without changing any
+ * rendered filename or tag path. The function is pure and idempotent so it can
+ * also normalize old schemas embedded in undo journals on demand.
+ */
+export function normalizeSchemaModel(schema: TrellisSchema): TrellisSchema {
+	const next: TrellisSchema = {
+		rootNamespace: schema.rootNamespace,
+		tagDefinitions: schema.tagDefinitions?.map((definition) => ({
+			...definition,
+			valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
+		})),
+		slots: schema.slots.map((slot) => ({
+			...slot,
+			wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
+		})),
+		separators: [...schema.separators],
+		separatorSpacing: schema.separatorSpacing ? [...schema.separatorSpacing] : undefined,
+	};
+
+	const definitionIds = new Set<string>();
+	const definitions: TrellisTagDefinition[] = [];
+	for (const definition of next.tagDefinitions ?? []) {
+		const namespace = definition.namespace.trim();
+		if (!namespace || definitions.some((candidate) => candidate.namespace === namespace)) {
+			continue;
+		}
+		const id = definition.id && !definitionIds.has(definition.id)
+			? definition.id
+			: uniqueId("tag", namespace, definitionIds);
+		definitionIds.add(id);
+		definitions.push({
+			...definition,
+			id,
+			name: definition.name?.trim() || namespace,
+			namespace,
+			sidebarVisible: definition.sidebarVisible !== false,
+		});
+	}
+
+	for (const slot of next.slots) {
+		if (slot.role !== "tag") continue;
+		const legacyNamespace = slot.namespace?.trim() ?? "";
+		let definition = definitions.find((candidate) => candidate.id === slot.tagDefinitionId);
+		if (!definition && legacyNamespace) {
+			definition = definitions.find((candidate) => candidate.namespace === legacyNamespace);
+		}
+		if (!definition && legacyNamespace) {
+			const id = uniqueId("tag", legacyNamespace, definitionIds);
+			definition = {
+				id,
+				name: legacyNamespace,
+				namespace: legacyNamespace,
+				sidebarVisible: true,
+				valueRule: valueRuleFromLegacyScheme(slot.scheme),
+			};
+			definitions.push(definition);
+		}
+		if (definition) {
+			slot.tagDefinitionId = definition.id;
+			if (!definition.valueRule && slot.scheme) {
+				definition.valueRule = valueRuleFromLegacyScheme(slot.scheme);
+			}
+		}
+		delete slot.namespace;
+		delete slot.scheme;
+	}
+
+	const slotIds = new Set<string>();
+	for (let index = 0; index < next.slots.length; index++) {
+		const slot = next.slots[index];
+		if (!slot.id || slotIds.has(slot.id)) {
+			slot.id = uniqueId("slot", String(index + 1), slotIds);
+		} else {
+			slotIds.add(slot.id);
+		}
+		if (!slot.wrapper || slot.wrapper.kind === "none") delete slot.wrapper;
+	}
+
+	next.tagDefinitions = definitions;
+	return next;
 }
 
 /** Render a stored boundary symbol with its independently configured spacing. */
@@ -98,6 +330,28 @@ export function boundarySeparator(schema: TrellisSchema, index: number): string 
 	return renderSeparator(schema.separators[index] ?? "", separatorSpacingAt(schema, index));
 }
 
+export function wrapperPair(wrapper?: SlotWrapper): { left: string; right: string } {
+	if (!wrapper || wrapper.kind === "none") return { left: "", right: "" };
+	if (wrapper.kind === "round") return { left: "(", right: ")" };
+	return { left: wrapper.left ?? "", right: wrapper.right ?? "" };
+}
+
+/** Wrap only present values, so omitted slots never leave empty punctuation. */
+export function renderSlotValue(value: string, slot: KeySlot): string {
+	if (!value) return "";
+	const { left, right } = wrapperPair(slot.wrapper);
+	return `${left}${value}${right}`;
+}
+
+/** Remove exactly one configured visual wrapper from a parsed slot value. */
+export function unwrapSlotValue(value: string, slot: KeySlot): string {
+	const { left, right } = wrapperPair(slot.wrapper);
+	if (!left && !right) return value;
+	if (!value.startsWith(left) || !value.endsWith(right)) return value;
+	if (value.length < left.length + right.length) return value;
+	return value.slice(left.length, value.length - right.length);
+}
+
 /**
  * The full tag namespace path of a slot namespace under the schema's root:
  * "tree" → "trellis/tree" when rootNamespace is "trellis", else "tree".
@@ -121,8 +375,18 @@ export function primaryNsPath(schema: TrellisSchema): string {
  * shared constant is never mutated in place.
  */
 export function defaultSchema(): TrellisSchema {
+	const definition: TrellisTagDefinition = {
+		id: "tag-trel",
+		name: "trel",
+		namespace: "trel",
+		sidebarVisible: true,
+	};
 	return {
-		slots: [{ role: "tag", namespace: "trel" }, { role: "name" }],
+		tagDefinitions: [definition],
+		slots: [
+			{ id: "slot-1", role: "tag", tagDefinitionId: definition.id },
+			{ id: "slot-2", role: "name" },
+		],
 		separators: ["-"],
 	};
 }
@@ -141,9 +405,23 @@ export function schemaFromLegacy(
 	separator: string,
 	keyPosition: "prefix" | "suffix"
 ): TrellisSchema {
-	const tag: KeySlot = { role: "tag", namespace };
-	const name: KeySlot = { role: "name" };
+	const definition: TrellisTagDefinition = {
+		id: `tag-${idPart(namespace)}`,
+		name: namespace,
+		namespace,
+		sidebarVisible: true,
+	};
+	const tag: KeySlot = {
+		id: keyPosition === "suffix" ? "slot-2" : "slot-1",
+		role: "tag",
+		tagDefinitionId: definition.id,
+	};
+	const name: KeySlot = {
+		id: keyPosition === "suffix" ? "slot-1" : "slot-2",
+		role: "name",
+	};
 	return {
+		tagDefinitions: [definition],
 		slots: keyPosition === "suffix" ? [name, tag] : [tag, name],
 		separators: [separator],
 	};
@@ -162,18 +440,12 @@ function firstTagSlotIndex(schema: TrellisSchema): number {
 /** The namespace of the primary (first) tag slot, e.g. "trel". */
 export function primaryNamespace(schema: TrellisSchema): string {
 	const i = firstTagSlotIndex(schema);
-	return (i >= 0 ? schema.slots[i].namespace : undefined) ?? "";
+	return i >= 0 ? slotNamespace(schema, schema.slots[i]) : "";
 }
 
 /** Every distinct location-tag namespace in the schema (one per tag slot). */
 export function tagNamespaces(schema: TrellisSchema): string[] {
-	const out: string[] = [];
-	for (const s of schema.slots) {
-		if (s.role === "tag" && s.namespace && !out.includes(s.namespace)) {
-			out.push(s.namespace);
-		}
-	}
-	return out;
+	return schemaTagDefinitions(schema).map((definition) => definition.namespace);
 }
 
 /** The schema tag-key whose namespace owns one tag. `keyPath` is the part
@@ -182,6 +454,7 @@ export function tagNamespaces(schema: TrellisSchema): string[] {
  * namespace ownership is what classifies the tag. */
 export interface TagKeyMatch {
 	slotIndex: number;
+	tagDefinitionId?: string;
 	namespace: string;
 	fullNamespace: string;
 	tagPath: string;
@@ -196,14 +469,19 @@ export function matchTagKey(
 	schema: TrellisSchema
 ): TagKeyMatch | null {
 	const tagPath = tag.replace(/^#/, "");
-	for (let slotIndex = 0; slotIndex < schema.slots.length; slotIndex++) {
-		const slot = schema.slots[slotIndex];
-		if (slot.role !== "tag" || !slot.namespace) continue;
-		const fullNamespace = nsPath(schema, slot.namespace);
+	for (const definition of schemaTagDefinitions(schema)) {
+		const slotIndex = schema.slots.findIndex(
+			(slot) =>
+				slot.role === "tag" &&
+				(slot.tagDefinitionId === definition.id ||
+					(!slot.tagDefinitionId && slot.namespace === definition.namespace))
+		);
+		const fullNamespace = nsPath(schema, definition.namespace);
 		if (tagPath === fullNamespace) {
 			return {
 				slotIndex,
-				namespace: slot.namespace,
+				tagDefinitionId: definition.id,
+				namespace: definition.namespace,
 				fullNamespace,
 				tagPath,
 				keyPath: "",
@@ -213,7 +491,8 @@ export function matchTagKey(
 		if (tagPath.startsWith(prefix)) {
 			return {
 				slotIndex,
-				namespace: slot.namespace,
+				tagDefinitionId: definition.id,
+				namespace: definition.namespace,
 				fullNamespace,
 				tagPath,
 				keyPath: tagPath.slice(prefix.length),
@@ -329,7 +608,7 @@ export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string |
 	// the generic guard rejects — a Zettel timestamp is ONE digit run); when the
 	// scheme doesn't recognise the tagkey, fall back to the generic run split so
 	// mixed vaults still onboard.
-	const scheme = schema.slots.find((s) => s.role === "tag")?.scheme;
+	const scheme = slot ? legacySchemeFromValueRule(slotValueRule(schema, slot)) : undefined;
 	const bySchema = scheme ? schemeSegments(scheme, tagkey) : null;
 	const segs =
 		bySchema ??
@@ -467,7 +746,11 @@ export function syncedBasename(
  *  any shape other than the battle-tested 2-slot [tag, name] pair. */
 export function isMultiKey(schema: TrellisSchema): boolean {
 	const tagCount = schema.slots.filter((s) => s.role === "tag").length;
-	return tagCount !== 1 || schema.slots.length !== 2;
+	return (
+		tagCount !== 1 ||
+		schema.slots.length !== 2 ||
+		schema.slots.some((slot) => wrapperPair(slot.wrapper).left !== "" || wrapperPair(slot.wrapper).right !== "")
+	);
 }
 
 /**
@@ -480,7 +763,7 @@ export function isMultiKey(schema: TrellisSchema): boolean {
  * in practice (e.g. "trel", "tree", "proj").
  */
 export function isValidNamespace(ns: string): boolean {
-	return /^[A-Za-z0-9_-]+$/.test(ns);
+	return isValidTagSegment(ns) && !/^[0-9]+$/.test(ns);
 }
 
 /**
@@ -496,6 +779,25 @@ export function isValidNamespace(ns: string): boolean {
 export function isValidSeparator(s: string): boolean {
 	if (s === "") return false;
 	return !/[A-Za-z0-9/\\:*?"<>|#^[\]]|\s/.test(s);
+}
+
+/** Hierarchy display may be hidden, otherwise it follows filename-separator safety. */
+export function isValidHierarchySeparator(s: string): boolean {
+	return s === "" || isValidSeparator(s);
+}
+
+/**
+ * Validate a custom visual wrapper. Presets are always valid. A custom pair
+ * requires one safe, non-whitespace punctuation string on each side. Keeping
+ * the same conservative character rules as separators avoids cross-platform
+ * filename and Obsidian link hazards.
+ */
+export function isValidSlotWrapper(wrapper?: SlotWrapper): boolean {
+	if (!wrapper || wrapper.kind === "none" || wrapper.kind === "round") return true;
+	if (wrapper.kind !== "custom") return false;
+	const left = wrapper.left ?? "";
+	const right = wrapper.right ?? "";
+	return isValidSeparator(left) && isValidSeparator(right);
 }
 
 /** A segment is reversibly encodable for this tag slot. The configured joiner
@@ -640,7 +942,7 @@ export function assembleBasenameMulti(
 		const v = values[i];
 		if (v === null || v === undefined || v === "") continue;
 		if (any) out += boundarySeparator(schema, i - 1) || primarySeparator(schema);
-		out += v;
+		out += renderSlotValue(v, schema.slots[i]);
 		any = true;
 	}
 	return out;
@@ -694,7 +996,8 @@ export function extractNameMulti(
 	// back to the positional separator, else leave `rest` whole so a real title
 	// is never truncated on a coincidental match.
 	for (let i = 0; i < nameIdx; i++) {
-		const v = tagkeys[i];
+		const raw = tagkeys[i];
+		const v = raw ? renderSlotValue(raw, schema.slots[i]) : raw;
 		if (!v) continue; // omitted slot — nothing in the filename for it
 		if (rest === v) {
 			// The tag value IS the entire remainder: a tagkey-only filename (an
@@ -723,7 +1026,8 @@ export function extractNameMulti(
 	// already took the separator, so stripping again would eat a title's own
 	// trailing separator characters ("demo-" → "demo").
 	for (let i = schema.slots.length - 1; i > nameIdx; i--) {
-		const v = tagkeys[i];
+		const raw = tagkeys[i];
+		const v = raw ? renderSlotValue(raw, schema.slots[i]) : raw;
 		if (!v) continue;
 		if (rest === v) {
 			rest = "";
@@ -742,7 +1046,7 @@ export function extractNameMulti(
 		const j = sepBefore ? rest.lastIndexOf(sepBefore) : -1;
 		if (j !== -1) rest = rest.slice(0, j);
 	}
-	return rest;
+	return unwrapSlotValue(rest, schema.slots[nameIdx]);
 }
 
 /**

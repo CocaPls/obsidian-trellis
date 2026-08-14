@@ -27,6 +27,12 @@ import {
 	tagNamespaces,
 	tagPosition,
 	normalizeTagList,
+	tagDefinitionById,
+	slotNamespace,
+	legacySchemeFromValueRule,
+	valueRuleFromLegacyScheme,
+	isValidHierarchySeparator,
+	isValidSlotWrapper,
 } from "./tagkey";
 import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
@@ -42,7 +48,14 @@ const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
 		rootNamespace: schema.rootNamespace,
-		slots: schema.slots.map((slot) => ({ ...slot })),
+		tagDefinitions: schema.tagDefinitions?.map((definition) => ({
+			...definition,
+			valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
+		})),
+		slots: schema.slots.map((slot) => ({
+			...slot,
+			wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
+		})),
 		separators: [...schema.separators],
 		separatorSpacing: schema.separatorSpacing
 			? [...schema.separatorSpacing]
@@ -226,8 +239,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 						for (const separator of SEGMENT_SEPARATORS.slice(1))
 							dropdown.addOption(separator, separator);
 						dropdown.setValue(pendingSegment).onChange((value) => {
-							pendingSegment = SEGMENT_SEPARATORS.includes(value as SegmentSeparator)
-								? (value as SegmentSeparator)
+							pendingSegment = SEGMENT_SEPARATORS.includes(value)
+								? value
 								: "";
 							updatePreview();
 						});
@@ -364,11 +377,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 							const ns = primaryNamespace(old) || "trel";
 							const sep = primarySeparator(old) || "-";
 							const pos = tagPosition(old);
-							const scheme = old.slots.find((s) => s.role === "tag")?.scheme;
+							const oldTagSlot = old.slots.find((slot) => slot.role === "tag");
+							const valueRule = oldTagSlot
+								? tagDefinitionById(old, oldTagSlot.tagDefinitionId)?.valueRule
+								: undefined;
 							const next = schemaFromLegacy(ns, sep, pos);
 							next.rootNamespace = old.rootNamespace;
 							const tagSlot = next.slots.find((s) => s.role === "tag");
-							if (tagSlot && scheme) tagSlot.scheme = scheme;
+							const definition = tagSlot
+								? tagDefinitionById(next, tagSlot.tagDefinitionId)
+								: undefined;
+							if (definition && valueRule) definition.valueRule = { ...valueRule };
 							this.plugin.requestSchemaChange(next, () => {
 								if (
 									JSON.stringify(this.plugin.settings.schema) ===
@@ -564,6 +583,27 @@ export class TrellisSettingTab extends PluginSettingTab {
 		);
 	}
 
+	private definitionForSlot(schema: TrellisSchema, slot: KeySlot) {
+		return tagDefinitionById(schema, slot.tagDefinitionId);
+	}
+
+	private addDefinition(schema: TrellisSchema, namespace: string) {
+		if (!schema.tagDefinitions) schema.tagDefinitions = [];
+		const used = new Set(schema.tagDefinitions.map((definition) => definition.id));
+		const base = `tag-${namespace.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "item"}`;
+		let id = base;
+		let suffix = 2;
+		while (used.has(id)) id = `${base}-${suffix++}`;
+		const definition = {
+			id,
+			name: namespace,
+			namespace,
+			sidebarVisible: true,
+		};
+		schema.tagDefinitions.push(definition);
+		return definition;
+	}
+
 	/** First problem with a staged schema as a human message, or null if valid. */
 	private validateDraft(schema: TrellisSchema): string | null {
 		const tags = schema.slots.filter((s) => s.role === "tag");
@@ -572,7 +612,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			return t("adv.invalid.oneName");
 		const seen = new Set<string>();
 		for (const s of tags) {
-			const ns = (s.namespace ?? "").trim();
+			const ns = slotNamespace(schema, s).trim();
 			if (ns === "") return t("adv.invalid.nsEmpty");
 			if (!isValidNamespace(ns)) return t("adv.invalid.nsBad", { ns });
 			if (seen.has(ns)) return t("adv.invalid.nsDup", { ns });
@@ -586,6 +626,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 				return t("adv.invalid.spacing", { n: i + 1 });
 		}
 		if (separatorConflicts(schema).length > 0) return t("adv.invalid.conflict");
+		for (const slot of schema.slots) {
+			if (!isValidHierarchySeparator(slot.segmentSeparator ?? ""))
+				return t("adv.invalid.segment");
+			if (!isValidSlotWrapper(slot.wrapper)) return t("adv.invalid.wrapper");
+		}
 		return null;
 	}
 
@@ -624,33 +669,42 @@ export class TrellisSettingTab extends PluginSettingTab {
 								return;
 							}
 							slot.role = "name";
-							delete slot.namespace;
-							delete slot.scheme;
+							delete slot.tagDefinitionId;
 							delete slot.segmentSeparator;
+							delete slot.wrapper;
 						} else {
 							slot.role = "tag";
-							slot.namespace = slot.namespace || this.nextFreeNamespace(schema);
+							const definition = this.addDefinition(
+								schema,
+								this.nextFreeNamespace(schema)
+							);
+							slot.tagDefinitionId = definition.id;
 						}
 						refresh();
 					})
 			);
 			if (slot.role === "tag") {
+				const definition = this.definitionForSlot(schema, slot);
 				row.addText((text) =>
 					text
 						.setPlaceholder(t("adv.nsPh"))
-						.setValue(slot.namespace ?? "")
+						.setValue(definition?.namespace ?? "")
 						.onChange((v) => {
 							// Staged raw; validated on Apply (no live save/re-render).
-							slot.namespace = v.trim().replace(/^#/, "").replace(/\/$/, "");
+							if (definition) {
+								definition.namespace = v.trim().replace(/^#/, "").replace(/\/$/, "");
+							}
 						})
 				);
 				// Per-slot ID scheme (0.3.0). Staged like the rest of the draft.
 				row.addDropdown((dd) => {
 					dd.addOption("", t("scheme.none"));
 					for (const id of SCHEME_IDS) dd.addOption(id, t(`scheme.${id}`));
-					dd.setValue(slot.scheme ?? "").onChange((v) => {
-						if ((SCHEME_IDS as string[]).includes(v)) slot.scheme = v as SchemeId;
-						else delete slot.scheme;
+					dd.setValue(legacySchemeFromValueRule(definition?.valueRule) ?? "").onChange((v) => {
+						if (!definition) return;
+						if ((SCHEME_IDS as string[]).includes(v)) {
+							definition.valueRule = valueRuleFromLegacyScheme(v as SchemeId);
+						} else delete definition.valueRule;
 					});
 				});
 				row.addDropdown((dropdown) => {
@@ -658,10 +712,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 					for (const separator of SEGMENT_SEPARATORS.slice(1))
 						dropdown.addOption(separator, separator);
 					dropdown.setValue(slot.segmentSeparator ?? "").onChange((value) => {
-						slot.segmentSeparator = SEGMENT_SEPARATORS.includes(
-							value as SegmentSeparator
-						)
-							? (value as SegmentSeparator)
+						slot.segmentSeparator = SEGMENT_SEPARATORS.includes(value)
+							? value
 							: "";
 					});
 				});
@@ -758,9 +810,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 		// wanted — replacing the old separate add-tag / add-name buttons.
 		new Setting(containerEl).addButton((b) =>
 			b.setButtonText(t("adv.addSlot")).onClick(() => {
+				const namespace = this.nextFreeNamespace(schema);
+				const definition = this.addDefinition(schema, namespace);
 				schema.slots.push({
+					id: `slot-${Date.now().toString(36)}`,
 					role: "tag",
-					namespace: this.nextFreeNamespace(schema),
+					tagDefinitionId: definition.id,
 				});
 				refresh();
 			})
@@ -1027,9 +1082,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 	/** A namespace not yet used by any tag slot, for a freshly added slot. */
 	private nextFreeNamespace(schema: TrellisSchema): string {
-		const used = new Set(
-			schema.slots.filter((s) => s.role === "tag").map((s) => s.namespace)
-		);
+		const used = new Set((schema.tagDefinitions ?? []).map((definition) => definition.namespace));
 		if (!used.has("trel")) return "trel";
 		let i = 2;
 		while (used.has(`key${i}`)) i++;

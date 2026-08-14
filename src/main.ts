@@ -49,6 +49,16 @@ import {
 	slotTagkeys,
 	portableBasenameIssue,
 	matchTagKey,
+	CURRENT_SETTINGS_VERSION,
+	normalizeSchemaModel,
+	slotNamespace,
+	tagDefinitionById,
+	schemaTagDefinitions,
+	legacySchemeFromValueRule,
+	valueRuleFromLegacyScheme,
+	slotValueRule,
+	isValidHierarchySeparator,
+	isValidSlotWrapper,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -86,7 +96,6 @@ import {
 import { TrellisSettingTab } from "./settings-tab";
 import { TagInventory } from "./tag-inventory";
 
-const SEGMENT_SEPARATORS: SegmentSeparator[] = ["", ".", "-", "_"];
 const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
 
 type SortKey = "tagkey" | "mtime" | "ctime";
@@ -178,6 +187,8 @@ type TreeViewMode = "notes" | "tags";
 type TreeLabelMode = "filename" | "tag";
 
 interface TrellisSettings {
+	/** Serialized settings model version. */
+	settingsVersion: number;
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
 	/** Advanced mode (0.2.0, experimental): expose the multi-key slot editor. */
@@ -218,6 +229,7 @@ interface TrellisSettings {
 }
 
 const DEFAULT_SETTINGS: TrellisSettings = {
+	settingsVersion: CURRENT_SETTINGS_VERSION,
 	schema: defaultSchema(),
 	advancedMode: false,
 	suppressSchemaConfirm: false,
@@ -253,7 +265,14 @@ interface LegacyConfig {
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
 		rootNamespace: schema.rootNamespace,
-		slots: schema.slots.map((slot) => ({ ...slot })),
+		tagDefinitions: schema.tagDefinitions?.map((definition) => ({
+			...definition,
+			valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
+		})),
+		slots: schema.slots.map((slot) => ({
+			...slot,
+			wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
+		})),
 		separators: [...schema.separators],
 		separatorSpacing: schema.separatorSpacing
 			? [...schema.separatorSpacing]
@@ -268,10 +287,9 @@ function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
 		if (
 			slot.role === "tag" &&
 			slot.segmentSeparator !== undefined &&
-			!SEGMENT_SEPARATORS.includes(slot.segmentSeparator)
-		) {
-			return { ...slot, segmentSeparator: "" };
-		}
+			!isValidHierarchySeparator(slot.segmentSeparator)
+		) return { ...slot, segmentSeparator: "" };
+		if (!isValidSlotWrapper(slot.wrapper)) return { ...slot, wrapper: undefined };
 		return slot;
 	});
 	normalized.separatorSpacing = normalized.separators.map((raw, i) => {
@@ -586,7 +604,10 @@ export default class TrellisPlugin extends Plugin {
 			delete s.separator;
 			delete s.keyPosition;
 		}
-		this.settings.schema = normalizeSchemaFormatting(this.settings.schema);
+		this.settings.schema = normalizeSchemaModel(
+			normalizeSchemaFormatting(this.settings.schema)
+		);
+		this.settings.settingsVersion = CURRENT_SETTINGS_VERSION;
 		// Own copy of headerButtons so a toggle never mutates the shared default;
 		// missing keys (older saved data) fall back to visible.
 		this.settings.headerButtons = {
@@ -1263,8 +1284,9 @@ export default class TrellisPlugin extends Plugin {
 		const segs: string[] = [];
 		const idx = this.slotForTagPath(parentTagPath);
 		const slot = idx >= 0 ? this.settings.schema.slots[idx] : null;
-		const full = slot?.namespace
-			? nsPath(this.settings.schema, slot.namespace)
+		const namespace = slot ? slotNamespace(this.settings.schema, slot) : "";
+		const full = namespace
+			? nsPath(this.settings.schema, namespace)
 			: primaryNsPath(this.settings.schema);
 		const prefix = `#${full}/`;
 		const exact = `#${full}`;
@@ -1305,7 +1327,8 @@ export default class TrellisPlugin extends Plugin {
 		const tagPath = `${parentTagPath}/${segment}`;
 		const idx = this.slotForTagPath(tagPath);
 		const slot = idx >= 0 ? schema.slots[idx] : null;
-		if (!slot?.namespace) {
+		const namespace = slot ? slotNamespace(schema, slot) : "";
+		if (!slot || !namespace) {
 			new Notice(t("notice.noTagkey"));
 			return;
 		}
@@ -1313,7 +1336,7 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.segmentBadChar"));
 			return;
 		}
-		const full = nsPath(schema, slot.namespace);
+		const full = nsPath(schema, namespace);
 		const rest = tagPath === full ? "" : tagPath.slice(full.length + 1);
 		const tagkey = rest.split("/").join(slot.segmentSeparator ?? "");
 		if (!tagkey) {
@@ -1448,8 +1471,8 @@ export default class TrellisPlugin extends Plugin {
 		const requested = this.settings.treeTagKeyNamespace;
 		if (
 			requested &&
-			this.settings.schema.slots.some(
-				(slot) => slot.role === "tag" && slot.namespace === requested
+			schemaTagDefinitions(this.settings.schema).some(
+				(definition) => definition.namespace === requested && definition.sidebarVisible
 			)
 		) {
 			return requested;
@@ -1750,8 +1773,11 @@ export default class TrellisPlugin extends Plugin {
 		}
 		const newSchema = cloneSchema(oldSchema);
 		const primary = newSchema.slots.find((slot) => slot.role === "tag");
-		if (!primary) return;
-		primary.namespace = newNamespace;
+		const definition = primary
+			? tagDefinitionById(newSchema, primary.tagDefinitionId)
+			: undefined;
+		if (!primary || !definition) return;
+		definition.namespace = newNamespace;
 		const from = primaryNsPath(oldSchema);
 		const to = primaryNsPath(newSchema);
 		const rows = this.previewCascade(from, to);
@@ -2700,13 +2726,16 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Read/write the primary tag slot's scheme (simple-mode dropdown). */
 	getPrimaryScheme(): SchemeId | "" {
-		return this.settings.schema.slots.find((s) => s.role === "tag")?.scheme ?? "";
+		const slot = this.settings.schema.slots.find((candidate) => candidate.role === "tag");
+		return slot ? legacySchemeFromValueRule(slotValueRule(this.settings.schema, slot)) ?? "" : "";
 	}
 
 	setPrimaryScheme(scheme: SchemeId | "") {
 		const slot = this.firstTagSlot();
-		if (scheme === "") delete slot.scheme;
-		else slot.scheme = scheme;
+		const definition = tagDefinitionById(this.settings.schema, slot.tagDefinitionId);
+		if (!definition) return;
+		if (scheme === "") delete definition.valueRule;
+		else definition.valueRule = valueRuleFromLegacyScheme(scheme);
 	}
 
 	/** Suggested next segment under a parent, per the OWNING slot's scheme
@@ -2715,10 +2744,13 @@ export default class TrellisPlugin extends Plugin {
 	segmentSuggestionFor(parent: string): string | null {
 		if (!parent) return null;
 		const idx = this.slotForTagPath(parent);
-		const scheme =
+		const slot =
 			idx >= 0
-				? this.settings.schema.slots[idx].scheme
-				: this.settings.schema.slots.find((s) => s.role === "tag")?.scheme;
+				? this.settings.schema.slots[idx]
+				: this.settings.schema.slots.find((candidate) => candidate.role === "tag");
+		const scheme = slot
+			? legacySchemeFromValueRule(slotValueRule(this.settings.schema, slot))
+			: undefined;
 		if (!scheme) return null;
 		const parentSeg = parent.split("/").pop() ?? "";
 		return suggestSegment(scheme, parentSeg, this.childSegmentsOf(parent), new Date());

@@ -42,6 +42,11 @@ import {
 	separatorConflicts,
 	schemaMigratedName,
 	portableBasenameIssue,
+	normalizeSchemaModel,
+	renderSlotValue,
+	unwrapSlotValue,
+	isValidHierarchySeparator,
+	isValidSlotWrapper,
 } from "../src/tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
@@ -127,6 +132,7 @@ test("matchTagKey separates ordinary tags and identifies the owning tag-key", ()
 	};
 	assert.deepEqual(matchTagKey("#title/policy/edit", multi), {
 		slotIndex: 2,
+		tagDefinitionId: "legacy-title",
 		namespace: "title",
 		fullNamespace: "title",
 		tagPath: "title/policy/edit",
@@ -1043,4 +1049,78 @@ test("portableBasenameIssue enforces the cross-platform filename subset", () => 
 	for (const name of ["CON", "con.txt", "PRN", "AUX", "NUL", "COM1", "LPT9", "CONOUT$"]) {
 		assert.equal(portableBasenameIssue(name), "reserved-name", name);
 	}
+});
+
+test("0.5 schema migration assigns stable definition and slot ids without changing output", () => {
+	const legacy: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "bp", scheme: "spark", segmentSeparator: "." },
+			{ role: "name" },
+		],
+		separators: ["·"],
+		separatorSpacing: ["after"],
+	};
+	const migrated = normalizeSchemaModel(legacy);
+	assert.deepEqual(migrated.tagDefinitions, [
+		{
+			id: "tag-bp",
+			name: "bp",
+			namespace: "bp",
+			sidebarVisible: true,
+			valueRule: {
+				kind: "alternating",
+				firstLevel: "alphabet",
+				letterCase: "upper",
+				numberWidth: 2,
+			},
+		},
+	]);
+	assert.equal(migrated.slots[0].tagDefinitionId, "tag-bp");
+	assert.equal(migrated.slots[0].namespace, undefined);
+	assert.equal(migrated.slots[0].scheme, undefined);
+	assert.deepEqual(migrated.slots.map((slot) => slot.id), ["slot-1", "slot-2"]);
+	assert.equal(
+		assembleBasenameMulti(["N.W.03", "나무위키"], migrated),
+		"N.W.03· 나무위키"
+	);
+	assert.deepEqual(normalizeSchemaModel(migrated), migrated);
+});
+
+test("slot wrappers render, parse and disappear with empty sparse slots", () => {
+	const wrapped: TrellisSchema = {
+		tagDefinitions: [
+			{ id: "tag-kind", name: "종류", namespace: "kind", sidebarVisible: true },
+		],
+		slots: [
+			{
+				id: "slot-kind",
+				role: "tag",
+				tagDefinitionId: "tag-kind",
+				wrapper: { kind: "round" },
+			},
+			{ id: "slot-name", role: "name" },
+		],
+		separators: ["-"],
+	};
+	assert.equal(renderSlotValue("UI", wrapped.slots[0]), "(UI)");
+	assert.equal(unwrapSlotValue("(UI)", wrapped.slots[0]), "UI");
+	assert.equal(assembleBasenameMulti(["UI", "버튼"], wrapped), "(UI)-버튼");
+	assert.equal(assembleBasenameMulti([null, "버튼"], wrapped), "버튼");
+	assert.equal(
+		extractNameMulti("(UI)-버튼", ["UI", null], wrapped),
+		"버튼"
+	);
+});
+
+test("custom hierarchy and wrapper characters use the portable safe subset", () => {
+	for (const value of ["", ".", "·", "~", "++"]) {
+		assert.equal(isValidHierarchySeparator(value), true, value);
+	}
+	for (const value of ["/", " ", "A", "1", "["]) {
+		assert.equal(isValidHierarchySeparator(value), false, value);
+	}
+	assert.equal(isValidSlotWrapper({ kind: "round" }), true);
+	assert.equal(isValidSlotWrapper({ kind: "custom", left: "〈", right: "〉" }), true);
+	assert.equal(isValidSlotWrapper({ kind: "custom", left: "[", right: "]" }), false);
+	assert.equal(isValidSlotWrapper({ kind: "custom", left: "", right: ")" }), false);
 });
