@@ -144,7 +144,6 @@ const EN: Record<string, string> = {
 		"Available only when no filename slot or note still uses this tag branch.",
 	"setting.tagAdd": "Add tag",
 	"setting.tagAddDesc": "Create another tag branch.",
-	"setting.tagAddFields": "Name and namespace",
 	"setting.tagNamePlaceholder": "Display name, e.g. Projects",
 	"setting.tagNamespacePlaceholder": "Namespace, e.g. projects",
 	"setting.add": "Add",
@@ -180,8 +179,6 @@ const EN: Record<string, string> = {
 		"Tag changes also update filenames.",
 	"setting.filenameSyncOff":
 		"Tag changes leave filenames as they are.",
-	"setting.filenameEditor": "Edit filename layout",
-	"setting.filenameEditorDesc": "Change slot order, separators, and formatting.",
 	"setting.preview": "Preview",
 	"setting.previewName": "Project overview",
 	"setting.previewUnmanaged": "No filename slots — Trellis will not rename files",
@@ -329,8 +326,6 @@ const EN: Record<string, string> = {
 	"setting.treeName": "Show Trellis in the sidebar",
 	"setting.treeDesc":
 		"Browse managed tags and notes as a tree.",
-	"setting.treeOptions": "View options",
-	"setting.treeOptionsDesc": "Name, sorting, rows, and toolbar actions.",
 	"setting.treeTagKeyName": "Tag used in the note tree",
 	"setting.treeTagKeyDesc":
 		"Choose the branch used by the note-focused view.",
@@ -633,7 +628,6 @@ const KO: Record<string, string> = {
 		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
 	"setting.tagAdd": "태그 추가",
 	"setting.tagAddDesc": "새 태그 분기를 만듭니다.",
-	"setting.tagAddFields": "이름과 네임스페이스",
 	"setting.tagNamePlaceholder": "표시 이름, 예: Projects",
 	"setting.tagNamespacePlaceholder": "네임스페이스, 예: projects",
 	"setting.add": "추가",
@@ -669,8 +663,6 @@ const KO: Record<string, string> = {
 		"태그가 바뀌면 파일명도 맞춥니다.",
 	"setting.filenameSyncOff":
 		"태그가 바뀌어도 파일명은 유지합니다.",
-	"setting.filenameEditor": "파일명 형식 편집",
-	"setting.filenameEditorDesc": "슬롯 순서, 구분자, 표시 형식을 바꿉니다.",
 	"setting.preview": "미리보기",
 	"setting.previewName": "프로젝트 개요",
 	"setting.previewUnmanaged": "파일명 슬롯 없음 — 트렐리가 파일명을 바꾸지 않음",
@@ -817,8 +809,6 @@ const KO: Record<string, string> = {
 	"setting.treeName": "사이드바에 Trellis 표시",
 	"setting.treeDesc":
 		"관리 태그와 노트를 트리로 탐색합니다.",
-	"setting.treeOptions": "보기 옵션",
-	"setting.treeOptionsDesc": "이름, 정렬, 행 표시, 헤더 동작을 설정합니다.",
 	"setting.treeTagKeyName": "노트 트리에 사용할 태그",
 	"setting.treeTagKeyDesc":
 		"노트 중심 보기에서 사용할 태그 분기를 고릅니다.",

@@ -251,61 +251,44 @@ button.trellis-destructive:hover {
 	line-height: 1.4;
 }
 
-.trellis-settings-disclosure {
-	margin: var(--size-4-2) 0 var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	padding: var(--size-4-2) var(--size-4-3);
-}
-
-.trellis-settings-disclosure > summary {
-	cursor: pointer;
-	font-weight: var(--font-semibold);
-	color: var(--text-normal);
-}
-
-.trellis-settings-disclosure-desc {
-	margin: var(--size-4-2) 0 0;
-}
-
-.trellis-settings-disclosure-body > .setting-item:last-child {
-	border-bottom: 0;
-}
-
-.trellis-settings-card .trellis-settings-disclosure,
-.trellis-slot-card .trellis-settings-disclosure {
-	margin-bottom: var(--size-4-2);
-}
-
 .trellis-settings-card {
-	margin: var(--size-4-2) 0;
+	margin: var(--size-4-3) 0;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	padding: var(--size-4-2) var(--size-4-3);
 }
 
-.trellis-settings-card-summary {
-	cursor: pointer;
+.trellis-settings-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-3);
+	padding: var(--size-4-2) 0 var(--size-4-1);
 	color: var(--text-normal);
 }
 
 .trellis-settings-card-title {
 	font-weight: var(--font-semibold);
-	margin-inline-start: var(--size-4-1);
 }
 
 .trellis-settings-card-meta {
-	float: right;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
 
-.trellis-settings-card-body {
-	padding-top: var(--size-4-2);
-}
-
 .trellis-settings-card-body > .setting-item:last-child {
 	border-bottom: 0;
+}
+
+.trellis-settings-toggle-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0 var(--size-4-5);
+	margin-bottom: var(--size-4-3);
+}
+
+.trellis-settings-toggle-grid .setting-item {
+	padding-block: var(--size-4-2);
 }
 
 /* Live tag inventory stays compact; path samples are subordinate and indented
@@ -314,19 +297,8 @@ button.trellis-destructive:hover {
 	margin-bottom: var(--size-4-3);
 }
 
-.trellis-tag-inventory-paths {
-	margin: 0 0 var(--size-4-2) var(--size-4-4);
-	color: var(--text-muted);
-	font-size: var(--font-ui-small);
-}
-
-.trellis-tag-inventory-paths > summary {
-	cursor: pointer;
-}
-
 .trellis-inventory-danger .setting-item-name,
-.trellis-inventory-danger .setting-item-description,
-.trellis-inventory-danger-details {
+.trellis-inventory-danger .setting-item-description {
 	color: var(--text-error);
 }
 
@@ -374,6 +346,10 @@ button.trellis-destructive:hover {
 }
 
 @media (max-width: 600px) {
+	.trellis-settings-toggle-grid {
+		grid-template-columns: 1fr;
+	}
+
 	.trellis-settings-card .setting-item,
 	.trellis-slot-card .setting-item,
 	.trellis-gap-row {

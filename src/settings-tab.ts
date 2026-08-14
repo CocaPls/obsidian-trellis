@@ -89,10 +89,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsEl: HTMLElement | null = null;
 	private statsTimer: number | null = null;
 	private statsCleanups: (() => void)[] = [];
-	/** Session-only disclosure state. It keeps the settings page compact without
-	 * making an open section snap shut whenever one of its controls re-renders. */
-	private disclosureState = new Map<string, boolean>();
-
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -142,13 +138,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		this.renderSidebar(containerEl);
 
 		new Setting(containerEl).setName(t("setting.section.status")).setHeading();
-		const status = this.renderDisclosure(
-			containerEl,
-			"vault-status",
-			t("setting.statusDisclosure"),
-			t("setting.statusDisclosureDesc")
-		);
-		this.renderStats(status);
+		this.renderStats(containerEl);
 	}
 
 	private resetDraft() {
@@ -156,49 +146,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 		this.inventorySchemaFingerprint = "";
 	}
 
-	private renderDisclosure(
+	private renderCard(
 		containerEl: HTMLElement,
-		key: string,
-		title: string,
-		description: string,
-		defaultOpen = false
-	): HTMLElement {
-		const details = containerEl.createEl("details", {
-			cls: "trellis-settings-disclosure",
-		});
-		details.open = this.disclosureState.get(key) ?? defaultOpen;
-		details.createEl("summary", { text: title });
-		if (description) {
-			details.createEl("p", {
-				cls: "setting-item-description trellis-settings-disclosure-desc",
-				text: description,
-			});
-		}
-		details.addEventListener("toggle", () => {
-			this.disclosureState.set(key, details.open);
-		});
-		return details.createDiv({ cls: "trellis-settings-disclosure-body" });
-	}
-
-	private renderCardDisclosure(
-		containerEl: HTMLElement,
-		key: string,
 		title: string,
 		meta: string
 	): HTMLElement {
-		const details = containerEl.createEl("details", {
+		const card = containerEl.createDiv({
 			cls: "trellis-settings-card",
 		});
-		details.open = this.disclosureState.get(key) ?? false;
-		const summary = details.createEl("summary", {
-			cls: "trellis-settings-card-summary",
+		const header = card.createDiv({
+			cls: "trellis-settings-card-header",
 		});
-		summary.createSpan({ cls: "trellis-settings-card-title", text: title });
-		summary.createEl("code", { cls: "trellis-settings-card-meta", text: meta });
-		details.addEventListener("toggle", () => {
-			this.disclosureState.set(key, details.open);
-		});
-		return details.createDiv({ cls: "trellis-settings-card-body" });
+		header.createSpan({ cls: "trellis-settings-card-title", text: title });
+		header.createEl("code", { cls: "trellis-settings-card-meta", text: meta });
+		return card.createDiv({ cls: "trellis-settings-card-body" });
 	}
 
 	private renderTagDefinitions(containerEl: HTMLElement) {
@@ -241,16 +202,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const ownerRoot = this.renderDisclosure(
-			containerEl,
-			"owner-root",
-			t("setting.ownerAdvanced"),
-			t("setting.ownerAdvancedDesc")
-		);
 		let pendingRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
-		new Setting(ownerRoot)
-			.setName(t("setting.rootName"))
-			.setDesc(t("setting.rootDesc"))
+		new Setting(containerEl)
+			.setName(t("setting.ownerAdvanced"))
+			.setDesc(t("setting.ownerAdvancedDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
@@ -275,14 +230,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		let newName = "";
 		let newNamespace = "";
-		const addTag = this.renderDisclosure(
-			containerEl,
-			"add-tag",
-			t("setting.tagAdd"),
-			t("setting.tagAddDesc")
-		);
-		new Setting(addTag)
-			.setName(t("setting.tagAddFields"))
+		new Setting(containerEl)
+			.setName(t("setting.tagAdd"))
+			.setDesc(t("setting.tagAddDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder(t("setting.tagNamePlaceholder"))
@@ -312,9 +262,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
-		const card = this.renderCardDisclosure(
+		const card = this.renderCard(
 			containerEl,
-			`definition-${definition.id}`,
 			definition.name || definition.namespace,
 			`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`
 		);
@@ -369,14 +318,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
-		const advanced = this.renderDisclosure(
-			card,
-			`tag-${definition.id}`,
-			t("setting.tagAdvanced"),
-			t("setting.tagAdvancedDesc")
-		);
-
-		new Setting(advanced)
+		new Setting(card)
 			.setName(t("setting.tagColor"))
 			.setDesc(t("setting.tagColorDesc"))
 			.addColorPicker((picker) =>
@@ -395,7 +337,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(advanced)
+		new Setting(card)
 			.setName(t("setting.valueRule"))
 			.setDesc(t("setting.valueRuleDesc"))
 			.addDropdown((dropdown) =>
@@ -413,9 +355,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 			);
-		if (definition.valueRule) this.renderValueRuleOptions(advanced, definition);
+		if (definition.valueRule) this.renderValueRuleOptions(card, definition);
 
-		new Setting(advanced)
+		new Setting(card)
 			.setName(t("setting.tagRemove"))
 			.setDesc(t("setting.tagRemoveDesc"))
 			.addButton((button) =>
@@ -624,12 +566,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const preview = containerEl.createDiv({ cls: "trellis-filename-preview" });
 		preview.createDiv({ cls: "trellis-filename-preview-label", text: t("setting.preview") });
 		preview.createEl("code", { text: this.filenamePreview(schema) });
-		const editor = this.renderDisclosure(
-			containerEl,
-			"filename-editor",
-			t("setting.filenameEditor"),
-			t("setting.filenameEditorDesc")
-		);
+		const editor = containerEl;
 
 		schema.slots.forEach((slot, index) => {
 			this.renderFilenameSlot(editor, schema, slot, index);
@@ -803,14 +740,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 				});
 		}
-		const formatting = this.renderDisclosure(
-			card,
-			`slot-${slot.id ?? index}`,
-			t("setting.slotFormatting"),
-			t("setting.slotFormattingDesc")
-		);
-		if (slot.role === "tag") this.renderHierarchySetting(formatting, slot);
-		this.renderWrapperSetting(formatting, slot);
+		if (slot.role === "tag") this.renderHierarchySetting(card, slot);
+		this.renderWrapperSetting(card, slot);
 	}
 
 	private renderHierarchySetting(containerEl: HTMLElement, slot: KeySlot) {
@@ -1022,12 +953,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
-		const options = this.renderDisclosure(
-			containerEl,
-			"sidebar-options",
-			t("setting.treeOptions"),
-			t("setting.treeOptionsDesc")
-		);
+		const options = containerEl;
 		const visible = this.plugin
 			.tagDefinitions()
 			.filter((definition) => definition.sidebarVisible);
@@ -1159,12 +1085,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 				);
 		}
 
-		const headerButtons = this.renderDisclosure(
-			options,
-			"sidebar-buttons",
-			t("setting.headerButtonsName"),
-			t("setting.headerButtonsDesc")
-		);
+		new Setting(options)
+			.setName(t("setting.headerButtonsName"))
+			.setDesc(t("setting.headerButtonsDesc"))
+			.setHeading();
+		const headerButtons = options.createDiv({ cls: "trellis-settings-toggle-grid" });
 		for (const id of HEADER_BUTTON_IDS) {
 			new Setting(headerButtons)
 				.setName(t(`setting.hb.${id}`))
@@ -1297,22 +1222,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 					unmanaged,
 				})
 			);
-		if (snapshot.combinations.length > 0) {
-			const details = this.statsEl.createEl("details", {
-				cls: "trellis-tag-inventory-paths",
-			});
-			details.createEl("summary", {
-				text: t("setting.statsCombinationsShow", {
-					n: Math.min(8, snapshot.combinations.length),
-				}),
-			});
-			for (const combination of snapshot.combinations.slice(0, 8)) {
-				details.createDiv({
-					text: `${combination.namespaces.map((namespace) => `#${namespace}`).join(" + ")} · ${combination.notes}`,
-					cls: "setting-item-description",
-				});
-			}
-		}
 		if (snapshot.filenameCollisions.length > 0) {
 			const setting = new Setting(this.statsEl)
 				.setName(t("setting.statsCollisionName"))
@@ -1322,20 +1231,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 				);
 			setting.settingEl.addClass("trellis-inventory-danger");
-			const details = this.statsEl.createEl("details", {
-				cls: "trellis-tag-inventory-paths trellis-inventory-danger-details",
-			});
-			details.createEl("summary", {
-				text: t("setting.statsCollisionShow", {
-					n: Math.min(5, snapshot.filenameCollisions.length),
-				}),
-			});
-			for (const group of snapshot.filenameCollisions.slice(0, 5)) {
-				details.createDiv({
-					text: `${group.targetPath} ← ${group.notePaths.join(", ")}`,
-					cls: "setting-item-description",
-				});
-			}
 		}
 		if (snapshot.filenameDrift.length > 0) {
 			new Setting(this.statsEl)
@@ -1369,20 +1264,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						roots: key.namespaceNodeNotes,
 					})
 				);
-			if (key.paths.length > 0) {
-				const details = this.statsEl.createEl("details", {
-					cls: "trellis-tag-inventory-paths",
-				});
-				details.createEl("summary", {
-					text: t("setting.statsPaths", { n: Math.min(5, key.paths.length) }),
-				});
-				for (const path of key.paths.slice(0, 5)) {
-					details.createDiv({
-						text: `#${path.tagPath} · ${path.count}`,
-						cls: "setting-item-description",
-					});
-				}
-			}
 		}
 		if (snapshot.rootOwnedUnmatchedOccurrences > 0) {
 			new Setting(this.statsEl)
