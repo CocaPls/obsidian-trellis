@@ -41,6 +41,8 @@ type FilenameSelection =
 	| { kind: "slot"; index: number }
 	| { kind: "gap"; index: number };
 
+type SettingsSection = "overview" | "tags" | "filename" | "views";
+
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
 		rootNamespace: schema.rootNamespace,
@@ -92,6 +94,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsTimer: number | null = null;
 	private statsCleanups: (() => void)[] = [];
 	private filenameSelection: FilenameSelection | null = null;
+	private activeSection: SettingsSection = "overview";
+	private selectedTagDefinitionId: string | null = null;
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -115,6 +119,130 @@ export class TrellisSettingTab extends PluginSettingTab {
 		containerEl.addClass("trellis-settings");
 		this.ensureTagInventory();
 
+		containerEl.createEl("p", {
+			cls: "setting-item-description trellis-settings-intro",
+			text: t("setting.intro"),
+		});
+		this.renderNavigation(containerEl);
+		const panel = containerEl.createDiv({
+			cls: "trellis-settings-panel",
+			attr: {
+				role: "tabpanel",
+				id: `trellis-settings-panel-${this.activeSection}`,
+				"aria-labelledby": `trellis-settings-tab-${this.activeSection}`,
+			},
+		});
+		if (this.activeSection === "overview") this.renderOverview(panel);
+		else if (this.activeSection === "tags") this.renderTagDefinitions(panel);
+		else if (this.activeSection === "filename") this.renderFilenameStructure(panel);
+		else this.renderViews(panel);
+	}
+
+	private renderNavigation(containerEl: HTMLElement) {
+		const sections: SettingsSection[] = ["overview", "tags", "filename", "views"];
+		const nav = containerEl.createDiv({
+			cls: "trellis-settings-nav",
+			attr: { role: "tablist", "aria-label": t("setting.navLabel") },
+		});
+		for (const section of sections) {
+			const selected = section === this.activeSection;
+			const button = nav.createEl("button", {
+				cls: "trellis-settings-nav-item",
+				text: t(`setting.nav.${section}`),
+				attr: {
+					type: "button",
+					role: "tab",
+					id: `trellis-settings-tab-${section}`,
+					"aria-selected": String(selected),
+					"aria-controls": `trellis-settings-panel-${section}`,
+					tabindex: selected ? "0" : "-1",
+				},
+			});
+			button.classList.toggle("is-active", selected);
+			const activate = () => {
+				this.activeSection = section;
+				this.render();
+				this.containerEl.scrollTop = 0;
+			};
+			button.addEventListener("click", activate);
+			button.addEventListener("keydown", (event) => {
+				let nextIndex = sections.indexOf(section);
+				if (event.key === "ArrowRight") nextIndex = (nextIndex + 1) % sections.length;
+				else if (event.key === "ArrowLeft") {
+					nextIndex = (nextIndex - 1 + sections.length) % sections.length;
+				} else if (event.key === "Home") nextIndex = 0;
+				else if (event.key === "End") nextIndex = sections.length - 1;
+				else return;
+				event.preventDefault();
+				this.activeSection = sections[nextIndex];
+				this.render();
+				this.containerEl
+					.querySelector<HTMLElement>(".trellis-settings-nav-item.is-active")
+					?.focus();
+			});
+		}
+	}
+
+	private renderOverview(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("setting.overviewName")).setHeading();
+		containerEl.createEl("p", {
+			cls: "setting-item-description trellis-section-description",
+			text: t("setting.overviewDesc"),
+		});
+		const snapshot = this.tagInventory?.snapshot();
+		if (snapshot) {
+			const metrics = containerEl.createDiv({ cls: "trellis-settings-metrics" });
+			this.renderMetric(
+				metrics,
+				t("setting.metricManaged"),
+				`${snapshot.managedNotes} / ${snapshot.totalNotes}`
+			);
+			this.renderMetric(
+				metrics,
+				t("setting.metricPaths"),
+				String(snapshot.uniqueManagedPaths)
+			);
+			this.renderMetric(
+				metrics,
+				t("setting.metricDrift"),
+				String(snapshot.filenameDrift.length),
+				snapshot.filenameDrift.length > 0 ? "warning" : "ok"
+			);
+			this.renderMetric(
+				metrics,
+				t("setting.metricCollisions"),
+				String(snapshot.filenameCollisions.length),
+				snapshot.filenameCollisions.length > 0 ? "danger" : "ok"
+			);
+		}
+
+		new Setting(containerEl)
+			.setName(t("setting.overviewFilename"))
+			.setDesc(
+				this.plugin.settings.filenameSyncEnabled
+					? t("setting.filenameSyncOn")
+					: t("setting.filenameSyncOff")
+			)
+			.addButton((button) =>
+				button.setButtonText(t("setting.openSettings")).onClick(() => {
+					this.activeSection = "filename";
+					this.render();
+				})
+			);
+		new Setting(containerEl)
+			.setName(t("setting.overviewViews"))
+			.setDesc(
+				this.plugin.settings.treeViewEnabled
+					? t("setting.treeEnabled")
+					: t("setting.treeDisabled")
+			)
+			.addButton((button) =>
+				button.setButtonText(t("setting.openSettings")).onClick(() => {
+					this.activeSection = "views";
+					this.render();
+				})
+			);
+
 		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
 		new Setting(containerEl)
 			.setName(t("setting.langName"))
@@ -136,12 +264,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		this.renderTagDefinitions(containerEl);
-		this.renderFilenameStructure(containerEl);
-		this.renderSidebar(containerEl);
-
 		new Setting(containerEl).setName(t("setting.section.status")).setHeading();
 		this.renderStats(containerEl);
+	}
+
+	private renderMetric(
+		containerEl: HTMLElement,
+		label: string,
+		value: string,
+		state: "ok" | "warning" | "danger" = "ok"
+	) {
+		const metric = containerEl.createDiv({ cls: `trellis-settings-metric is-${state}` });
+		metric.createDiv({ cls: "trellis-settings-metric-value", text: value });
+		metric.createDiv({ cls: "trellis-settings-metric-label", text: label });
 	}
 
 	private resetDraft() {
@@ -171,40 +306,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
 		});
-		// Keep display-mode examples neutral and stable. Using the first live
-		// definition here leaked a user's own taxonomy into screenshots and made
-		// the four choices harder to compare after a namespace rename.
-		const exampleName = "Projects";
-		const examplePath = "projects/website/design";
-		const exampleTerminal = "design";
-		new Setting(containerEl)
-			.setName(t("setting.propertyTagDisplayName"))
-			.setDesc(t("setting.propertyTagDisplayDesc"))
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("full", t("propertyTagDisplay.full", { path: examplePath }))
-					.addOption("name", t("propertyTagDisplay.name", { name: exampleName }))
-					.addOption(
-						"name-terminal",
-						t("propertyTagDisplay.nameTerminal", {
-							name: exampleName,
-							terminal: exampleTerminal,
-						})
-					)
-					.addOption(
-						"terminal",
-						t("propertyTagDisplay.terminal", { terminal: exampleTerminal })
-					)
-					.setValue(this.plugin.settings.propertyTagDisplay)
-					.onChange((value) => {
-						const mode =
-							value === "name" || value === "name-terminal" || value === "terminal"
-								? value
-								: "full";
-						void this.plugin.setPropertyTagDisplay(mode);
-					})
-			);
-
 		let pendingRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
 		new Setting(containerEl)
 			.setName(t("setting.ownerAdvanced"))
@@ -227,8 +328,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
-		for (const definition of this.plugin.tagDefinitions()) {
-			this.renderTagDefinition(containerEl, definition);
+		const definitions = this.plugin.tagDefinitions();
+		if (!definitions.some((definition) => definition.id === this.selectedTagDefinitionId)) {
+			this.selectedTagDefinitionId = definitions[0]?.id ?? null;
+		}
+		if (definitions.length > 0) {
+			const list = containerEl.createDiv({ cls: "trellis-tag-definition-list" });
+			for (const definition of definitions) {
+				this.renderTagDefinitionChoice(list, definition);
+			}
+			const selected = definitions.find(
+				(definition) => definition.id === this.selectedTagDefinitionId
+			);
+			if (selected) this.renderTagDefinition(containerEl, selected);
 		}
 
 		let newName = "";
@@ -258,10 +370,54 @@ export class TrellisSettingTab extends PluginSettingTab {
 						new Notice(t("notice.tagDefinitionExists"));
 						return;
 					}
+					this.selectedTagDefinitionId = id;
 					this.resetDraft();
 					this.render();
 				})
 			);
+	}
+
+	private renderTagDefinitionChoice(
+		containerEl: HTMLElement,
+		definition: TrellisTagDefinition
+	) {
+		const selected = definition.id === this.selectedTagDefinitionId;
+		const inFilename = this.plugin.settings.schema.slots.some(
+			(slot) => slot.role === "tag" && slot.tagDefinitionId === definition.id
+		);
+		const button = containerEl.createEl("button", {
+			cls: "trellis-tag-definition-choice",
+			attr: { type: "button", "aria-pressed": String(selected) },
+		});
+		button.classList.toggle("is-selected", selected);
+		const color = button.createSpan({ cls: "trellis-tag-definition-color" });
+		color.style.setProperty("--trellis-tag-color", definition.color || "#7c6df2");
+		const text = button.createSpan({ cls: "trellis-tag-definition-text" });
+		text.createSpan({
+			cls: "trellis-tag-definition-name",
+			text: definition.name || definition.namespace,
+		});
+		text.createEl("code", {
+			cls: "trellis-tag-definition-path",
+			text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
+		});
+		const badges = button.createSpan({ cls: "trellis-tag-definition-badges" });
+		if (inFilename) {
+			badges.createSpan({
+				cls: "trellis-tag-definition-badge",
+				text: t("setting.tagBadgeFilename"),
+			});
+		}
+		if (definition.sidebarVisible) {
+			badges.createSpan({
+				cls: "trellis-tag-definition-badge",
+				text: t("setting.tagBadgeSidebar"),
+			});
+		}
+		button.addEventListener("click", () => {
+			this.selectedTagDefinitionId = definition.id;
+			this.render();
+		});
 	}
 
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
@@ -278,7 +434,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.addText((text) => {
 				text.setValue(definition.name).onChange((value) => (pendingName = value));
 				text.inputEl.addEventListener("change", () => {
-					void this.plugin.updateTagDefinition(definition.id, { name: pendingName });
+					void this.plugin
+						.updateTagDefinition(definition.id, { name: pendingName })
+						.then(() => this.render());
 				});
 			});
 
@@ -318,6 +476,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					await this.plugin.updateTagDefinition(definition.id, {
 						sidebarVisible: value,
 					});
+					this.render();
 				})
 			);
 
@@ -372,10 +531,46 @@ export class TrellisSettingTab extends PluginSettingTab {
 							new Notice(t("notice.tagDefinitionInUse"));
 							return;
 						}
+						this.selectedTagDefinitionId = null;
 						this.resetDraft();
 						this.render();
 					})
 			);
+	}
+
+	private renderViews(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("setting.section.views")).setHeading();
+		const exampleName = "Projects";
+		const examplePath = "projects/website/design";
+		const exampleTerminal = "design";
+		new Setting(containerEl)
+			.setName(t("setting.propertyTagDisplayName"))
+			.setDesc(t("setting.propertyTagDisplayDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("full", t("propertyTagDisplay.full", { path: examplePath }))
+					.addOption("name", t("propertyTagDisplay.name", { name: exampleName }))
+					.addOption(
+						"name-terminal",
+						t("propertyTagDisplay.nameTerminal", {
+							name: exampleName,
+							terminal: exampleTerminal,
+						})
+					)
+					.addOption(
+						"terminal",
+						t("propertyTagDisplay.terminal", { terminal: exampleTerminal })
+					)
+					.setValue(this.plugin.settings.propertyTagDisplay)
+					.onChange((value) => {
+						const mode =
+							value === "name" || value === "name-terminal" || value === "terminal"
+								? value
+								: "full";
+						void this.plugin.setPropertyTagDisplay(mode);
+					})
+			);
+		this.renderSidebar(containerEl);
 	}
 
 	private renderValueRuleOptions(containerEl: HTMLElement, definition: TrellisTagDefinition) {
@@ -932,6 +1127,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.onChange((value) => {
 						if (slot.wrapper?.kind === "custom") slot.wrapper.left = value;
 					});
+				text.inputEl.addEventListener("change", () => this.render());
 			})
 			.addText((text) => {
 				rightInput = text.inputEl;
@@ -941,6 +1137,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.onChange((value) => {
 						if (slot.wrapper?.kind === "custom") slot.wrapper.right = value;
 					});
+				text.inputEl.addEventListener("change", () => this.render());
 			});
 		toggleCustom(current === "custom");
 	}
@@ -979,6 +1176,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setPlaceholder("~")
 					.setValue(BOUNDARY_PRESETS.includes(current) ? "" : current)
 					.onChange((value) => (schema.separators[index] = value));
+				text.inputEl.addEventListener("change", () => this.render());
 				text.inputEl.classList.toggle("trellis-hidden", BOUNDARY_PRESETS.includes(current));
 			});
 		new Setting(containerEl)
@@ -1249,7 +1447,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 		if (this.statsTimer !== null) window.clearTimeout(this.statsTimer);
 		this.statsTimer = window.setTimeout(() => {
 			this.statsTimer = null;
-			this.renderStatsContents();
+			if (this.activeSection === "overview") this.render();
+			else this.renderStatsContents();
 		}, 200);
 	}
 

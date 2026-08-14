@@ -241,14 +241,84 @@ button.trellis-destructive:hover {
 	display: none;
 }
 
-/* Keep settings calm: one clear vertical flow, with editing tools disclosed
-   only when requested. */
-.trellis-settings > .setting-item-heading:not(:first-child) {
+/* Settings use task-level navigation so the user never has to scan one long
+   implementation-shaped form. */
+.trellis-settings-intro {
+	margin-top: 0;
+	margin-bottom: var(--size-4-4);
+}
+
+.trellis-settings-nav {
+	display: flex;
+	gap: var(--size-4-1);
+	overflow-x: auto;
+	margin-bottom: var(--size-4-5);
+	padding: var(--size-4-1);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.trellis-settings-nav-item {
+	flex: 1 0 auto;
+	border: 0;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+}
+
+.trellis-settings-nav-item:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.trellis-settings-nav-item.is-active {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	box-shadow: var(--shadow-s);
+}
+
+.trellis-settings-panel > .setting-item-heading:not(:first-child) {
 	margin-top: var(--size-4-6);
 }
 
 .trellis-settings .setting-item-description {
 	line-height: 1.4;
+}
+
+.trellis-settings-metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-4);
+}
+
+.trellis-settings-metric {
+	min-width: 0;
+	padding: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+}
+
+.trellis-settings-metric.is-warning {
+	border-color: var(--color-yellow);
+}
+
+.trellis-settings-metric.is-danger {
+	border-color: var(--text-error);
+}
+
+.trellis-settings-metric-value {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+.trellis-settings-metric-label {
+	margin-top: var(--size-4-1);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 .trellis-settings-card {
@@ -278,6 +348,77 @@ button.trellis-destructive:hover {
 
 .trellis-settings-card-body > .setting-item:last-child {
 	border-bottom: 0;
+}
+
+.trellis-tag-definition-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--size-4-2);
+	margin: var(--size-4-3) 0;
+}
+
+.trellis-tag-definition-choice {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-width: 0;
+	padding: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	background: var(--background-secondary);
+	text-align: start;
+}
+
+.trellis-tag-definition-choice:hover,
+.trellis-tag-definition-choice.is-selected {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+.trellis-tag-definition-color {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--trellis-tag-color);
+}
+
+.trellis-tag-definition-text {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.trellis-tag-definition-name {
+	overflow: hidden;
+	font-weight: var(--font-medium);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trellis-tag-definition-path {
+	overflow: hidden;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trellis-tag-definition-badges {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--size-4-1);
+}
+
+.trellis-tag-definition-badge {
+	padding: 2px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 .trellis-settings-toggle-grid {
@@ -362,6 +503,11 @@ button.trellis-destructive:hover {
 }
 
 @media (max-width: 600px) {
+	.trellis-settings-metrics,
+	.trellis-tag-definition-list {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.trellis-settings-toggle-grid {
 		grid-template-columns: 1fr;
 	}
