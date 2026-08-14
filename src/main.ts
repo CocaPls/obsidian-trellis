@@ -300,6 +300,9 @@ export default class TrellisPlugin extends Plugin {
 	/** Suppress metadata-triggered live sync while guarded automation owns a
 	 * note's frontmatter + filename transaction. */
 	private automationApplying = new Set<string>();
+	/** Global automation-write lock. The flag is set synchronously before the
+	 * first await so two applies, or apply + bulk, cannot both enter. */
+	private automationWriteActive = false;
 	/** Files already warned about carrying multiple location tags (one note =
 	 *  one location). Cleared when a file returns to a single location tag. */
 	private multiWarned = new Set<string>();
@@ -660,10 +663,13 @@ export default class TrellisPlugin extends Plugin {
 	/** Only one vault-wide mutation may run at a time. This prevents two command
 	 * palette actions from interleaving their writes and overwriting undo state. */
 	private beginBulkOperation(label: string): boolean {
-		if (this.activeBulkOperation !== null) {
+		const active =
+			this.activeBulkOperation ??
+			(this.automationWriteActive ? t("operation.automation") : null);
+		if (active !== null) {
 			new Notice(
 				t("notice.bulkBusy", {
-					active: this.activeBulkOperation,
+					active,
 				})
 			);
 			return false;
@@ -748,6 +754,31 @@ export default class TrellisPlugin extends Plugin {
 	 * frontmatter is restored; if that rollback fails too, the structured error
 	 * reports both failures instead of pretending the operation was atomic. */
 	async applyChange(
+		plan: TrellisChangePlan
+	): Promise<AutomationResult<TrellisApplyResult>> {
+		const active =
+			this.activeBulkOperation ??
+			(this.automationWriteActive ? "automation apply" : null);
+		if (active !== null) {
+			return {
+				ok: false,
+				error: {
+					code: "write-in-progress",
+					message: "Another Trellis write is already in progress.",
+					details: { active },
+				},
+			};
+		}
+		this.automationWriteActive = true;
+		try {
+			return await this.applyChangeUnlocked(plan);
+		} finally {
+			this.automationWriteActive = false;
+		}
+	}
+
+	/** Apply after the global managed-write gate has been acquired. */
+	private async applyChangeUnlocked(
 		plan: TrellisChangePlan
 	): Promise<AutomationResult<TrellisApplyResult>> {
 		const stateResult = this.noteState(plan.expected.path);

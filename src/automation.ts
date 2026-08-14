@@ -17,6 +17,7 @@ export type AutomationErrorCode =
 	| "not-a-markdown-file"
 	| "metadata-unavailable"
 	| "stale-plan"
+	| "write-in-progress"
 	| "invalid-request"
 	| "unknown-namespace"
 	| "invalid-tag-path"

@@ -76,7 +76,8 @@ const EN: Record<string, string> = {
 	"notice.namespaceUndone": "restored the previous namespace on {n} note(s)",
 	"notice.namespaceUndoStale":
 		"the schema changed after this namespace migration; restore that schema before undoing",
-	"notice.bulkBusy": "finish the current bulk operation first: {active}",
+	"notice.bulkBusy": "finish the current Trellis change first: {active}",
+	"operation.automation": "automation apply",
 	"notice.bootstrapped":
 		'bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
 	"notice.bootstrapProgress": "bootstrapping… {done}/{total}",
@@ -408,7 +409,8 @@ const KO: Record<string, string> = {
 	"notice.namespaceUndone": "{n}개 노트를 이전 네임스페이스로 복원했습니다",
 	"notice.namespaceUndoStale":
 		"네임스페이스 변경 뒤 스키마가 달라졌습니다. 해당 스키마를 먼저 복원하세요",
-	"notice.bulkBusy": "현재 일괄 작업을 먼저 끝내세요: {active}",
+	"notice.bulkBusy": "현재 Trellis 변경을 먼저 끝내세요: {active}",
+	"operation.automation": "자동화 적용",
 	"notice.bootstrapped":
 		'{n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
 	"notice.bootstrapProgress": "부트스트랩 중… {done}/{total}",
