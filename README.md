@@ -2,6 +2,9 @@
 
 **English** | [한국어](README.ko.md)
 
+[![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
+· [Community plugin page](https://community.obsidian.md/plugins/trellis)
+
 Trellis keeps a hierarchical **location tag** as the source of truth for a note,
 and mirrors it into the note's **filename prefix** — automatically, and without
 breaking any links.

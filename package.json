@@ -21,6 +21,14 @@
 	],
 	"author": "CocaPls",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/CocaPls/obsidian-trellis.git"
+	},
+	"bugs": {
+		"url": "https://github.com/CocaPls/obsidian-trellis/issues"
+	},
+	"homepage": "https://community.obsidian.md/plugins/trellis",
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
 		"@types/node": "^22.0.0",

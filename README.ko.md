@@ -2,6 +2,9 @@
 
 [English](README.md) | **한국어**
 
+[![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
+· [커뮤니티 플러그인 페이지](https://community.obsidian.md/plugins/trellis)
+
 Trellis는 노트의 계층형 **위치 태그**를 원본(source of truth)으로 삼아, 그 값을
 노트의 **파일명 접두어**에 자동으로 반영합니다. 링크는 깨지지 않습니다.
 
