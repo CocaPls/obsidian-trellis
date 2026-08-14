@@ -16,6 +16,7 @@ import {
 	isMultiKey,
 	isValidNamespace,
 	isValidSeparator,
+	nsPath,
 	primaryNamespace,
 	primarySeparator,
 	primarySeparatorSymbol,
@@ -23,6 +24,7 @@ import {
 	schemaFromLegacy,
 	separatorConflicts,
 	separatorSpacingAt,
+	tagNamespaces,
 	tagPosition,
 	normalizeTagList,
 } from "./tagkey";
@@ -389,6 +391,26 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		// ── Sidebar tree view ────────────────────────────────────────────────
 		new Setting(containerEl).setName(t("setting.section.tree")).setHeading();
+
+		const treeNamespaces = tagNamespaces(this.plugin.settings.schema);
+		if (treeNamespaces.length > 1) {
+			new Setting(containerEl)
+				.setName(t("setting.treeTagKeyName"))
+				.setDesc(t("setting.treeTagKeyDesc"))
+				.addDropdown((dropdown) => {
+					for (const namespace of treeNamespaces) {
+						dropdown.addOption(
+							namespace,
+							`#${nsPath(this.plugin.settings.schema, namespace)}/…`
+						);
+					}
+					dropdown
+						.setValue(this.plugin.treeTagKeyNamespace())
+						.onChange((namespace) =>
+							void this.plugin.setTreeTagKeyNamespace(namespace)
+						);
+				});
+		}
 
 		new Setting(containerEl)
 			.setName(t("setting.treeName"))

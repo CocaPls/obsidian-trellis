@@ -10,7 +10,7 @@ import {
 	portableBasenameIssue,
 	slotTagkeys,
 	syncedBasenameMulti,
-	tagNamespaces,
+	matchTagKey,
 } from "./tagkey.ts";
 
 export type AutomationErrorCode =
@@ -148,15 +148,10 @@ export function inspectNoteState(
 		syncedBasenameMulti(state.basename, state.allTags, schema) ?? state.basename;
 	const duplicates = duplicateLocationGroups(state.allTags, schema);
 	const frontmatter = new Set(state.frontmatterTags.map(withoutHash));
-	const managedNamespaces = tagNamespaces(schema).map((namespace) =>
-		nsPath(schema, namespace)
-	);
 	const inlineManaged = state.allTags
 		.map(withoutHash)
 		.filter(
-			(tag) =>
-				!frontmatter.has(tag) &&
-				managedNamespaces.some((namespace) => pathInNamespace(tag, namespace))
+			(tag) => !frontmatter.has(tag) && matchTagKey(tag, schema) !== null
 		);
 	const issues: InspectionIssue[] = [];
 	if (expectedBasename !== state.basename) {

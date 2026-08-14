@@ -196,6 +196,8 @@ interface TrellisSettings {
 	treeShowUntagged: boolean;
 	/** Nested mode: note rows show the filename or only the tag segment. */
 	treeLabelMode: TreeLabelMode;
+	/** Namespace used as the single axis in the classic notes-only tree. */
+	treeTagKeyNamespace: string;
 	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
 	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
@@ -234,6 +236,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeShowRoot: true,
 	treeShowUntagged: true,
 	treeLabelMode: "filename",
+	treeTagKeyNamespace: "",
 	language: "auto",
 };
 
@@ -1055,7 +1058,7 @@ export default class TrellisPlugin extends Plugin {
 	private sortedNoteTree(): NoteTreeNode[] {
 		if (this.treeCache) return this.treeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
-		const full = primaryNsPath(this.settings.schema); // root-aware
+		const full = nsPath(this.settings.schema, this.treeTagKeyNamespace());
 		const prefix = `#${full}/`;
 		const exact = `#${full}`;
 		for (const file of this.app.vault.getMarkdownFiles()) {
@@ -1085,17 +1088,15 @@ export default class TrellisPlugin extends Plugin {
 		if (this.tagTreeCache) return this.tagTreeCache;
 		const entries: { tagPath: string; notePath: string }[] = [];
 		const untagged: string[] = [];
-		const fulls = tagNamespaces(this.settings.schema).map((ns) =>
-			nsPath(this.settings.schema, ns)
-		);
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const tags = cache ? getAllTags(cache) ?? [] : [];
 			const managed = [
 				...new Set(
-					tags.filter((t) =>
-						fulls.some((f) => t === `#${f}` || t.startsWith(`#${f}/`))
-					)
+					tags.flatMap((tag) => {
+						const match = matchTagKey(tag, this.settings.schema);
+						return match ? [`#${match.tagPath}`] : [];
+					})
 				),
 			];
 			if (managed.length === 0) {
@@ -1184,7 +1185,7 @@ export default class TrellisPlugin extends Plugin {
 	 *  (created under its parent). Either way the parent stays editable. */
 	private newNoteFromActive() {
 		const active = this.app.workspace.getActiveFile();
-		const tag = active ? this.locationTagOf(active) : null;
+		const tag = active ? this.treeTagOf(active) : null;
 		if (!tag) {
 			this.openNewNoteModal("");
 			return;
@@ -1199,12 +1200,7 @@ export default class TrellisPlugin extends Plugin {
 	 *  suggestion work on EVERY namespace branch the nested view renders, not
 	 *  just the primary one. */
 	private slotForTagPath(tagPath: string): number {
-		const s = this.settings.schema;
-		return s.slots.findIndex((sl) => {
-			if (sl.role !== "tag" || !sl.namespace) return false;
-			const full = nsPath(s, sl.namespace);
-			return tagPath === full || tagPath.startsWith(full + "/");
-		});
+		return matchTagKey(tagPath, this.settings.schema)?.slotIndex ?? -1;
 	}
 
 	/** Direct-child segments already in use under a parent tag path. The
@@ -1375,10 +1371,11 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
-	/** The note's location tag (namespace match, root-aware), without the '#'.
+	/** The note's primary tag-key value (root-aware), without the '#'. Kept for
+	 * primary-only reverse import; the classic tree uses treeTagOf instead.
 	 *  Matches the exact namespace-level tag too — a note tagged exactly
 	 *  #trellis/tree IS managed (it shows in the tree), so bootstrap must not
-	 *  offer to re-tag it and new-note-from-active must keep its context. */
+	 *  offer to re-tag it. */
 	private locationTagOf(file: TFile): string | null {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return null;
@@ -1387,6 +1384,37 @@ export default class TrellisPlugin extends Plugin {
 		const exact = `#${full}`;
 		const tag = (getAllTags(cache) ?? []).find(
 			(t) => t === exact || t.startsWith(prefix)
+		);
+		return tag ? tag.replace(/^#/, "") : null;
+	}
+
+	/** Currently selected tag-key namespace for the classic notes-only tree.
+	 * Empty or stale saved values fall back to the first tag-key. */
+	treeTagKeyNamespace(): string {
+		const requested = this.settings.treeTagKeyNamespace;
+		if (
+			requested &&
+			this.settings.schema.slots.some(
+				(slot) => slot.role === "tag" && slot.namespace === requested
+			)
+		) {
+			return requested;
+		}
+		return primaryNamespace(this.settings.schema);
+	}
+
+	async setTreeTagKeyNamespace(namespace: string) {
+		this.settings.treeTagKeyNamespace = namespace;
+		await this.saveSettings();
+		this.rebuildTrees();
+	}
+
+	private treeTagOf(file: TFile): string | null {
+		const cache = this.app.metadataCache.getFileCache(file);
+		if (!cache) return null;
+		const full = nsPath(this.settings.schema, this.treeTagKeyNamespace());
+		const tag = (getAllTags(cache) ?? []).find(
+			(value) => value === `#${full}` || value.startsWith(`#${full}/`)
 		);
 		return tag ? tag.replace(/^#/, "") : null;
 	}
