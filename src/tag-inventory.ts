@@ -1,5 +1,11 @@
 import type { TrellisSchema } from "./tagkey.ts";
-import { matchTagKey, nsPath } from "./tagkey.ts";
+import {
+	assembleBasenameMulti,
+	extractNameMulti,
+	matchTagKey,
+	nsPath,
+	slotTagkeys,
+} from "./tagkey.ts";
 
 export interface TagInventoryFile {
 	path: string;
@@ -31,6 +37,29 @@ export interface TagInventorySnapshot {
 	uniqueGeneralTags: number;
 	rootOwnedUnmatchedOccurrences: number;
 	tagKeys: TagKeyInventory[];
+	combinations: {
+		slotIndexes: number[];
+		namespaces: string[];
+		notes: number;
+	}[];
+	filenameCollisions: {
+		targetPath: string;
+		notePaths: string[];
+	}[];
+}
+
+function basenameOf(path: string): string {
+	const filename = path.split("/").pop() ?? path;
+	return filename.endsWith(".md") ? filename.slice(0, -3) : filename;
+}
+
+function parentOf(path: string): string {
+	const index = path.lastIndexOf("/");
+	return index === -1 ? "" : path.slice(0, index);
+}
+
+function notePath(parent: string, basename: string): string {
+	return `${parent ? `${parent}/` : ""}${basename}.md`;
 }
 
 function normalizedTags(tags: string[]): string[] {
@@ -112,6 +141,9 @@ export class TagInventory {
 		let generalOccurrences = 0;
 		let rootOwnedUnmatchedOccurrences = 0;
 		const ownerRoot = (this.schema.rootNamespace ?? "").trim();
+		const combinationCounts = new Map<string, number>();
+		const combinationSlots = new Map<string, number[]>();
+		const targetSources = new Map<string, Set<string>>();
 
 		for (const file of this.files.values()) {
 			const frontmatter = new Set(file.frontmatterTags);
@@ -162,10 +194,37 @@ export class TagInventory {
 					row.pathCounts.set(tagPath, (row.pathCounts.get(tagPath) ?? 0) + 1);
 				}
 			}
+
+			const activeSlots = [...valuesBySlot.keys()].sort((a, b) => a - b);
+			if (activeSlots.length > 0) {
+				const combinationKey = activeSlots.join(",");
+				combinationCounts.set(
+					combinationKey,
+					(combinationCounts.get(combinationKey) ?? 0) + 1
+				);
+				combinationSlots.set(combinationKey, activeSlots);
+
+				const keys = slotTagkeys(file.allTags, this.schema);
+				const name = extractNameMulti(basenameOf(file.path), keys, this.schema);
+				const values = this.schema.slots.map((slot, index) =>
+					slot.role === "name" ? name : keys[index]
+				);
+				const targetBasename = assembleBasenameMulti(values, this.schema);
+				if (targetBasename) {
+					const targetPath = notePath(parentOf(file.path), targetBasename);
+					const sources = targetSources.get(targetPath) ?? new Set<string>();
+					sources.add(file.path);
+					targetSources.set(targetPath, sources);
+				}
+			}
 			for (const slotIndex of namespaceNodeSlots) {
 				const row = rowBySlot.get(slotIndex);
 				if (row) row.namespaceNodeNotes++;
 			}
+		}
+
+		for (const [targetPath, sources] of targetSources) {
+			if (this.files.has(targetPath)) sources.add(targetPath);
 		}
 
 		return {
@@ -176,6 +235,29 @@ export class TagInventory {
 			generalOccurrences,
 			uniqueGeneralTags: generalTags.size,
 			rootOwnedUnmatchedOccurrences,
+			combinations: [...combinationCounts.entries()]
+				.map(([key, notes]) => {
+					const slotIndexes = combinationSlots.get(key) ?? [];
+					return {
+						slotIndexes,
+						namespaces: slotIndexes.map(
+							(index) => this.schema.slots[index].namespace ?? ""
+						),
+						notes,
+					};
+				})
+				.sort(
+					(a, b) =>
+						b.notes - a.notes ||
+						a.slotIndexes.join(",").localeCompare(b.slotIndexes.join(","))
+				),
+			filenameCollisions: [...targetSources.entries()]
+				.filter(([, paths]) => paths.size > 1)
+				.map(([targetPath, paths]) => ({
+					targetPath,
+					notePaths: [...paths].sort(),
+				}))
+				.sort((a, b) => a.targetPath.localeCompare(b.targetPath)),
 			tagKeys: keyRows.map((row) => ({
 				slotIndex: row.slotIndex,
 				namespace: row.namespace,

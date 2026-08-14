@@ -277,6 +277,12 @@ button.trellis-destructive:hover {
 	cursor: pointer;
 }
 
+.trellis-inventory-danger .setting-item-name,
+.trellis-inventory-danger .setting-item-description,
+.trellis-inventory-danger-details {
+	color: var(--text-error);
+}
+
 /* Advanced slot rows can contain several controls. Obsidian settings windows
    and mobile sheets are intentionally narrow, so wrap the control side rather
    than widening the whole settings pane and creating horizontal scrolling. */

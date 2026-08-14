@@ -84,6 +84,7 @@ import {
 } from "./modals";
 
 import { TrellisSettingTab } from "./settings-tab";
+import { TagInventory } from "./tag-inventory";
 
 const SEGMENT_SEPARATORS: SegmentSeparator[] = ["", ".", "-", "_"];
 const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
@@ -2004,6 +2005,29 @@ export default class TrellisPlugin extends Plugin {
 		return count;
 	}
 
+	/** Prospective exact-path collisions under a staged schema. Only groups that
+	 * include a file this schema edit would rename block the apply; unrelated
+	 * pre-existing drift remains visible in the live settings inventory. */
+	private schemaFilenameCollisions(
+		newSchema: TrellisSchema,
+		changedPaths: Set<string>
+	): { targetPath: string; notePaths: string[] }[] {
+		const inventory = new TagInventory(newSchema);
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			inventory.upsertFile({
+				path: file.path,
+				allTags: cache ? getAllTags(cache) ?? [] : [],
+				frontmatterTags: normalizeTagList(cache?.frontmatter?.tags),
+			});
+		}
+		return inventory
+			.snapshot()
+			.filenameCollisions.filter((group) =>
+				group.notePaths.some((path) => changedPaths.has(path))
+			);
+	}
+
 	requestPrimaryFormattingChange(
 		symbol: string,
 		spacing: SeparatorSpacing,
@@ -2054,6 +2078,25 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const rows = this.previewSchemaChange(newSchema);
+		const collisions = this.schemaFilenameCollisions(
+			newSchema,
+			new Set(rows.map((row) => row.path))
+		);
+		if (collisions.length > 0) {
+			new AlertModal(
+				this.app,
+				t("modal.schemaCollision.title"),
+				t("modal.schemaCollision.desc", {
+					n: collisions.length,
+					items: collisions
+						.slice(0, 5)
+						.map((group) => group.targetPath)
+						.join(", "),
+				})
+			).open();
+			onDone();
+			return;
+		}
 		const lostNames = this.nameKeyLossCount(newSchema);
 		if (rows.length === 0) {
 			void this.applySchemaChange(newSchema, rows).finally(onDone);

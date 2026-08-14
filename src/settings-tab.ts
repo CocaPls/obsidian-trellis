@@ -912,6 +912,55 @@ export class TrellisSettingTab extends PluginSettingTab {
 					unique: snapshot.uniqueGeneralTags,
 				})
 			);
+		const unmanaged = snapshot.totalNotes - snapshot.managedNotes;
+		new Setting(this.statsEl)
+			.setName(t("setting.statsCombinationsName"))
+			.setDesc(
+				t("setting.statsCombinationsDesc", {
+					n: snapshot.combinations.length,
+					unmanaged,
+				})
+			);
+		if (snapshot.combinations.length > 0) {
+			const details = this.statsEl.createEl("details", {
+				cls: "trellis-tag-inventory-paths",
+			});
+			details.createEl("summary", {
+				text: t("setting.statsCombinationsShow", {
+					n: Math.min(8, snapshot.combinations.length),
+				}),
+			});
+			for (const combination of snapshot.combinations.slice(0, 8)) {
+				details.createDiv({
+					text: `${combination.namespaces.map((ns) => `#${ns}`).join(" + ")} · ${combination.notes}`,
+					cls: "setting-item-description",
+				});
+			}
+		}
+		if (snapshot.filenameCollisions.length > 0) {
+			const collisionSetting = new Setting(this.statsEl)
+				.setName(t("setting.statsCollisionName"))
+				.setDesc(
+					t("setting.statsCollisionDesc", {
+						n: snapshot.filenameCollisions.length,
+					})
+				);
+			collisionSetting.settingEl.addClass("trellis-inventory-danger");
+			const details = this.statsEl.createEl("details", {
+				cls: "trellis-tag-inventory-paths trellis-inventory-danger-details",
+			});
+			details.createEl("summary", {
+				text: t("setting.statsCollisionShow", {
+					n: Math.min(5, snapshot.filenameCollisions.length),
+				}),
+			});
+			for (const group of snapshot.filenameCollisions.slice(0, 5)) {
+				details.createDiv({
+					text: `${group.targetPath} ← ${group.notePaths.join(", ")}`,
+					cls: "setting-item-description",
+				});
+			}
+		}
 		for (const key of snapshot.tagKeys) {
 			new Setting(this.statsEl)
 				.setName(

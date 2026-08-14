@@ -325,11 +325,22 @@ const EN: Record<string, string> = {
 	"modal.applySchema.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
 	"modal.schemaNameLoss":
 		"Removing the name-key discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
+	"modal.schemaCollision.title": "Filename collisions in this schema",
+	"modal.schemaCollision.desc":
+		"This schema creates {n} exact-path collision group(s), so nothing was applied. Resolve or redesign these targets first: {items}",
 	"setting.statsName": "Live vault status",
 	"setting.statsDesc":
 		"{managed} of {total} notes · {tags} managed tag value(s) · {paths} unique path(s). Updates while settings are open.",
 	"setting.statsGeneralName": "Ordinary tags",
 	"setting.statsGeneralDesc": "{tags} explicit use(s) · {unique} unique tag(s)",
+	"setting.statsCombinationsName": "Tag-key combinations",
+	"setting.statsCombinationsDesc":
+		"{n} active combination(s) · {unmanaged} note(s) have no managed tag-key",
+	"setting.statsCombinationsShow": "Top combinations ({n})",
+	"setting.statsCollisionName": "Filename collisions",
+	"setting.statsCollisionDesc":
+		"{n} exact target path(s) are requested by more than one note under the current schema.",
+	"setting.statsCollisionShow": "Collision targets ({n})",
 	"setting.statsKeyName": "Slot {n} tag-key · #{ns}/…",
 	"setting.statsKeyDesc":
 		"{notes} note(s) · {tags} value(s) · {paths} unique path(s) · {duplicates} duplicate note(s) · {inline} inline-only note(s) · {roots} namespace-node note(s)",
@@ -676,11 +687,22 @@ const KO: Record<string, string> = {
 	"modal.applySchema.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
 	"modal.schemaNameLoss":
 		"네임키를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
+	"modal.schemaCollision.title": "이 스키마에서 파일명 충돌 발생",
+	"modal.schemaCollision.desc":
+		"같은 경로를 요구하는 충돌 묶음이 {n}개라 적용하지 않았습니다. 먼저 다음 대상을 정리하거나 스키마를 바꾸세요: {items}",
 	"setting.statsName": "현재 볼트 현황",
 	"setting.statsDesc":
 		"전체 {total}개 중 관리 노트 {managed}개 · 관리 태그값 {tags}개 · 고유 경로 {paths}개. 설정창을 연 동안 자동 갱신됩니다.",
 	"setting.statsGeneralName": "일반 태그",
 	"setting.statsGeneralDesc": "명시적 사용 {tags}개 · 고유 태그 {unique}개",
+	"setting.statsCombinationsName": "태그키 조합",
+	"setting.statsCombinationsDesc":
+		"사용 중인 조합 {n}개 · 관리 태그키가 없는 노트 {unmanaged}개",
+	"setting.statsCombinationsShow": "사용량 상위 조합 ({n})",
+	"setting.statsCollisionName": "파일명 충돌",
+	"setting.statsCollisionDesc":
+		"현재 스키마에서 둘 이상의 노트가 요구하는 동일 대상 경로가 {n}개 있습니다.",
+	"setting.statsCollisionShow": "충돌 대상 ({n})",
 	"setting.statsKeyName": "슬롯 {n} 태그키 · #{ns}/…",
 	"setting.statsKeyDesc":
 		"노트 {notes}개 · 태그값 {tags}개 · 고유 경로 {paths}개 · 중복 노트 {duplicates}개 · 인라인 전용 노트 {inline}개 · 네임스페이스 노드 노트 {roots}개",

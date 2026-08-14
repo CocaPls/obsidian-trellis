@@ -86,3 +86,52 @@ test("inventory keeps unknown children under an owner root separate from general
 	assert.equal(snapshot.rootOwnedUnmatchedOccurrences, 1);
 	assert.equal(snapshot.generalOccurrences, 1);
 });
+
+test("inventory reports sparse tag-key combinations and exact filename collisions", () => {
+	const noName: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "a" },
+			{ role: "tag", namespace: "b" },
+		],
+		separators: ["-"],
+	};
+	const inventory = new TagInventory(noName);
+	inventory.upsertFile({
+		path: "notes/source.md",
+		allTags: ["#a/A/01", "#b/B/02"],
+		frontmatterTags: ["a/A/01", "b/B/02"],
+	});
+	inventory.upsertFile({
+		path: "notes/A01-B02.md",
+		allTags: ["#a/A/01", "#b/B/02"],
+		frontmatterTags: ["a/A/01", "b/B/02"],
+	});
+	inventory.upsertFile({
+		path: "notes/b-only.md",
+		allTags: ["#b/B/03"],
+		frontmatterTags: ["b/B/03"],
+	});
+	inventory.upsertFile({
+		path: "notes/ordinary.md",
+		allTags: ["#status/wip"],
+		frontmatterTags: ["status/wip"],
+	});
+
+	const snapshot = inventory.snapshot();
+	assert.deepEqual(
+		snapshot.combinations.map((combination) => [
+			combination.namespaces,
+			combination.notes,
+		]),
+		[
+			[["a", "b"], 2],
+			[["b"], 1],
+		]
+	);
+	assert.deepEqual(snapshot.filenameCollisions, [
+		{
+			targetPath: "notes/A01-B02.md",
+			notePaths: ["notes/A01-B02.md", "notes/source.md"],
+		},
+	]);
+});
