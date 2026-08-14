@@ -715,11 +715,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		if (slot.role === "tag") {
+		const definitions = schemaTagDefinitions(schema);
+		if (slot.role === "tag" && (definitions.length > 1 || !definition)) {
 			new Setting(card)
 				.setName(t("setting.slotSource"))
 				.addDropdown((dropdown) => {
-					for (const candidate of schemaTagDefinitions(schema)) {
+					for (const candidate of definitions) {
 						dropdown.addOption(
 							candidate.id,
 							`${candidate.name || candidate.namespace} · #${candidate.namespace}`
