@@ -881,7 +881,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const selection = this.ensureFilenameSelection(schema);
-		const sequence = containerEl.createDiv({ cls: "trellis-filename-sequence" });
+		const composer = containerEl.createDiv({ cls: "trellis-filename-composer" });
+		const composerHeader = composer.createDiv({
+			cls: "trellis-filename-composer-header",
+		});
+		composerHeader.createSpan({
+			cls: "trellis-filename-composer-title",
+			text: t("setting.filenamePreview"),
+		});
+		composerHeader.createSpan({
+			cls: "trellis-filename-composer-hint",
+			text: t("setting.filenamePreviewHint"),
+		});
+		const sequence = composer.createDiv({ cls: "trellis-filename-sequence" });
 
 		schema.slots.forEach((slot, index) => {
 			this.renderFilenameSequenceSlot(sequence, schema, slot, index, selection);
@@ -897,7 +909,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.replace(/\s+/g, "");
 			return sample || `TAG${index + 1}`;
 		});
-		const filenameExample = containerEl.createDiv({
+		const filenameExample = composer.createDiv({
 			cls: "trellis-filename-example",
 		});
 		filenameExample.createSpan({

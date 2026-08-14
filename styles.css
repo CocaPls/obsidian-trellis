@@ -558,13 +558,39 @@ button.trellis-destructive:disabled:hover {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
+.trellis-filename-composer {
+	margin: var(--size-4-4) 0;
+	padding: var(--size-4-3) var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.trellis-filename-composer-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+}
+
+.trellis-filename-composer-title {
+	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-composer-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-align: end;
+}
+
 .trellis-filename-sequence {
 	display: flex;
 	align-items: center;
 	gap: var(--size-4-1);
 	overflow-x: auto;
-	margin-bottom: var(--size-4-3);
-	padding-bottom: var(--size-4-1);
+	padding: var(--size-4-1) 0 var(--size-4-3);
 }
 
 .trellis-filename-example {
@@ -572,10 +598,8 @@ button.trellis-destructive:disabled:hover {
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--size-4-3);
-	margin-bottom: var(--size-4-4);
-	padding: var(--size-4-2) var(--size-4-3);
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
+	padding-top: var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .trellis-filename-example-label {
@@ -585,45 +609,60 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-filename-example code {
 	overflow: hidden;
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.trellis-filename-sequence-slot,
-.trellis-filename-sequence-gap {
+.trellis-filename-composer button.trellis-filename-sequence-slot,
+.trellis-filename-composer button.trellis-filename-sequence-gap {
 	flex: 0 0 auto;
-	border: 0;
-	border-bottom: 2px solid transparent;
+	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	box-shadow: none;
-	background: transparent;
+	background: var(--background-primary);
 	color: var(--text-muted);
 }
 
-.trellis-filename-sequence-slot {
+.trellis-filename-composer button.trellis-filename-sequence-slot {
 	display: flex;
-	align-items: baseline;
-	gap: var(--size-4-2);
+	min-width: 120px;
+	height: auto;
+	min-height: 48px;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
 	padding: var(--size-4-2) var(--size-4-3);
 }
 
-.trellis-filename-sequence-gap {
-	min-width: 32px;
+.trellis-filename-composer button.trellis-filename-sequence-gap {
+	min-width: 30px;
 	padding: var(--size-4-2);
+	border-color: transparent;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
 	font-family: var(--font-monospace);
 	white-space: pre;
 }
 
-.trellis-filename-sequence-slot:hover,
-.trellis-filename-sequence-gap:hover {
+.trellis-filename-composer button.trellis-filename-sequence-slot:hover,
+.trellis-filename-composer button.trellis-filename-sequence-gap:hover {
+	border-color: var(--background-modifier-border-hover);
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 
-.trellis-filename-sequence-slot.is-selected,
-.trellis-filename-sequence-gap.is-selected {
-	border-bottom-color: var(--interactive-accent);
+.trellis-filename-composer button.trellis-filename-sequence-slot.is-selected {
+	border-color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
 	color: var(--text-normal);
+}
+
+.trellis-filename-composer button.trellis-filename-sequence-gap.is-selected {
+	border-color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
 }
 
 .trellis-filename-sequence-meta {
@@ -632,7 +671,11 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-filename-selection {
-	margin-bottom: var(--size-4-3);
+	margin-bottom: var(--size-4-4);
+	padding: 0 var(--size-4-4) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
 }
 
 @media (max-width: 600px) {
@@ -646,6 +689,16 @@ button.trellis-destructive:disabled:hover {
 
 	.trellis-settings-toggle-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.trellis-filename-composer-header,
+	.trellis-filename-example {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.trellis-filename-composer-hint {
+		text-align: start;
 	}
 
 	.trellis-settings-card .setting-item,

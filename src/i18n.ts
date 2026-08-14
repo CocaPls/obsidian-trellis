@@ -199,6 +199,8 @@ const EN: Record<string, string> = {
 	"valueRule.example": "Example",
 	"setting.filenameStructureDesc":
 		"Arrange filename parts from left to right.",
+	"setting.filenamePreview": "Composition preview",
+	"setting.filenamePreviewHint": "Select a part or separator to edit it.",
 	"setting.filenameExample": "Example filename",
 	"setting.filenameExampleName": "note-title",
 	"setting.filenameSyncName": "Update filenames when tags change",
@@ -709,6 +711,8 @@ const KO: Record<string, string> = {
 	"valueRule.example": "예시",
 	"setting.filenameStructureDesc":
 		"파일명에 들어갈 항목을 왼쪽부터 순서대로 정합니다.",
+	"setting.filenamePreview": "구성 미리보기",
+	"setting.filenamePreviewHint": "항목이나 구분자를 선택해 수정합니다.",
 	"setting.filenameExample": "파일명 예시",
 	"setting.filenameExampleName": "노트제목",
 	"setting.filenameSyncName": "태그 변경 시 파일명 자동 변경",
