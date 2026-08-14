@@ -96,11 +96,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsTimer: number | null = null;
 	private statsCleanups: (() => void)[] = [];
 	private activeSection: SettingsSection = "overview";
-	private statusExpanded = false;
-	private sharedSettingsExpanded = false;
-	private tagAdvancedExpanded = false;
-	private treeDisplayExpanded = false;
-	private treeActionsExpanded = false;
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	constructor(app: App, plugin: TrellisPlugin) {
@@ -268,40 +263,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const details = this.createDisclosure(
-			containerEl,
-			t("setting.statusDisclosure"),
-			t("setting.statusDisclosureDesc"),
-			this.statusExpanded,
-			(open) => (this.statusExpanded = open)
-		);
-		this.renderStats(details);
-	}
-
-	private createDisclosure(
-		containerEl: HTMLElement,
-		title: string,
-		description: string,
-		open = false,
-		onToggle?: (open: boolean) => void
-	): HTMLDetailsElement {
-		const details = containerEl.createEl("details", {
-			cls: "trellis-settings-details",
-		});
-		details.open = open;
-		const summary = details.createEl("summary", {
-			cls: "trellis-settings-details-summary",
-		});
-		const copy = summary.createSpan({ cls: "trellis-settings-details-copy" });
-		copy.createSpan({ cls: "trellis-settings-details-title", text: title });
-		copy.createSpan({
-			cls: "trellis-settings-details-desc",
-			text: description,
-		});
-		if (onToggle) {
-			details.addEventListener("toggle", () => onToggle(details.open));
-		}
-		return details;
+		new Setting(containerEl)
+			.setName(t("setting.statusDisclosure"))
+			.setDesc(t("setting.statusDisclosureDesc"))
+			.setHeading();
+		this.renderStats(containerEl);
 	}
 
 	private resetDraft() {
@@ -332,14 +298,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 			const next = cleanNamespaceInput(pendingRoot);
 			rootApply?.setDisabled(next === currentRoot || Boolean(next && !isValidNamespace(next)));
 		};
-		const sharedSettings = this.createDisclosure(
-			containerEl,
-			t("setting.sharedAdvanced"),
-			t("setting.ownerAdvancedDesc"),
-			this.sharedSettingsExpanded,
-			(open) => (this.sharedSettingsExpanded = open)
-		);
-		new Setting(sharedSettings)
+		new Setting(containerEl)
+			.setName(t("setting.sharedAdvanced"))
+			.setDesc(t("setting.ownerAdvancedDesc"))
+			.setHeading();
+		new Setting(containerEl)
 			.setName(t("setting.ownerAdvanced"))
 			.addText((text) =>
 				text
@@ -559,14 +522,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
-		const advanced = this.createDisclosure(
-			containerEl,
-			t("setting.tagAdvanced"),
-			t("setting.tagAdvancedDesc"),
-			this.tagAdvancedExpanded,
-			(open) => (this.tagAdvancedExpanded = open)
-		);
-		new Setting(advanced)
+		new Setting(containerEl)
+			.setName(t("setting.tagAdvanced"))
+			.setDesc(t("setting.tagAdvancedDesc"))
+			.setHeading();
+		new Setting(containerEl)
 			.setName(t("setting.tagColor"))
 			.setDesc(t("setting.tagColorDesc"))
 			.addColorPicker((picker) =>
@@ -585,7 +545,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(advanced)
+		new Setting(containerEl)
 			.setName(t("setting.valueRule"))
 			.setDesc(t("setting.valueRuleDesc"))
 			.addDropdown((dropdown) =>
@@ -603,9 +563,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 			);
-		if (definition.valueRule) this.renderValueRuleOptions(advanced, definition);
+		if (definition.valueRule) this.renderValueRuleOptions(containerEl, definition);
 
-		new Setting(advanced)
+		new Setting(containerEl)
 			.setName(t("setting.tagRemove"))
 			.setDesc(t("setting.tagRemoveDesc"))
 			.addButton((button) =>
@@ -1350,21 +1310,18 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		if (this.plugin.settings.treeViewMode === "tags") {
-			const tagOptions = this.createDisclosure(
-				options,
-				t("setting.treeDisplayOptions"),
-				t("setting.treeDisplayOptionsDesc"),
-				this.treeDisplayExpanded,
-				(open) => (this.treeDisplayExpanded = open)
-			);
+			new Setting(options)
+				.setName(t("setting.treeDisplayOptions"))
+				.setDesc(t("setting.treeDisplayOptionsDesc"))
+				.setHeading();
 			const hidden = this.plugin.hiddenSidebarBranches();
 			if (hidden.length > 0) {
-				new Setting(tagOptions)
+				new Setting(options)
 					.setName(t("setting.hiddenBranchesName"))
 					.setDesc(t("setting.hiddenBranchesDesc", { n: hidden.length }))
 					.setHeading();
 				for (const branch of hidden) {
-					new Setting(tagOptions)
+					new Setting(options)
 						.setName(branch.label)
 						.addButton((button) =>
 							button.setButtonText(t("setting.restore")).onClick(async () => {
@@ -1377,7 +1334,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 						);
 				}
 			}
-			new Setting(tagOptions)
+			new Setting(options)
 				.setName(t("setting.showRootName"))
 				.setDesc(t("setting.showRootDesc"))
 				.addToggle((toggle) =>
@@ -1387,7 +1344,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.plugin.rebuildTrees();
 					})
 				);
-			new Setting(tagOptions)
+			new Setting(options)
 				.setName(t("setting.untaggedName"))
 				.setDesc(t("setting.untaggedDesc"))
 				.addToggle((toggle) =>
@@ -1399,7 +1356,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							this.plugin.rebuildTrees();
 						})
 				);
-			new Setting(tagOptions)
+			new Setting(options)
 				.setName(t("setting.labelModeName"))
 				.setDesc(t("setting.labelModeDesc"))
 				.addDropdown((dropdown) =>
@@ -1416,14 +1373,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 				);
 		}
 
-		const actions = this.createDisclosure(
-			options,
-			t("setting.headerButtonsName"),
-			t("setting.headerButtonsDesc"),
-			this.treeActionsExpanded,
-			(open) => (this.treeActionsExpanded = open)
-		);
-		const headerButtons = actions.createDiv({ cls: "trellis-settings-toggle-grid" });
+		new Setting(options)
+			.setName(t("setting.headerButtonsName"))
+			.setDesc(t("setting.headerButtonsDesc"))
+			.setHeading();
+		const headerButtons = options.createDiv({ cls: "trellis-settings-toggle-grid" });
 		for (const id of HEADER_BUTTON_IDS) {
 			new Setting(headerButtons)
 				.setName(t(`setting.hb.${id}`))

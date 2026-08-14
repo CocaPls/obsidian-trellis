@@ -417,56 +417,6 @@ button.trellis-destructive:disabled:hover {
 	margin-bottom: var(--size-4-3);
 }
 
-.trellis-settings-details {
-	margin-top: var(--size-4-3);
-	border-top: 1px solid var(--background-modifier-border);
-}
-
-.trellis-settings-details-summary {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-2);
-	padding: var(--size-4-3) 0;
-	cursor: pointer;
-	list-style: none;
-}
-
-.trellis-settings-details-summary::-webkit-details-marker {
-	display: none;
-}
-
-.trellis-settings-details-summary::before {
-	content: "›";
-	color: var(--text-muted);
-	font-size: var(--font-ui-large);
-	transition: transform 120ms ease;
-}
-
-.trellis-settings-details[open] > .trellis-settings-details-summary::before {
-	transform: rotate(90deg);
-}
-
-.trellis-settings-details-copy {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.trellis-settings-details-title {
-	color: var(--text-normal);
-	font-weight: var(--font-semibold);
-}
-
-.trellis-settings-details-desc {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.trellis-settings-details > .trellis-tag-inventory {
-	margin: 0;
-	padding: 0 0 var(--size-4-3);
-}
-
 .trellis-inventory-danger .setting-item-name,
 .trellis-inventory-danger .setting-item-description {
 	color: var(--text-error);
