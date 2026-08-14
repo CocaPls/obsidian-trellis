@@ -133,10 +133,9 @@ function hashedTagList(raw: unknown): string[] {
  * When a note's location tag (e.g. #trel/…) changes, rewrite the filename
  * tagkey slot to match, via the link-safe rename API. One direction only: the
  * tag is the source of truth. A cascade command renames a whole tag subtree.
- * The filename key schema (slots + separators, B09) is configurable; the
- * single-key default is a 2-slot [tag, name].
- * Deferred: multi-key UI & parsing (data model ready), title-key upward sync,
- * drift warnings.
+ * The filename structure (slots + separators) is configurable; the default is
+ * a 2-slot [managed tag, free name] layout. Multiple managed-tag slots remain
+ * one-way projections from frontmatter; filenames never rewrite tags.
  */
 
 /** What one bootstrap pass wrote, kept so it can be undone. */
@@ -402,6 +401,13 @@ export default class TrellisPlugin extends Plugin {
 	private readonly scheduleUndoPathSave = debounce(
 		() => void this.saveSettings(),
 		500,
+		true
+	);
+	/** High-frequency visual controls (notably the color picker) update live but
+	 * coalesce their full data.json write. Settings-tab hide flushes this queue. */
+	private readonly scheduleSettingsSave = debounce(
+		() => void this.saveSettings(),
+		300,
 		true
 	);
 	private readonly schedulePropertyTagDecoration = debounce(
@@ -995,6 +1001,20 @@ export default class TrellisPlugin extends Plugin {
 		}
 		await this.saveSettings();
 		this.rebuildTrees();
+	}
+
+	updateTagDefinitionColor(id: string, color: string): void {
+		const definition = this.tagDefinitions().find((candidate) => candidate.id === id);
+		if (!definition) return;
+		if (color) definition.color = color;
+		else delete definition.color;
+		this.scheduleSettingsSave();
+		this.scheduleTreeRefresh();
+		this.schedulePropertyTagDecoration();
+	}
+
+	flushQueuedSettingsSave(): void {
+		this.scheduleSettingsSave.run();
 	}
 
 	async removeTagDefinition(id: string): Promise<boolean> {

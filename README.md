@@ -80,7 +80,7 @@ intentionally treated as a managed location.
 The single-code path remains the default, but the same staged editor can model
 multiple optional projections without switching to a separate advanced mode.
 
-- **Multi-key slots** combine more than one managed namespace with one free title:
+- **Multiple tag slots** combine more than one managed tag with one free title:
 
   ```text
   #trel/AA/01 + #area/BB/02  →  AA01-my-note--BB02
@@ -93,7 +93,7 @@ multiple optional projections without switching to a separate advanced mode.
   `A-B`, `A-C`, and `B-C` coexist while
   omitted slots and their separators collapse automatically. Removing the
   name slot shows an explicit free-name loss warning, and exact filename
-  collisions block the schema change.
+  collisions block the structure change.
 - **Root namespace** places every managed tag below a shared root such as
   `#zettel/trel/...` without adding that root to filenames. Changes are migrated
   behind confirmation and are undoable.
@@ -106,7 +106,7 @@ the sidebar. The classic notes-only tree lets you choose one visible tag as its 
 Subtree moves may also transfer a reviewed branch between definitions, which
 supports deliberate hierarchy split/merge workflows.
 Import existing filenames still reads the primary outer code because arbitrary
-multi-key filenames are not always reversibly parseable without their tags.
+multi-slot filenames are not always reversibly parseable without their tags.
 
 ## Screenshots
 
@@ -139,7 +139,7 @@ rename API. A cancel or failure rolls the transaction back.
 
 Trellis exposes an experimental, in-process `describe / inspectNote → planChange
 → applyChange` surface for tools that already run inside Obsidian. It opens no
-network, REST, URI, or MCP endpoint. Plans are rejected if the note or schema
+network, REST, URI, or MCP endpoint. Plans are rejected if the note or filename structure
 changed after inspection.
 
 See [Guarded automation](docs/automation.md) for examples, result shapes, and

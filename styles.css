@@ -261,6 +261,16 @@ button.trellis-destructive:hover {
 	margin: var(--size-4-2) 0;
 }
 
+.trellis-settings-disclosure-body > .setting-item:last-child {
+	border-bottom: 0;
+}
+
+.trellis-definition-card .trellis-settings-disclosure,
+.trellis-slot-card .trellis-settings-disclosure {
+	margin-bottom: var(--size-4-2);
+	background: var(--background-primary);
+}
+
 /* Live tag inventory stays compact; path samples are subordinate and indented
    so this read-only status does not compete with the actual schema controls. */
 .trellis-tag-inventory {
@@ -281,30 +291,6 @@ button.trellis-destructive:hover {
 .trellis-inventory-danger .setting-item-description,
 .trellis-inventory-danger-details {
 	color: var(--text-error);
-}
-
-/* Advanced slot rows can contain several controls. Obsidian settings windows
-   and mobile sheets are intentionally narrow, so wrap the control side rather
-   than widening the whole settings pane and creating horizontal scrolling. */
-.trellis-slot-row {
-	align-items: flex-start;
-	flex-wrap: wrap;
-}
-
-.trellis-slot-row .setting-item-info {
-	min-width: 8rem;
-	flex: 1 1 10rem;
-}
-
-.trellis-slot-row .setting-item-control {
-	min-width: 0;
-	flex: 1 1 20rem;
-	flex-wrap: wrap;
-}
-
-.trellis-slot-row .setting-item-control input[type="text"] {
-	min-width: 7rem;
-	max-width: 12rem;
 }
 
 /* 0.5 settings: registered tag definitions and filename slots are separate

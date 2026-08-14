@@ -111,6 +111,16 @@ const EN: Record<string, string> = {
 	"setting.section.status": "Vault status",
 	"setting.tagsDesc":
 		"Register the Obsidian tag branches Trellis owns. A registered tag can be used in filenames, shown only in the sidebar, or kept hidden from both.",
+	"setting.ownerAdvanced": "Shared owner root",
+	"setting.ownerAdvancedDesc":
+		"Optional. Put every managed tag below one common root without adding it to filenames.",
+	"setting.tagAdvanced": "More tag options",
+	"setting.tagAdvancedDesc": "Color, new-value suggestions and safe removal.",
+	"setting.slotFormatting": "Slot formatting",
+	"setting.slotFormattingDesc": "Hierarchy display and optional wrapping for this slot.",
+	"setting.statusDisclosure": "Live vault status",
+	"setting.statusDisclosureDesc":
+		"Counts, tag combinations, filename drift and collisions. Updates while settings are open.",
 	"setting.propertyTagDisplayName": "Managed tag labels in Properties",
 	"setting.propertyTagDisplayDesc":
 		"Visual only. The full Obsidian tag remains stored and is shown on hover.",
@@ -338,7 +348,7 @@ const EN: Record<string, string> = {
 	"setting.sortName": "Tree sort by",
 	"setting.sortDesc":
 		"Sort order in the tree (ascending/descending is toggled in the panel header).",
-	"setting.sortTagkey": "Filename code",
+	"setting.sortTagkey": "Filename",
 	"setting.sortMtime": "Modified time",
 	"setting.sortCtime": "Created time",
 	"setting.langName": "Language",
@@ -399,8 +409,8 @@ const EN: Record<string, string> = {
 		"Edit the filename as an array of key slots. Each Trellis tag slot syncs from its own namespace; the name slot stays free. Applying shows an exact rename preview and runs as one undoable batch.",
 	"setting.advSlots": "Slots",
 	"adv.slot": "Slot {n}",
-	"adv.roleTag": "Tag key",
-	"adv.roleName": "Name key (free title)",
+	"adv.roleTag": "Trellis tag slot",
+	"adv.roleName": "Name slot (free title)",
 	"adv.nsPh": "namespace, e.g. trel",
 	"adv.sep": "Separator {n} (between slot {a} and slot {b})",
 	"adv.addTag": "Add Trellis tag slot",
@@ -414,14 +424,14 @@ const EN: Record<string, string> = {
 	"adv.revert": "Revert",
 	"adv.invalidTitle": "Invalid filename structure",
 	"adv.invalid.needTag": "At least one Trellis tag slot is required.",
-	"adv.invalid.oneName": "Only one name slot slot is supported.",
+	"adv.invalid.oneName": "Only one name slot is supported.",
 	"adv.invalid.nsEmpty": "A tag slot namespace cannot be empty.",
 	"adv.invalid.nsBad": "Namespace '{ns}' has illegal characters — use Unicode letters, marks, digits, '-' or '_', not digits alone.",
 	"adv.invalid.nsDup": "Namespace '{ns}' is used by more than one tag slot.",
 	"adv.invalid.sep": "Separator {n} is empty or contains an illegal character.",
 	"adv.invalid.spacing": "Separator {n} has an invalid spacing mode.",
 	"adv.invalid.conflict":
-		"A tag hierarchy separator matches an adjacent boundary symbol with no spacing. Change one of them or add boundary spacing.",
+		"Hierarchy or slot-boundary separators overlap ambiguously. Change a symbol or add boundary spacing.",
 	"notice.advApplied": "filename structure applied",
 	"modal.ok": "OK",
 	"modal.confirm.dontAsk": "Don't ask again",
@@ -430,7 +440,7 @@ const EN: Record<string, string> = {
 	"modal.badSep.title": "Invalid separator",
 	"modal.badSep.desc": "A separator must be 1–4 safe punctuation or symbol characters. Try -, _, ., · or ~.",
 	"modal.badSep.conflict":
-		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
+		"Hierarchy or slot-boundary separators overlap, so the filename would be ambiguous. Change a symbol or add boundary spacing.",
 	"modal.schemaNameLoss":
 		"Removing the name slot discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
 	"modal.schemaCollision.title": "Filename collisions in this filename structure",
@@ -594,6 +604,16 @@ const KO: Record<string, string> = {
 	"setting.section.status": "볼트 현황",
 	"setting.tagsDesc":
 		"트렐리가 소유할 옵시디언 태그 분기를 등록합니다. 등록한 태그는 파일명에 넣거나, 사이드바에서만 보이거나, 양쪽 모두에서 숨길 수 있습니다.",
+	"setting.ownerAdvanced": "공통 소유 루트",
+	"setting.ownerAdvancedDesc":
+		"선택 사항입니다. 파일명에는 넣지 않고 모든 트렐리 태그를 하나의 공통 루트 아래에 둡니다.",
+	"setting.tagAdvanced": "태그 추가 옵션",
+	"setting.tagAdvancedDesc": "색상, 새 태그값 제안과 안전한 삭제를 설정합니다.",
+	"setting.slotFormatting": "슬롯 표시 형식",
+	"setting.slotFormattingDesc": "이 슬롯의 계층 표시와 선택적 감싸기를 설정합니다.",
+	"setting.statusDisclosure": "현재 볼트 현황",
+	"setting.statusDisclosureDesc":
+		"개수, 태그 조합, 파일명 차이와 충돌을 보여 줍니다. 설정창을 연 동안 갱신됩니다.",
 	"setting.propertyTagDisplayName": "속성의 트렐리 태그 표시",
 	"setting.propertyTagDisplayDesc":
 		"화면 표시만 줄입니다. 실제 옵시디언 태그 전체 경로는 그대로 저장되며 마우스를 올리면 확인할 수 있습니다.",
@@ -819,7 +839,7 @@ const KO: Record<string, string> = {
 	"setting.hb.undo": "되돌리기",
 	"setting.sortName": "트리 정렬 기준",
 	"setting.sortDesc": "트리 정렬 순서 (오름/내림차순은 패널 헤더에서 전환).",
-	"setting.sortTagkey": "파일명 코드",
+	"setting.sortTagkey": "파일명",
 	"setting.sortMtime": "수정 시간",
 	"setting.sortCtime": "생성 시간",
 	"setting.langName": "언어",
@@ -895,14 +915,14 @@ const KO: Record<string, string> = {
 	"adv.revert": "되돌리기",
 	"adv.invalidTitle": "잘못된 파일명 구조",
 	"adv.invalid.needTag": "트렐리 태그 슬롯이 최소 1개 필요합니다.",
-	"adv.invalid.oneName": "이름 슬롯 슬롯은 1개까지만 지원합니다.",
+	"adv.invalid.oneName": "이름 슬롯은 1개까지만 지원합니다.",
 	"adv.invalid.nsEmpty": "태그 슬롯의 네임스페이스는 비울 수 없습니다.",
 	"adv.invalid.nsBad": "네임스페이스 '{ns}' 에 사용할 수 없는 문자가 있습니다 — 문자·숫자·'-'·'_'만 쓸 수 있고 숫자로만 구성할 수 없습니다.",
 	"adv.invalid.nsDup": "네임스페이스 '{ns}' 가 둘 이상의 태그 슬롯에서 쓰입니다.",
 	"adv.invalid.sep": "구분자 {n} 이 비어 있거나 사용할 수 없는 문자를 포함합니다.",
 	"adv.invalid.spacing": "구분자 {n} 의 공백 설정이 올바르지 않습니다.",
 	"adv.invalid.conflict":
-		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같습니다. 둘 중 하나를 바꾸거나 경계 공백을 추가하세요.",
+		"계층 표시나 슬롯 경계 기호가 서로 겹쳐 파일명을 구분할 수 없습니다. 기호를 바꾸거나 경계 공백을 추가하세요.",
 	"notice.advApplied": "파일명 구조를 적용했습니다",
 	"modal.ok": "확인",
 	"modal.confirm.dontAsk": "다시 묻지 않기",
@@ -911,7 +931,7 @@ const KO: Record<string, string> = {
 	"modal.badSep.title": "잘못된 구분자",
 	"modal.badSep.desc": "구분자는 안전한 문장부호나 기호 1~4자로 입력하세요. -, _, ., ·, ~ 등을 쓸 수 있습니다.",
 	"modal.badSep.conflict":
-		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
+		"계층 표시나 슬롯 경계 기호가 서로 겹쳐 파일명을 구분할 수 없습니다. 기호를 바꾸거나 경계에 공백을 추가하세요.",
 	"modal.schemaNameLoss":
 		"이름 슬롯를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
 	"modal.schemaCollision.title": "이 파일명 구조에서 파일명 충돌 발생",
