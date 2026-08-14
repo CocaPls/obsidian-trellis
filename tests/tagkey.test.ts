@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TrellisSchema } from "./tagkey.ts";
+import type { TrellisSchema } from "../src/tagkey.ts";
 import {
 	DEFAULT_SCHEMA,
 	schemaFromLegacy,
@@ -40,7 +40,7 @@ import {
 	primarySeparatorSymbol,
 	separatorConflicts,
 	schemaMigratedName,
-} from "./tagkey.ts";
+} from "../src/tagkey.ts";
 
 const cfg: TrellisSchema = schemaFromLegacy("trel", "-", "prefix");
 const cfgSuffix: TrellisSchema = schemaFromLegacy("trel", "-", "suffix");
@@ -826,7 +826,7 @@ import {
 	scaffoldingPaths,
 	suggestSegment,
 	schemeSegments,
-} from "./tagkey.ts";
+} from "../src/tagkey.ts";
 
 const ROOTED: TrellisSchema = {
 	rootNamespace: "trellis",

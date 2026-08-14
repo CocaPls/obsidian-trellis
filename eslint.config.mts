@@ -6,15 +6,13 @@ export default defineConfig(
 	globalIgnores([
 		"node_modules",
 		"dist",
-		"esbuild.config.mjs",
-		"verify-release.mjs",
-		"version-bump.mjs",
+		"scripts",
 		"versions.json",
 		"main.js",
 		"package.json",
 		"package-lock.json",
 		"tsconfig.json",
-		"*.test.ts",
+		"tests",
 		"test-vault",
 	]),
 	{
@@ -23,8 +21,8 @@ export default defineConfig(
 				...globals.browser,
 			},
 			parserOptions: {
-			projectService: {
-				allowDefaultProject: ["eslint.config.mts", "manifest.json"],
+				projectService: {
+					allowDefaultProject: ["manifest.json"],
 			},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: [".json"],

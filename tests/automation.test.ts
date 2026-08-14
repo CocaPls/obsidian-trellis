@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { TrellisSchema } from "./tagkey.ts";
+import type { TrellisSchema } from "../src/tagkey.ts";
 import {
 	inspectNoteState,
 	planNoteChange,
 	validatePlanSnapshot,
 	type TrellisNoteState,
-} from "./automation.ts";
+} from "../src/automation.ts";
 
 const schema: TrellisSchema = {
 	slots: [

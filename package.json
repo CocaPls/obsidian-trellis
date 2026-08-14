@@ -4,13 +4,16 @@
 	"description": "Keep hierarchical tags and filename codes in sync in Obsidian, with a tag-based sidebar tree and link-safe bulk changes.",
 	"main": "main.js",
 	"type": "module",
+	"engines": {
+		"node": ">=22.18.0"
+	},
 	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "node scripts/esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node scripts/esbuild.config.mjs production",
 		"lint": "eslint .",
 		"test": "node --test",
-		"verify:release": "node verify-release.mjs",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
+		"verify:release": "node scripts/verify-release.mjs",
+		"version": "node scripts/version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [
 		"obsidian",
