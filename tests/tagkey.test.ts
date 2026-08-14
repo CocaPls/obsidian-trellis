@@ -7,6 +7,7 @@ import {
 	tagToTagkey,
 	pickTagkey,
 	tagNamespaces,
+	matchTagKey,
 	duplicateLocationGroups,
 	assembleBasename,
 	syncedBasename,
@@ -113,6 +114,41 @@ test("tagNamespaces lists distinct tag-slot namespaces in order", () => {
 		separators: ["-"],
 	};
 	assert.deepEqual(tagNamespaces(multi), ["trel", "proj"]);
+});
+
+test("matchTagKey separates ordinary tags and identifies the owning tag-key", () => {
+	const multi: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "bp" },
+			{ role: "name" },
+			{ role: "tag", namespace: "title" },
+		],
+		separators: ["-", "-"],
+	};
+	assert.deepEqual(matchTagKey("#title/policy/edit", multi), {
+		slotIndex: 2,
+		namespace: "title",
+		fullNamespace: "title",
+		tagPath: "title/policy/edit",
+		keyPath: "policy/edit",
+	});
+	assert.equal(matchTagKey("#status/wip", multi), null);
+	assert.equal(matchTagKey("#titlecase/policy", multi), null);
+	assert.equal(matchTagKey("#title", multi)?.keyPath, "");
+});
+
+test("matchTagKey applies the optional owner root before classifying", () => {
+	const rooted: TrellisSchema = {
+		rootNamespace: "trellis",
+		slots: [
+			{ role: "tag", namespace: "bp" },
+			{ role: "tag", namespace: "title" },
+		],
+		separators: ["-"],
+	};
+	assert.equal(matchTagKey("#trellis/bp/system", rooted)?.slotIndex, 0);
+	assert.equal(matchTagKey("#trellis/title/policy", rooted)?.slotIndex, 1);
+	assert.equal(matchTagKey("#bp/system", rooted), null);
 });
 
 test("duplicateLocationGroups flags a namespace carrying 2+ location tags", () => {

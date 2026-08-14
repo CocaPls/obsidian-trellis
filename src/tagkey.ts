@@ -176,6 +176,53 @@ export function tagNamespaces(schema: TrellisSchema): string[] {
 	return out;
 }
 
+/** The schema tag-key whose namespace owns one tag. `keyPath` is the part
+ * below that namespace; an empty value means the tag is the namespace node
+ * itself, not a filename value. Slot order remains a filename-layout concern —
+ * namespace ownership is what classifies the tag. */
+export interface TagKeyMatch {
+	slotIndex: number;
+	namespace: string;
+	fullNamespace: string;
+	tagPath: string;
+	keyPath: string;
+}
+
+/** Classify one tag against every configured tag-key namespace. Returns null
+ * for an ordinary (unmanaged) tag. Both rooted and rootless schemas pass
+ * through the same root-aware namespace path. */
+export function matchTagKey(
+	tag: string,
+	schema: TrellisSchema
+): TagKeyMatch | null {
+	const tagPath = tag.replace(/^#/, "");
+	for (let slotIndex = 0; slotIndex < schema.slots.length; slotIndex++) {
+		const slot = schema.slots[slotIndex];
+		if (slot.role !== "tag" || !slot.namespace) continue;
+		const fullNamespace = nsPath(schema, slot.namespace);
+		if (tagPath === fullNamespace) {
+			return {
+				slotIndex,
+				namespace: slot.namespace,
+				fullNamespace,
+				tagPath,
+				keyPath: "",
+			};
+		}
+		const prefix = `${fullNamespace}/`;
+		if (tagPath.startsWith(prefix)) {
+			return {
+				slotIndex,
+				namespace: slot.namespace,
+				fullNamespace,
+				tagPath,
+				keyPath: tagPath.slice(prefix.length),
+			};
+		}
+	}
+	return null;
+}
+
 /** A namespace carrying more than one distinct location tag on a single note. */
 export interface DuplicateTagGroup {
 	namespace: string;
@@ -190,15 +237,17 @@ export function duplicateLocationGroups(
 	tags: string[],
 	schema: TrellisSchema
 ): DuplicateTagGroup[] {
-	const groups: DuplicateTagGroup[] = [];
-	for (const ns of tagNamespaces(schema)) {
-		const full = nsPath(schema, ns); // root-aware match prefix
-		const matched = [
-			...new Set(tags.filter((t) => t === `#${full}` || t.startsWith(`#${full}/`))),
-		];
-		if (matched.length > 1) groups.push({ namespace: full, tags: matched });
+	const byNamespace = new Map<string, string[]>();
+	for (const tag of tags) {
+		const match = matchTagKey(tag, schema);
+		if (!match) continue;
+		const matched = byNamespace.get(match.fullNamespace) ?? [];
+		if (!matched.includes(tag)) matched.push(tag);
+		byNamespace.set(match.fullNamespace, matched);
 	}
-	return groups;
+	return [...byNamespace.entries()]
+		.filter(([, matched]) => matched.length > 1)
+		.map(([namespace, matched]) => ({ namespace, tags: matched }));
 }
 
 /** The primary rendered boundary separator, e.g. "-" or " - ". */
@@ -564,11 +613,16 @@ export function slotTagkeys(
 	tags: string[],
 	schema: TrellisSchema
 ): (string | null)[] {
-	return schema.slots.map((s) =>
-		s.role === "tag" && s.namespace
-			? pickTagkeyNs(tags, nsPath(schema, s.namespace), s.segmentSeparator)
-			: null
-	);
+	const keys: (string | null)[] = schema.slots.map(() => null);
+	for (const tag of tags) {
+		const match = matchTagKey(tag, schema);
+		if (!match || match.keyPath === "" || keys[match.slotIndex] !== null) continue;
+		const slot = schema.slots[match.slotIndex];
+		keys[match.slotIndex] = match.keyPath
+			.split("/")
+			.join(slot.segmentSeparator ?? "");
+	}
+	return keys;
 }
 
 /**
