@@ -647,15 +647,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 			(definition) => !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
-		new Setting(editor)
-			.setName(t("setting.slotAdd"))
-			.setDesc(t("setting.slotAddDesc"))
-			.addButton((button) =>
-				button
-					.setButtonText(t("setting.addTagSlot"))
-					.setDisabled(!available)
-					.onClick(() => {
-						if (!available) return;
+		if (available || !hasName) {
+			const addSlot = new Setting(editor)
+				.setName(t("setting.slotAdd"))
+				.setDesc(t("setting.slotAddDesc"));
+			if (available) {
+				addSlot.addButton((button) =>
+					button.setButtonText(t("setting.addTagSlot")).onClick(() => {
 						schema.slots.push({
 							id: nextSlotId(schema),
 							role: "tag",
@@ -664,18 +662,18 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.ensureSeparators(schema);
 						this.render();
 					})
-			)
-			.addButton((button) =>
-				button
-					.setButtonText(t("setting.addNameSlot"))
-					.setDisabled(hasName)
-					.onClick(() => {
-						if (hasName) return;
+				);
+			}
+			if (!hasName) {
+				addSlot.addButton((button) =>
+					button.setButtonText(t("setting.addNameSlot")).onClick(() => {
 						schema.slots.push({ id: nextSlotId(schema), role: "name" });
 						this.ensureSeparators(schema);
 						this.render();
 					})
-			);
+				);
+			}
+		}
 
 		if (this.draftDirty()) {
 			new Setting(editor)

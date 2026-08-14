@@ -114,7 +114,7 @@ const EN: Record<string, string> = {
 	"setting.ownerAdvanced": "Shared tag root",
 	"setting.ownerAdvancedDesc":
 		"Optional. Place all Trellis tags below one root.",
-	"setting.tagAdvanced": "More tag options",
+	"setting.tagAdvanced": "More options",
 	"setting.tagAdvancedDesc": "Color, value suggestions, and removal.",
 	"setting.slotFormatting": "Display format",
 	"setting.slotFormattingDesc": "Hierarchy separator and optional wrapping.",
@@ -142,7 +142,7 @@ const EN: Record<string, string> = {
 	"setting.tagRemoveButton": "Remove definition",
 	"setting.tagRemoveDesc":
 		"Available only when no filename slot or note still uses this tag branch.",
-	"setting.tagAdd": "Add Trellis tag",
+	"setting.tagAdd": "Add tag",
 	"setting.tagAddDesc": "Create another tag branch.",
 	"setting.tagAddFields": "Name and namespace",
 	"setting.tagNamePlaceholder": "Display name, e.g. Projects",
@@ -603,7 +603,7 @@ const KO: Record<string, string> = {
 	"setting.ownerAdvanced": "공통 태그 루트",
 	"setting.ownerAdvancedDesc":
 		"선택 사항입니다. 모든 Trellis 태그를 하나의 루트 아래에 둡니다.",
-	"setting.tagAdvanced": "태그 추가 옵션",
+	"setting.tagAdvanced": "추가 옵션",
 	"setting.tagAdvancedDesc": "색상, 값 제안, 삭제를 설정합니다.",
 	"setting.slotFormatting": "표시 형식",
 	"setting.slotFormattingDesc": "계층 기호와 선택적 감싸기를 설정합니다.",
@@ -631,7 +631,7 @@ const KO: Record<string, string> = {
 	"setting.tagRemoveButton": "정의 삭제",
 	"setting.tagRemoveDesc":
 		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
-	"setting.tagAdd": "트렐리 태그 추가",
+	"setting.tagAdd": "태그 추가",
 	"setting.tagAddDesc": "새 태그 분기를 만듭니다.",
 	"setting.tagAddFields": "이름과 네임스페이스",
 	"setting.tagNamePlaceholder": "표시 이름, 예: Projects",
