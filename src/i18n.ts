@@ -320,8 +320,19 @@ const EN: Record<string, string> = {
 		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
 	"modal.applySchema.title": "Apply schema changes?",
 	"modal.applySchema.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
-	"setting.statsName": "Managed notes",
-	"setting.statsDesc": "{managed} of {total} notes carry a managed location tag. Namespaces: {ns}",
+	"setting.statsName": "Live vault status",
+	"setting.statsDesc":
+		"{managed} of {total} notes · {tags} managed tag value(s) · {paths} unique path(s). Updates while settings are open.",
+	"setting.statsGeneralName": "Ordinary tags",
+	"setting.statsGeneralDesc": "{tags} explicit use(s) · {unique} unique tag(s)",
+	"setting.statsKeyName": "Slot {n} tag-key · #{ns}/…",
+	"setting.statsKeyDesc":
+		"{notes} note(s) · {tags} value(s) · {paths} unique path(s) · {duplicates} duplicate note(s) · {inline} inline-only note(s) · {roots} namespace-node note(s)",
+	"setting.statsPaths": "Top paths ({n})",
+	"setting.statsMore": "+ {n} more path(s)",
+	"setting.statsRootUnknownName": "Unrecognized owner-root tags",
+	"setting.statsRootUnknownDesc":
+		"{n} explicit tag(s) are under the owner root but do not match any tag-key namespace.",
 	"notice.advLastTag": "at least one tag-key slot is required",
 	"notice.advOneName": "only one name-key slot is supported",
 	"notice.advNsEmpty": "tag slot namespace cannot be empty",
@@ -655,8 +666,19 @@ const KO: Record<string, string> = {
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
 	"modal.applySchema.title": "스키마 변경을 적용할까요?",
 	"modal.applySchema.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
-	"setting.statsName": "관리 중인 노트",
-	"setting.statsDesc": "전체 {total}개 중 {managed}개 노트가 관리 태그를 가집니다. 네임스페이스: {ns}",
+	"setting.statsName": "현재 볼트 현황",
+	"setting.statsDesc":
+		"전체 {total}개 중 관리 노트 {managed}개 · 관리 태그값 {tags}개 · 고유 경로 {paths}개. 설정창을 연 동안 자동 갱신됩니다.",
+	"setting.statsGeneralName": "일반 태그",
+	"setting.statsGeneralDesc": "명시적 사용 {tags}개 · 고유 태그 {unique}개",
+	"setting.statsKeyName": "슬롯 {n} 태그키 · #{ns}/…",
+	"setting.statsKeyDesc":
+		"노트 {notes}개 · 태그값 {tags}개 · 고유 경로 {paths}개 · 중복 노트 {duplicates}개 · 인라인 전용 노트 {inline}개 · 네임스페이스 노드 노트 {roots}개",
+	"setting.statsPaths": "사용량 상위 경로 ({n})",
+	"setting.statsMore": "외 {n}개 경로",
+	"setting.statsRootUnknownName": "루트 아래 미등록 태그",
+	"setting.statsRootUnknownDesc":
+		"공통 루트 아래 있지만 어느 태그키 네임스페이스에도 속하지 않는 명시적 태그가 {n}개 있습니다.",
 	"notice.advLastTag": "태그키 슬롯은 최소 1개 필요합니다",
 	"notice.advOneName": "네임키 슬롯은 1개까지만 지원합니다",
 	"notice.advNsEmpty": "태그 슬롯 네임스페이스는 비울 수 없습니다",

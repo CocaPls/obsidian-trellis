@@ -1,0 +1,88 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { TrellisSchema } from "../src/tagkey.ts";
+import { TagInventory } from "../src/tag-inventory.ts";
+
+const schema: TrellisSchema = {
+	slots: [
+		{ role: "tag", namespace: "bp" },
+		{ role: "name" },
+		{ role: "tag", namespace: "title" },
+	],
+	separators: ["-", "-"],
+};
+
+test("inventory separates general tags and reports each tag-key independently", () => {
+	const inventory = new TagInventory(schema);
+	inventory.upsertFile({
+		path: "one.md",
+		allTags: ["#bp/system", "#title/policy", "#status/wip"],
+		frontmatterTags: ["bp/system", "title/policy", "status/wip"],
+	});
+	inventory.upsertFile({
+		path: "two.md",
+		allTags: ["#title/help", "#status/wip"],
+		frontmatterTags: ["title/help", "status/wip"],
+	});
+	const snapshot = inventory.snapshot();
+	assert.equal(snapshot.totalNotes, 2);
+	assert.equal(snapshot.managedNotes, 2);
+	assert.equal(snapshot.managedOccurrences, 3);
+	assert.equal(snapshot.uniqueManagedPaths, 3);
+	assert.equal(snapshot.generalOccurrences, 2);
+	assert.equal(snapshot.uniqueGeneralTags, 1);
+	assert.deepEqual(
+		snapshot.tagKeys.map((key) => [key.namespace, key.notes, key.occurrences]),
+		[
+			["bp", 1, 1],
+			["title", 2, 2],
+		]
+	);
+});
+
+test("inventory surfaces duplicates, inline-only values and namespace nodes", () => {
+	const inventory = new TagInventory(schema);
+	inventory.upsertFile({
+		path: "issue.md",
+		allTags: ["#bp/A", "#bp/B", "#title", "#title/inline"],
+		frontmatterTags: ["bp/A", "bp/B", "title"],
+	});
+	const [bp, title] = inventory.snapshot().tagKeys;
+	assert.equal(bp.duplicateNotes, 1);
+	assert.equal(title.inlineOnlyNotes, 1);
+	assert.equal(title.namespaceNodeNotes, 1);
+});
+
+test("inventory updates and removes only the changed note snapshot", () => {
+	const inventory = new TagInventory(schema);
+	assert.equal(
+		inventory.upsertFile({ path: "one.md", allTags: ["#bp/A"], frontmatterTags: ["bp/A"] }),
+		true
+	);
+	assert.equal(
+		inventory.upsertFile({ path: "one.md", allTags: ["bp/A"], frontmatterTags: ["#bp/A"] }),
+		false
+	);
+	assert.equal(
+		inventory.upsertFile({ path: "one.md", allTags: ["#title/B"], frontmatterTags: ["title/B"] }),
+		true
+	);
+	assert.equal(inventory.snapshot().tagKeys[0].notes, 0);
+	assert.equal(inventory.snapshot().tagKeys[1].notes, 1);
+	assert.equal(inventory.removeFile("one.md"), true);
+	assert.equal(inventory.snapshot().totalNotes, 0);
+});
+
+test("inventory keeps unknown children under an owner root separate from general tags", () => {
+	const rooted: TrellisSchema = { ...schema, rootNamespace: "trellis" };
+	const inventory = new TagInventory(rooted);
+	inventory.upsertFile({
+		path: "rooted.md",
+		allTags: ["#trellis/bp/A", "#trellis/unknown/B", "#ordinary"],
+		frontmatterTags: ["trellis/bp/A", "trellis/unknown/B", "ordinary"],
+	});
+	const snapshot = inventory.snapshot();
+	assert.equal(snapshot.managedOccurrences, 1);
+	assert.equal(snapshot.rootOwnedUnmatchedOccurrences, 1);
+	assert.equal(snapshot.generalOccurrences, 1);
+});

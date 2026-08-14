@@ -253,6 +253,22 @@ button.trellis-destructive:hover {
 	margin: var(--size-4-2) 0;
 }
 
+/* Live tag inventory stays compact; path samples are subordinate and indented
+   so this read-only status does not compete with the actual schema controls. */
+.trellis-tag-inventory {
+	margin-bottom: var(--size-4-3);
+}
+
+.trellis-tag-inventory-paths {
+	margin: 0 0 var(--size-4-2) var(--size-4-4);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.trellis-tag-inventory-paths > summary {
+	cursor: pointer;
+}
+
 /* Advanced slot rows can contain several controls. Obsidian settings windows
    and mobile sheets are intentionally narrow, so wrap the control side rather
    than widening the whole settings pane and creating horizontal scrolling. */

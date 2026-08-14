@@ -1,4 +1,11 @@
-import { App, Notice, PluginSettingTab, Setting, getAllTags } from "obsidian";
+import {
+	App,
+	Notice,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	getAllTags,
+} from "obsidian";
 import {
 	KeySlot,
 	SCHEME_IDS,
@@ -9,7 +16,6 @@ import {
 	isMultiKey,
 	isValidNamespace,
 	isValidSeparator,
-	nsPath,
 	primaryNamespace,
 	primarySeparator,
 	primarySeparatorSymbol,
@@ -17,9 +23,10 @@ import {
 	schemaFromLegacy,
 	separatorConflicts,
 	separatorSpacingAt,
-	tagNamespaces,
 	tagPosition,
+	normalizeTagList,
 } from "./tagkey";
+import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
 import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
@@ -46,6 +53,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private readonly plugin: TrellisPlugin;
 	/** Keep the experimental disclosure open across our own settings re-renders. */
 	private experimentalOpen: boolean | null = null;
+	private tagInventory: TagInventory | null = null;
+	private inventorySchemaFingerprint = "";
+	private statsEl: HTMLElement | null = null;
+	private statsTimer: number | null = null;
+	private statsCleanups: (() => void)[] = [];
 
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
@@ -53,7 +65,14 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	display() {
+		this.stopStatsWatch();
+		this.startStatsWatch();
 		this.render();
+	}
+
+	hide() {
+		this.stopStatsWatch();
+		super.hide();
 	}
 
 	/** Imperative render of the settings tab. Our own re-render triggers call
@@ -61,6 +80,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private render() {
 		const { containerEl } = this;
 		containerEl.empty();
+		this.ensureTagInventory();
 
 		// ── General ──────────────────────────────────────────────────────────
 		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
@@ -761,32 +781,163 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 	}
 
-	/** Read-only summary: how many notes carry a managed location tag, and which
-	 *  namespaces TRELLIS is currently managing. */
-	private renderStats(containerEl: HTMLElement) {
-		const schema = this.plugin.settings.schema;
-		const fulls = tagNamespaces(schema).map((ns) => nsPath(schema, ns)); // root-aware
-		const files = this.app.vault.getMarkdownFiles();
-		let managed = 0;
-		for (const f of files) {
-			const cache = this.app.metadataCache.getFileCache(f);
-			const tags = cache ? getAllTags(cache) ?? [] : [];
-			if (
-				// Only tags that resolve to a real tagkey (#ns/...): a bare
-				// namespace tag is never managed, so counting it would overstate.
-				tags.some((tag) => fulls.some((ns) => tag.startsWith(`#${ns}/`)))
-			)
-				managed++;
+	private inventoryFile(file: TFile): TagInventoryFile {
+		const cache = this.app.metadataCache.getFileCache(file);
+		return {
+			path: file.path,
+			allTags: cache ? getAllTags(cache) ?? [] : [],
+			frontmatterTags: normalizeTagList(cache?.frontmatter?.tags),
+		};
+	}
+
+	private rebuildTagInventory() {
+		const schema = cloneSchema(this.plugin.settings.schema);
+		const inventory = new TagInventory(schema);
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			inventory.upsertFile(this.inventoryFile(file));
 		}
-		new Setting(containerEl)
+		this.tagInventory = inventory;
+		this.inventorySchemaFingerprint = JSON.stringify(this.plugin.settings.schema);
+	}
+
+	private ensureTagInventory() {
+		const fingerprint = JSON.stringify(this.plugin.settings.schema);
+		if (!this.tagInventory || this.inventorySchemaFingerprint !== fingerprint) {
+			this.rebuildTagInventory();
+		}
+	}
+
+	private scheduleStatsRender() {
+		if (this.statsTimer !== null) window.clearTimeout(this.statsTimer);
+		this.statsTimer = window.setTimeout(() => {
+			this.statsTimer = null;
+			this.renderStatsContents();
+		}, 200);
+	}
+
+	private updateInventoryFile(file: TFile) {
+		if (file.extension !== "md" || !this.tagInventory) return;
+		if (this.tagInventory.upsertFile(this.inventoryFile(file))) {
+			this.scheduleStatsRender();
+		}
+	}
+
+	private startStatsWatch() {
+		this.rebuildTagInventory();
+		const changed = this.app.metadataCache.on("changed", (file) =>
+			this.updateInventoryFile(file)
+		);
+		this.statsCleanups.push(() => this.app.metadataCache.offref(changed));
+		const created = this.app.vault.on("create", (file) => {
+			if (file instanceof TFile) this.updateInventoryFile(file);
+		});
+		this.statsCleanups.push(() => this.app.vault.offref(created));
+		const deleted = this.app.vault.on("delete", (file) => {
+			if (file instanceof TFile && this.tagInventory?.removeFile(file.path)) {
+				this.scheduleStatsRender();
+			}
+		});
+		this.statsCleanups.push(() => this.app.vault.offref(deleted));
+		const renamed = this.app.vault.on("rename", (file, oldPath) => {
+			if (
+				file instanceof TFile &&
+				file.extension === "md" &&
+				this.tagInventory?.renameFile(oldPath, this.inventoryFile(file))
+			) {
+				this.scheduleStatsRender();
+			}
+		});
+		this.statsCleanups.push(() => this.app.vault.offref(renamed));
+	}
+
+	private stopStatsWatch() {
+		for (const cleanup of this.statsCleanups.splice(0)) cleanup();
+		if (this.statsTimer !== null) window.clearTimeout(this.statsTimer);
+		this.statsTimer = null;
+		this.statsEl = null;
+		this.tagInventory = null;
+		this.inventorySchemaFingerprint = "";
+	}
+
+	/** Live, read-only inventory under the currently applied filename schema. */
+	private renderStats(containerEl: HTMLElement) {
+		this.statsEl = containerEl.createDiv({ cls: "trellis-tag-inventory" });
+		this.renderStatsContents();
+	}
+
+	private renderStatsContents() {
+		if (!this.statsEl?.isConnected) return;
+		this.ensureTagInventory();
+		const inventory = this.tagInventory;
+		if (!inventory) return;
+		const snapshot = inventory.snapshot();
+		this.statsEl.empty();
+		new Setting(this.statsEl)
 			.setName(t("setting.statsName"))
 			.setDesc(
 				t("setting.statsDesc", {
-					managed,
-					total: files.length,
-					ns: fulls.join(", ") || "—",
+					managed: snapshot.managedNotes,
+					total: snapshot.totalNotes,
+					tags: snapshot.managedOccurrences,
+					paths: snapshot.uniqueManagedPaths,
 				})
 			);
+		new Setting(this.statsEl)
+			.setName(t("setting.statsGeneralName"))
+			.setDesc(
+				t("setting.statsGeneralDesc", {
+					tags: snapshot.generalOccurrences,
+					unique: snapshot.uniqueGeneralTags,
+				})
+			);
+		for (const key of snapshot.tagKeys) {
+			new Setting(this.statsEl)
+				.setName(
+					t("setting.statsKeyName", {
+						n: key.slotIndex + 1,
+						ns: key.fullNamespace,
+					})
+				)
+				.setDesc(
+					t("setting.statsKeyDesc", {
+						notes: key.notes,
+						tags: key.occurrences,
+						paths: key.uniquePaths,
+						duplicates: key.duplicateNotes,
+						inline: key.inlineOnlyNotes,
+						roots: key.namespaceNodeNotes,
+					})
+				);
+			if (key.paths.length > 0) {
+				const details = this.statsEl.createEl("details", {
+					cls: "trellis-tag-inventory-paths",
+				});
+				details.createEl("summary", {
+					text: t("setting.statsPaths", { n: Math.min(5, key.paths.length) }),
+				});
+				for (const path of key.paths.slice(0, 5)) {
+					details.createDiv({
+						text: `#${path.tagPath} · ${path.count}`,
+						cls: "setting-item-description",
+					});
+				}
+				if (key.paths.length > 5) {
+					details.createDiv({
+						text: t("setting.statsMore", { n: key.paths.length - 5 }),
+						cls: "setting-item-description",
+					});
+				}
+			}
+		}
+		if (snapshot.rootOwnedUnmatchedOccurrences > 0) {
+			new Setting(this.statsEl)
+				.setName(t("setting.statsRootUnknownName"))
+				.setDesc(
+					t("setting.statsRootUnknownDesc", {
+						n: snapshot.rootOwnedUnmatchedOccurrences,
+					})
+				);
+		}
 	}
 
 	/** Keep separators aligned with the slot count (n slots → n-1 separators). */
