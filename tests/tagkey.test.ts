@@ -823,6 +823,7 @@ test("isValidSeparator accepts parse-safe symbols, rejects filename-hostile ones
 	assert.equal(isValidSeparator("--"), true);
 	assert.equal(isValidSeparator("_"), true);
 	assert.equal(isValidSeparator("."), true);
+	assert.equal(isValidSeparator("·"), true);
 	assert.equal(isValidSeparator("~"), true);
 	assert.equal(isValidSeparator("=="), true);
 	assert.equal(isValidSeparator(""), false); // empty

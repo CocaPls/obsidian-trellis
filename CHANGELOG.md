@@ -25,6 +25,8 @@ development milestones; `0.1.0` is the first public release.
   tag is removed, and dropping the name-key warns about free-name loss.
 - Report live tag-key combination usage and prospective filename collisions;
   block a schema edit before it can create an exact-path collision.
+- Offer the middle dot (`·`) as a first-class slot-boundary preset while keeping
+  uncommon safe symbols available through the existing custom separator input.
 
 ## 0.4.2 — Cross-platform filename safety
 

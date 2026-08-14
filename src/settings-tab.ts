@@ -150,7 +150,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			{
 				const schema = this.plugin.settings.schema;
 				const currentSymbol = primarySeparatorSymbol(schema);
-				const presetSymbols = ["-", "_", "."];
+				const presetSymbols = ["-", "_", ".", "·"];
 				let pendingSymbol = currentSymbol;
 				let pendingSpacing = separatorSpacingAt(schema, 0);
 				let pendingSegment =
@@ -174,6 +174,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							.addOption("-", "-")
 							.addOption("_", "_")
 							.addOption(".", ".")
+							.addOption("·", "·")
 							.addOption("custom", t("setting.sepCustom"))
 							.setValue(presetSymbols.includes(currentSymbol) ? currentSymbol : "custom")
 							.onChange((value) => {
@@ -706,7 +707,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			// The separator between this slot and the next (slots n → seps n-1).
 			if (i < schema.slots.length - 1) {
 				const current = schema.separators[i] ?? "-";
-				const presets = ["-", "_", "."];
+				const presets = ["-", "_", ".", "·"];
 				let customInput: HTMLInputElement | null = null;
 				const separatorRow = new Setting(containerEl)
 					.setName(t("adv.sep", { n: i + 1, a: i + 1, b: i + 2 }))
@@ -715,6 +716,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							.addOption("-", "-")
 							.addOption("_", "_")
 							.addOption(".", ".")
+							.addOption("·", "·")
 							.addOption("custom", t("setting.sepCustom"))
 							.setValue(presets.includes(current) ? current : "custom")
 							.onChange((value) => {
