@@ -1,6 +1,6 @@
 {
 	"name": "trellis-plugin",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"description": "Keep hierarchical tags and filename codes in sync in Obsidian, with a tag-based sidebar tree and link-safe bulk changes.",
 	"main": "main.js",
 	"type": "module",

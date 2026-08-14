@@ -8,6 +8,12 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
+## 0.4.1 — Tree view hot-update repair
+
+- Recreate an already-open Trellis sidebar view when Obsidian hot-updates the
+  plugin and leaves that tab as an unknown view, avoiding an app restart or
+  manual tab repair after upgrading.
+
 ## 0.4.0 — Safe automation and filename formatting
 
 - **Flexible filename formatting.** Configure the code–title boundary symbol,
