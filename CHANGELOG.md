@@ -20,6 +20,11 @@ development milestones; `0.1.0` is the first public release.
   tree continues to show every configured tag-key. Reverse import remains tied
   to the primary outer filename code because arbitrary multi-key filenames are
   not always reversibly parseable.
+- Keep sparse no-name schemas explicit and safe: omitted tag-key slots collapse
+  with their separators, automation requires approval before the final managed
+  tag is removed, and dropping the name-key warns about free-name loss.
+- Report live tag-key combination usage and prospective filename collisions;
+  block a schema edit before it can create an exact-path collision.
 
 ## 0.4.2 — Cross-platform filename safety
 

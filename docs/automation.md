@@ -68,6 +68,10 @@ if (planned.ok) console.log(planned.value);
 
 - Omit `tagChanges` or `nameChange` when that part should stay unchanged.
 - Use `tagPath: null` to remove the frontmatter tag for that slot.
+- In a schema without a name-key, removing the final managed tag would leave
+  the note unmanaged. Trellis returns `would-unmanage-note` unless the reviewed
+  request explicitly sets `allowUnmanaged: true`; the current filename is then
+  preserved.
 - `namespace` is the slot namespace (`trel`), not an optional shared root.
 - `tagPath` must include the configured root when one exists, for example
   `zettel/trel/S88/B99`.
@@ -114,7 +118,7 @@ request and rejects modified output.
 
 Common error codes include `note-not-found`, `metadata-unavailable`,
 `invalid-request`, `stale-plan`, `write-in-progress`, `inline-tag-conflict`,
-`duplicate-location-tags`, `target-exists`, `frontmatter-write-failed`, and
+`duplicate-location-tags`, `would-unmanage-note`, `target-exists`, `frontmatter-write-failed`, and
 `rename-failed`. Always branch on `ok` and retain the structured error for logs.
 
 ## Operational guidance

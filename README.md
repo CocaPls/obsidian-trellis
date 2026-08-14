@@ -84,6 +84,11 @@ single-code path remains the default.
 
   Each tag slot has its own namespace and hierarchy display. Applying a schema
   change requires a preview; ambiguous or orphaning layouts are rejected.
+  The name-key is optional. With a global `[A]-[B]-[C]` schema, each note may
+  carry only the tag-keys it needs: `A`, `A-B`, `A-C`, and `B-C` coexist while
+  omitted slots and their separators collapse automatically. Removing the
+  name-key shows an explicit free-name loss warning, and exact filename
+  collisions block the schema change.
 - **Root namespace** places every managed tag below a shared root such as
   `#zettel/trel/...` without adding that root to filenames. Changes are migrated
   behind confirmation and are undoable.
@@ -115,7 +120,8 @@ multi-key filenames are not always reversibly parseable without their tags.
 
 The everyday controls cover the managed location namespace, filename-code
 format, tree behavior, visible header actions, language, and a live per-tag-key
-note count. Multi-key slots, root namespaces, and segment presets remain in the
+note count, active tag-key combinations, and filename collisions. Multi-key
+slots, root namespaces, and segment presets remain in the
 collapsed experimental section.
 
 Vault-wide setting changes are staged first. Trellis shows the exact affected

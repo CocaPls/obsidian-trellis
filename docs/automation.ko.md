@@ -67,6 +67,9 @@ if (planned.ok) console.log(planned.value);
 
 - 유지할 부분은 `tagChanges`나 `nameChange`를 생략합니다.
 - 해당 슬롯의 frontmatter 태그를 제거하려면 `tagPath: null`을 사용합니다.
+- 네임키 없는 스키마에서 마지막 관리 태그를 제거하면 노트가 트렐리 관리 밖으로
+  나갑니다. 검토한 요청에 `allowUnmanaged: true`를 명시하지 않으면
+  `would-unmanage-note`로 차단하며, 명시한 경우 현재 파일명을 보존합니다.
 - `namespace`는 선택형 공통 루트가 아니라 슬롯 네임스페이스(`trel`)입니다.
 - 루트가 설정돼 있다면 `tagPath`에는 `zettel/trel/S88/B99`처럼 루트까지
   포함합니다.
@@ -112,7 +115,7 @@ if (!applied.ok) {
 
 주요 오류 코드는 `note-not-found`, `metadata-unavailable`, `invalid-request`,
 `stale-plan`, `write-in-progress`, `inline-tag-conflict`,
-`duplicate-location-tags`, `target-exists`,
+`duplicate-location-tags`, `would-unmanage-note`, `target-exists`,
 `frontmatter-write-failed`, `rename-failed`입니다. 항상 `ok`로 분기하고 구조화된
 오류를 로그에 보존하세요.
 

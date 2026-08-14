@@ -672,6 +672,36 @@ test("assembleBasenameMulti joins present slots, dropping omitted ones + their s
 	assert.equal(assembleBasenameMulti(["S88B07", null, null], twoTag), "S88B07");
 });
 
+test("no-name sparse schema keeps global order and only joins present tag-keys", () => {
+	const sparse: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "a" },
+			{ role: "tag", namespace: "b" },
+			{ role: "tag", namespace: "c" },
+		],
+		separators: ["-", "-"],
+	};
+	assert.equal(assembleBasenameMulti(["A01", null, null], sparse), "A01");
+	assert.equal(assembleBasenameMulti([null, "B02", null], sparse), "B02");
+	assert.equal(assembleBasenameMulti([null, null, "C03"], sparse), "C03");
+	assert.equal(assembleBasenameMulti(["A01", "B02", null], sparse), "A01-B02");
+	assert.equal(assembleBasenameMulti(["A01", null, "C03"], sparse), "A01-C03");
+	assert.equal(assembleBasenameMulti([null, "B02", "C03"], sparse), "B02-C03");
+	assert.equal(
+		assembleBasenameMulti(["A01", "B02", "C03"], sparse),
+		"A01-B02-C03"
+	);
+	assert.equal(
+		syncedBasenameMulti(
+			"A01-B02-C03",
+			["#a/A/01", "#c/C/03"],
+			sparse
+		),
+		"A01-C03"
+	);
+	assert.equal(syncedBasenameMulti("A01", ["#ordinary/x"], sparse), null);
+});
+
 test("extractNameMulti anchors the name between known tag slots", () => {
 	assert.equal(extractNameMulti("S88B07-idea-P02C03", ["S88B07", null, "P02C03"], twoTag), "idea");
 	// multi-word title between the two tag slots is preserved whole
