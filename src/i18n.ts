@@ -71,7 +71,9 @@ const EN: Record<string, string> = {
 	"notice.retagged": "retagged {n} file(s) {from} → {to}",
 	"notice.noFilesTagged": "no files tagged {from}",
 	"notice.cascadeBadPath": "enter valid tag paths without spaces or reserved symbols",
-	"notice.cascadeOutside": "cascade is limited to children of the managed namespace '{ns}'",
+	"notice.cascadeOutside": "cascade is limited to children of managed tag-key namespaces: {ns}",
+	"notice.cascadeDifferentKey":
+		"a cascade must stay in one tag-key namespace ({from} → {to} is not allowed)",
 	"notice.noCascade": "no location-tag rename to undo",
 	"notice.cascadeUndone": "restored the previous tags and filenames on {n} note(s)",
 	"notice.noNamespaceChange": "no namespace change to undo",
@@ -406,7 +408,9 @@ const KO: Record<string, string> = {
 	"notice.retagged": "{n}개 파일 재태그 {from} → {to}",
 	"notice.noFilesTagged": "{from} 태그가 붙은 파일 없음",
 	"notice.cascadeBadPath": "공백이나 예약 문자가 없는 올바른 태그 경로를 입력하세요",
-	"notice.cascadeOutside": "하위 전체 변경은 관리 네임스페이스 '{ns}' 안에서만 가능합니다",
+	"notice.cascadeOutside": "하위 전체 변경은 관리 태그키 네임스페이스 안에서만 가능합니다: {ns}",
+	"notice.cascadeDifferentKey":
+		"하위 전체 변경은 하나의 태그키 안에서만 가능합니다 ({from} → {to} 이동 불가)",
 	"notice.noCascade": "되돌릴 위치 태그 이름 변경이 없습니다",
 	"notice.cascadeUndone": "{n}개 노트의 이전 태그와 파일명을 복원했습니다",
 	"notice.noNamespaceChange": "되돌릴 네임스페이스 변경이 없습니다",

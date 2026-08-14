@@ -135,7 +135,8 @@ export class CascadeRenameModal extends Modal {
 	constructor(
 		app: App,
 		onSubmit: (from: string, to: string) => void,
-		initialFrom = ""
+		initialFrom = "",
+		private readonly includeSuggestion: (tagPath: string) => boolean = () => true
 	) {
 		super(app);
 		this.onSubmit = onSubmit;
@@ -158,7 +159,12 @@ export class CascadeRenameModal extends Modal {
 					.setPlaceholder(TAG_PATH_PLACEHOLDER)
 					.setValue(this.from)
 					.onChange((v) => (this.from = v.trim()));
-				new TagPathSuggest(this.app, input.inputEl, (v) => (this.from = v));
+				new TagPathSuggest(
+					this.app,
+					input.inputEl,
+					(v) => (this.from = v),
+					this.includeSuggestion
+				);
 			});
 		new Setting(contentEl)
 			.setName(t("modal.cascade.toName"))
@@ -167,7 +173,12 @@ export class CascadeRenameModal extends Modal {
 				input
 					.setPlaceholder(NEXT_TAG_PATH_PLACEHOLDER)
 					.onChange((v) => (this.to = v.trim()));
-				new TagPathSuggest(this.app, input.inputEl, (v) => (this.to = v));
+				new TagPathSuggest(
+					this.app,
+					input.inputEl,
+					(v) => (this.to = v),
+					this.includeSuggestion
+				);
 			});
 
 		new Setting(contentEl).addButton((b) =>
@@ -1090,7 +1101,8 @@ class TagPathSuggest extends AbstractInputSuggest<string> {
 	constructor(
 		app: App,
 		textInput: HTMLInputElement,
-		onPick: (value: string) => void
+		onPick: (value: string) => void,
+		include: (tagPath: string) => boolean = () => true
 	) {
 		super(app, textInput);
 		this.textInput = textInput;
@@ -1102,7 +1114,7 @@ class TagPathSuggest extends AbstractInputSuggest<string> {
 			const cache = app.metadataCache.getFileCache(file);
 			if (cache) for (const t of getAllTags(cache) ?? []) tags.add(t);
 		}
-		this.all = expandTagPrefixes([...tags]);
+		this.all = expandTagPrefixes([...tags]).filter(include);
 	}
 
 	getSuggestions(query: string): string[] {

@@ -46,6 +46,7 @@ import {
 	separatorConflicts,
 	schemaMigratedName,
 	portableBasenameIssue,
+	matchTagKey,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -393,10 +394,7 @@ export default class TrellisPlugin extends Plugin {
 								(paths) => this.bootstrapDryRun(paths),
 								(f) => this.locationTagOf(f) !== null
 							).open(),
-						onCascade: () =>
-							new CascadeRenameModal(this.app, (from, to) =>
-								this.requestCascadeRename(from, to)
-							).open(),
+						onCascade: () => this.openCascadeRenameModal(),
 						onUndoBootstrap: () => void this.undoBootstrap(),
 						onUndoSeparator: () => void this.undoSeparatorChange(),
 						onUndoRoot: () => void this.undoRootChange(),
@@ -480,11 +478,7 @@ export default class TrellisPlugin extends Plugin {
 		this.addCommand({
 			id: "cascade-rename-tag",
 			name: t("cmd.cascade"),
-			callback: () => {
-				new CascadeRenameModal(this.app, (from, to) =>
-					this.requestCascadeRename(from, to)
-				).open();
-			},
+			callback: () => this.openCascadeRenameModal(),
 		});
 
 		// Bootstrap an existing vault: read filename tagkey prefixes and propose
@@ -531,22 +525,20 @@ export default class TrellisPlugin extends Plugin {
 		});
 		this.registerRootCommands();
 
-		// Right-click a note → cascade-rename its location tag (From prefilled).
+		// Right-click a note → cascade-rename one of its managed tag-keys. A note
+		// with exactly one managed value is prefilled; with several, the filtered
+		// picker stays empty so no key is silently preferred.
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				if (!(file instanceof TFile) || file.extension !== "md") return;
-				const from = this.locationTagOf(file);
-				if (from === null) return;
+				const managed = this.managedTagPathsOf(file);
+				if (managed.length === 0) return;
 				menu.addItem((item) =>
 					item
 						.setTitle(t("cmd.cascade"))
 						.setIcon("tags")
 						.onClick(() =>
-							new CascadeRenameModal(
-								this.app,
-								(f, t) => this.requestCascadeRename(f, t),
-								from
-							).open()
+							this.openCascadeRenameModal(managed.length === 1 ? managed[0] : "")
 						)
 				);
 			})
@@ -1399,9 +1391,36 @@ export default class TrellisPlugin extends Plugin {
 		return tag ? tag.replace(/^#/, "") : null;
 	}
 
-	/** Exact frontmatter changes a managed cascade would make. The command is
-	 * deliberately limited to the primary managed namespace; it is not a generic
-	 * vault-wide tag replacement tool. */
+	/** Every filename-bearing managed tag on one note, across all tag-keys. */
+	private managedTagPathsOf(file: TFile): string[] {
+		const cache = this.app.metadataCache.getFileCache(file);
+		if (!cache) return [];
+		return [
+			...new Set(
+				(getAllTags(cache) ?? []).flatMap((tag) => {
+					const match = matchTagKey(tag, this.settings.schema);
+					return match && match.keyPath !== "" ? [match.tagPath] : [];
+				})
+			),
+		];
+	}
+
+	private isManagedTagValue(tagPath: string): boolean {
+		const match = matchTagKey(tagPath, this.settings.schema);
+		return match !== null && match.keyPath !== "";
+	}
+
+	private openCascadeRenameModal(initialFrom = "") {
+		new CascadeRenameModal(
+			this.app,
+			(from, to) => this.requestCascadeRename(from, to),
+			initialFrom,
+			(tagPath) => this.isManagedTagValue(tagPath)
+		).open();
+	}
+
+	/** Exact frontmatter changes a managed cascade would make. Scope validation
+	 * happens before this scan; it is not a generic vault-wide tag replacement. */
 	private previewCascade(from: string, to: string): CascadePreviewRow[] {
 		const rows: CascadePreviewRow[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
@@ -1425,10 +1444,22 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.cascadeBadPath"));
 			return;
 		}
-		const namespace = primaryNsPath(this.settings.schema);
-		const isManagedChild = (path: string) => path.startsWith(`${namespace}/`);
-		if (!isManagedChild(from) || !isManagedChild(to)) {
-			new Notice(t("notice.cascadeOutside", { ns: namespace }));
+		const fromKey = matchTagKey(from, this.settings.schema);
+		const toKey = matchTagKey(to, this.settings.schema);
+		if (!fromKey || !toKey || fromKey.keyPath === "" || toKey.keyPath === "") {
+			const namespaces = tagNamespaces(this.settings.schema)
+				.map((namespace) => nsPath(this.settings.schema, namespace))
+				.join(", ");
+			new Notice(t("notice.cascadeOutside", { ns: namespaces || "—" }));
+			return;
+		}
+		if (fromKey.slotIndex !== toKey.slotIndex) {
+			new Notice(
+				t("notice.cascadeDifferentKey", {
+					from: fromKey.fullNamespace,
+					to: toKey.fullNamespace,
+				})
+			);
 			return;
 		}
 		const rows = this.previewCascade(from, to);
