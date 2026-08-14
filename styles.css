@@ -558,7 +558,11 @@ button.trellis-destructive:disabled:hover {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
-.trellis-filename-composer {
+.trellis-filename-result {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
 	margin: var(--size-4-4) 0;
 	padding: var(--size-4-3) var(--size-4-4);
 	border: 1px solid var(--background-modifier-border);
@@ -566,103 +570,123 @@ button.trellis-destructive:disabled:hover {
 	background: var(--background-secondary);
 }
 
-.trellis-filename-composer-header {
+.trellis-filename-result-copy {
 	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: var(--size-4-3);
-	margin-bottom: var(--size-4-3);
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
 }
 
-.trellis-filename-composer-title {
+.trellis-filename-result-label {
 	color: var(--text-normal);
 	font-weight: var(--font-semibold);
 }
 
-.trellis-filename-composer-hint {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	text-align: end;
-}
-
-.trellis-filename-sequence {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-1);
-	overflow-x: auto;
-	padding: var(--size-4-1) 0 var(--size-4-3);
-}
-
-.trellis-filename-example {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-3);
-	padding-top: var(--size-4-3);
-	border-top: 1px solid var(--background-modifier-border);
-}
-
-.trellis-filename-example-label {
+.trellis-filename-result-hint {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
 
-.trellis-filename-example code {
+.trellis-filename-result > code {
 	overflow: hidden;
+	max-width: 55%;
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
 	color: var(--text-normal);
-	font-size: var(--font-ui-medium);
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-slot,
-.trellis-filename-composer button.trellis-filename-sequence-gap {
-	flex: 0 0 auto;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	box-shadow: none;
-	background: var(--background-primary);
-	color: var(--text-muted);
+.trellis-filename-workspace {
+	display: grid;
+	grid-template-columns: minmax(180px, 210px) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-4);
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-slot {
+.trellis-filename-outline {
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.trellis-filename-outline-title {
+	padding: var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-sequence {
 	display: flex;
-	min-width: 120px;
+	flex-direction: column;
+	gap: 2px;
+	padding: var(--size-4-1);
+}
+
+.trellis-filename-outline button.trellis-filename-sequence-slot,
+.trellis-filename-outline button.trellis-filename-sequence-gap {
+	width: 100%;
 	height: auto;
-	min-height: 48px;
+	border: 0;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-muted);
+	text-align: start;
+}
+
+.trellis-filename-outline button.trellis-filename-sequence-slot {
+	display: flex;
+	min-height: 52px;
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 2px;
 	padding: var(--size-4-2) var(--size-4-3);
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-gap {
-	min-width: 30px;
-	padding: var(--size-4-2);
-	border-color: transparent;
-	background: transparent;
-	color: var(--text-normal);
-	font-size: var(--font-ui-medium);
-	font-family: var(--font-monospace);
-	white-space: pre;
+.trellis-filename-outline button.trellis-filename-sequence-gap {
+	display: grid;
+	min-height: 40px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-slot:hover,
-.trellis-filename-composer button.trellis-filename-sequence-gap:hover {
-	border-color: var(--background-modifier-border-hover);
+.trellis-filename-outline button.trellis-filename-sequence-slot:hover,
+.trellis-filename-outline button.trellis-filename-sequence-gap:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-slot.is-selected {
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
+.trellis-filename-outline button.trellis-filename-sequence-slot.is-selected,
+.trellis-filename-outline button.trellis-filename-sequence-gap.is-selected {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
 	color: var(--text-normal);
 }
 
-.trellis-filename-composer button.trellis-filename-sequence-gap.is-selected {
-	border-color: var(--interactive-accent);
-	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+.trellis-filename-sequence-title {
+	overflow: hidden;
+	font-weight: var(--font-medium);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trellis-filename-sequence-gap code {
+	padding: 2px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
 }
 
 .trellis-filename-sequence-meta {
@@ -671,11 +695,16 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-filename-selection {
-	margin-bottom: var(--size-4-4);
+	min-width: 0;
+	margin: 0;
 	padding: 0 var(--size-4-4) var(--size-4-2);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-primary);
+}
+
+.trellis-filename-selection:empty {
+	display: none;
 }
 
 @media (max-width: 600px) {
@@ -691,14 +720,17 @@ button.trellis-destructive:disabled:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-filename-composer-header,
-	.trellis-filename-example {
+	.trellis-filename-result {
 		align-items: flex-start;
 		flex-direction: column;
 	}
 
-	.trellis-filename-composer-hint {
-		text-align: start;
+	.trellis-filename-result > code {
+		max-width: 100%;
+	}
+
+	.trellis-filename-workspace {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.trellis-settings-card .setting-item,

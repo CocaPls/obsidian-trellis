@@ -881,26 +881,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const selection = this.ensureFilenameSelection(schema);
-		const composer = containerEl.createDiv({ cls: "trellis-filename-composer" });
-		const composerHeader = composer.createDiv({
-			cls: "trellis-filename-composer-header",
-		});
-		composerHeader.createSpan({
-			cls: "trellis-filename-composer-title",
-			text: t("setting.filenamePreview"),
-		});
-		composerHeader.createSpan({
-			cls: "trellis-filename-composer-hint",
-			text: t("setting.filenamePreviewHint"),
-		});
-		const sequence = composer.createDiv({ cls: "trellis-filename-sequence" });
-
-		schema.slots.forEach((slot, index) => {
-			this.renderFilenameSequenceSlot(sequence, schema, slot, index, selection);
-			if (index < schema.slots.length - 1) {
-				this.renderFilenameSequenceGap(sequence, schema, index, selection);
-			}
-		});
 		const exampleParts = schema.slots.map((slot, index) => {
 			if (slot.role === "name") return t("setting.filenameExampleName");
 			const definition = tagDefinitionById(schema, slot.tagDefinitionId);
@@ -909,18 +889,39 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.replace(/\s+/g, "");
 			return sample || `TAG${index + 1}`;
 		});
-		const filenameExample = composer.createDiv({
-			cls: "trellis-filename-example",
+		const filenameResult = containerEl.createDiv({
+			cls: "trellis-filename-result",
 		});
-		filenameExample.createSpan({
-			cls: "trellis-filename-example-label",
-			text: t("setting.filenameExample"),
+		const resultCopy = filenameResult.createDiv({
+			cls: "trellis-filename-result-copy",
 		});
-		filenameExample.createEl("code", {
+		resultCopy.createSpan({
+			cls: "trellis-filename-result-label",
+			text: t("setting.filenamePreview"),
+		});
+		resultCopy.createSpan({
+			cls: "trellis-filename-result-hint",
+			text: t("setting.filenamePreviewHint"),
+		});
+		filenameResult.createEl("code", {
 			text: assembleBasenameMulti(exampleParts, schema) || "—",
 		});
 
-		const selectedEditor = containerEl.createDiv({
+		const workspace = containerEl.createDiv({ cls: "trellis-filename-workspace" });
+		const outline = workspace.createDiv({ cls: "trellis-filename-outline" });
+		outline.createDiv({
+			cls: "trellis-filename-outline-title",
+			text: t("setting.filenameParts"),
+		});
+		const sequence = outline.createDiv({ cls: "trellis-filename-sequence" });
+		schema.slots.forEach((slot, index) => {
+			this.renderFilenameSequenceSlot(sequence, schema, slot, index, selection);
+			if (index < schema.slots.length - 1) {
+				this.renderFilenameSequenceGap(sequence, schema, index, selection);
+			}
+		});
+
+		const selectedEditor = workspace.createDiv({
 			cls: "trellis-filename-selection",
 		});
 		if (selection?.kind === "slot") {
@@ -1078,7 +1079,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "trellis-filename-sequence-slot",
 			attr: { type: "button" },
 		});
-		button.createSpan({ text: label.title });
+		button.createSpan({
+			cls: "trellis-filename-sequence-title",
+			text: label.title,
+		});
 		if (label.meta) {
 			button.createSpan({
 				cls: "trellis-filename-sequence-meta",
@@ -1102,14 +1106,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 	) {
 		const button = containerEl.createEl("button", {
 			cls: "trellis-filename-sequence-gap",
-			text: renderSeparator(
-				schema.separators[index] ?? "-",
-				separatorSpacingAt(schema, index)
-			),
 			attr: {
 				type: "button",
 				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),
 			},
+		});
+		button.createSpan({
+			cls: "trellis-filename-sequence-title",
+			text: t("setting.filenameSeparatorPart"),
+		});
+		button.createEl("code", {
+			text: renderSeparator(
+				schema.separators[index] ?? "-",
+				separatorSpacingAt(schema, index)
+			),
 		});
 		const selected = selection?.kind === "gap" && selection.index === index;
 		button.classList.toggle("is-selected", selected);
