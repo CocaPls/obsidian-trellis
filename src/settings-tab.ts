@@ -151,14 +151,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
 		});
+		const exampleDefinition = this.plugin.tagDefinitions()[0];
+		const exampleName = exampleDefinition?.name || exampleDefinition?.namespace || "Trellis";
+		const examplePath = exampleDefinition
+			? `${nsPath(this.plugin.settings.schema, exampleDefinition.namespace)}/N/E/03`
+			: "tag/N/E/03";
 		new Setting(containerEl)
 			.setName(t("setting.propertyTagDisplayName"))
 			.setDesc(t("setting.propertyTagDisplayDesc"))
 			.addDropdown((dropdown) =>
 				dropdown
-					.addOption("full", t("propertyTagDisplay.full"))
-					.addOption("name", t("propertyTagDisplay.name"))
-					.addOption("name-terminal", t("propertyTagDisplay.nameTerminal"))
+					.addOption("full", t("propertyTagDisplay.full", { path: examplePath }))
+					.addOption("name", t("propertyTagDisplay.name", { name: exampleName }))
+					.addOption("name-terminal", t("propertyTagDisplay.nameTerminal", { name: exampleName }))
 					.addOption("terminal", t("propertyTagDisplay.terminal"))
 					.setValue(this.plugin.settings.propertyTagDisplay)
 					.onChange((value) => {

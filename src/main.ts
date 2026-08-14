@@ -1420,9 +1420,8 @@ export default class TrellisPlugin extends Plugin {
 		// carries duplicate location tags; the user resolves them in bulk via the
 		// "check duplicate location tags" command. Detection uses frontmatter tags
 		// only — that's what the cleanup can actually remove (inline body tags
-		// aren't touched). We still sync from the first match (pickTagkey) so
-		// synchronization stops until the ambiguity is resolved. Trellis never
-		// silently chooses one value from a single-valued managed tag definition.
+		// aren't touched). Synchronization stops until the ambiguity is resolved;
+		// Trellis never silently chooses one value from a single-valued branch.
 		const dupGroups = duplicateLocationGroups(fmTags, this.settings.schema);
 		if (dupGroups.length > 0) {
 			if (!this.multiWarned.has(file.path)) {

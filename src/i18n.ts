@@ -114,9 +114,9 @@ const EN: Record<string, string> = {
 	"setting.propertyTagDisplayName": "Managed tag labels in Properties",
 	"setting.propertyTagDisplayDesc":
 		"Visual only. The full Obsidian tag remains stored and is shown on hover.",
-	"propertyTagDisplay.full": "Full path — trellis/bp/N/E/03",
-	"propertyTagDisplay.name": "Trellis tag name — BLUEPRINT",
-	"propertyTagDisplay.nameTerminal": "Name + terminal — BLUEPRINT · 03",
+	"propertyTagDisplay.full": "Full path — {path}",
+	"propertyTagDisplay.name": "Trellis tag name — {name}",
+	"propertyTagDisplay.nameTerminal": "Name + terminal — {name} · 03",
 	"propertyTagDisplay.terminal": "Terminal only — 03",
 	"setting.tagDisplayName": "Display name",
 	"setting.tagDisplayNameDesc":
@@ -213,7 +213,7 @@ const EN: Record<string, string> = {
 	"notice.sepUndoStale":
 		"this undo record no longer matches the current filename structure or files; no changes were made",
 	"notice.multiLocation":
-		"{name} has {n} location tags — using the first (one note = one location)",
+		"{name} has {n} managed tags in a single-value branch — filename sync paused for this note",
 	"notice.noDuplicates": "no duplicate location tags found",
 	"notice.deduped": "cleaned up duplicate tags on {n} file(s)",
 	"notice.noDedup": "no duplicate-tag cleanup to undo",
@@ -431,12 +431,10 @@ const EN: Record<string, string> = {
 	"modal.badSep.desc": "A separator must be 1–4 safe punctuation or symbol characters. Try -, _, ., · or ~.",
 	"modal.badSep.conflict":
 		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
-	"modal.applyFilename structure.title": "Apply filename structure changes?",
-	"modal.applyFilename structure.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
-	"modal.filename structureNameLoss":
+	"modal.schemaNameLoss":
 		"Removing the name slot discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
-	"modal.filename structureCollision.title": "Filename collisions in this filename structure",
-	"modal.filename structureCollision.desc":
+	"modal.schemaCollision.title": "Filename collisions in this filename structure",
+	"modal.schemaCollision.desc":
 		"This filename structure creates {n} exact-path collision group(s), so nothing was applied. Resolve or redesign these targets first: {items}",
 	"setting.statsName": "Live vault status",
 	"setting.statsDesc":
@@ -599,9 +597,9 @@ const KO: Record<string, string> = {
 	"setting.propertyTagDisplayName": "속성의 트렐리 태그 표시",
 	"setting.propertyTagDisplayDesc":
 		"화면 표시만 줄입니다. 실제 옵시디언 태그 전체 경로는 그대로 저장되며 마우스를 올리면 확인할 수 있습니다.",
-	"propertyTagDisplay.full": "전체 경로 — trellis/bp/N/E/03",
-	"propertyTagDisplay.name": "트렐리 태그 이름 — BLUEPRINT",
-	"propertyTagDisplay.nameTerminal": "이름 + 말단 — BLUEPRINT · 03",
+	"propertyTagDisplay.full": "전체 경로 — {path}",
+	"propertyTagDisplay.name": "트렐리 태그 이름 — {name}",
+	"propertyTagDisplay.nameTerminal": "이름 + 말단 — {name} · 03",
 	"propertyTagDisplay.terminal": "말단만 — 03",
 	"setting.tagDisplayName": "표시 이름",
 	"setting.tagDisplayNameDesc":
@@ -698,7 +696,7 @@ const KO: Record<string, string> = {
 	"notice.sepUndoStale":
 		"이 실행취소 기록은 현재 파일명 구조 또는 파일과 일치하지 않습니다. 아무것도 변경하지 않았습니다",
 	"notice.multiLocation":
-		"{name} 위치 태그 {n}개 — 첫 번째 사용 (노트 하나 = 위치 하나)",
+		"{name}의 단일값 트렐리 태그 분기에 태그가 {n}개 있습니다. 이 노트의 파일명 동기화를 멈췄습니다",
 	"notice.noDuplicates": "중복 위치 태그 없음",
 	"notice.deduped": "{n}개 파일 중복 태그 정리됨",
 	"notice.noDedup": "되돌릴 중복 태그 정리 없음",
@@ -914,12 +912,10 @@ const KO: Record<string, string> = {
 	"modal.badSep.desc": "구분자는 안전한 문장부호나 기호 1~4자로 입력하세요. -, _, ., ·, ~ 등을 쓸 수 있습니다.",
 	"modal.badSep.conflict":
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
-	"modal.applyFilename structure.title": "파일명 구조 변경을 적용할까요?",
-	"modal.applyFilename structure.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
-	"modal.filename structureNameLoss":
+	"modal.schemaNameLoss":
 		"이름 슬롯를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
-	"modal.filename structureCollision.title": "이 파일명 구조에서 파일명 충돌 발생",
-	"modal.filename structureCollision.desc":
+	"modal.schemaCollision.title": "이 파일명 구조에서 파일명 충돌 발생",
+	"modal.schemaCollision.desc":
 		"같은 경로를 요구하는 충돌 묶음이 {n}개라 적용하지 않았습니다. 먼저 다음 대상을 정리하거나 파일명 구조를 바꾸세요: {items}",
 	"setting.statsName": "현재 볼트 현황",
 	"setting.statsDesc":
