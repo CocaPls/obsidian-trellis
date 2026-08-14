@@ -135,3 +135,46 @@ test("inventory reports sparse tag-key combinations and exact filename collision
 		},
 	]);
 });
+
+test("registered sidebar-only tags are inventoried but never projected into filenames", () => {
+	const definitions: TrellisSchema = {
+		tagDefinitions: [
+			{ id: "area", name: "Area", namespace: "area", sidebarVisible: true },
+			{ id: "state", name: "State", namespace: "state", sidebarVisible: true },
+		],
+		slots: [
+			{ id: "slot-area", role: "tag", tagDefinitionId: "area" },
+			{ id: "slot-name", role: "name" },
+		],
+		separators: ["-"],
+	};
+	const inventory = new TagInventory(definitions);
+	inventory.upsertFile({
+		path: "wrong-title.md",
+		allTags: ["#area/A/01", "#state/wip"],
+		frontmatterTags: ["area/A/01", "state/wip"],
+	});
+	const snapshot = inventory.snapshot();
+	assert.deepEqual(
+		snapshot.tagKeys.map((row) => [row.tagDefinitionId, row.slotIndex, row.notes]),
+		[
+			["area", 0, 1],
+			["state", -1, 1],
+		]
+	);
+	assert.deepEqual(snapshot.filenameDrift, [
+		{ path: "wrong-title.md", targetPath: "A01-title.md" },
+	]);
+});
+
+test("inline managed tags are reported but do not create filename drift", () => {
+	const inventory = new TagInventory(schema);
+	inventory.upsertFile({
+		path: "plain.md",
+		allTags: ["#bp/A/01"],
+		frontmatterTags: [],
+	});
+	const snapshot = inventory.snapshot();
+	assert.equal(snapshot.tagKeys[0].inlineOnlyNotes, 1);
+	assert.deepEqual(snapshot.filenameDrift, []);
+});

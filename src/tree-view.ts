@@ -49,6 +49,9 @@ export interface TrellisTreeCallbacks {
 	getButtons: () => HeaderButtonVisibility;
 	onToggleSort: () => void;
 	onNewChild: (parentTagPath: string) => void;
+	onHideBranch: (tagPath: string) => void;
+	canHideBranch: (tagPath: string) => boolean;
+	getTagColor: (tagPath: string) => string | undefined;
 	onNewNote: () => void;
 	onBootstrap: () => void;
 	onCascade: () => void;
@@ -508,6 +511,9 @@ export class TrellisTreeView extends ItemView {
 					? this.basename(ownNote)
 					: node.segment;
 		inner.setText(label);
+		const accent = this.cb.getTagColor(node.path);
+		if (accent) inner.style.setProperty("--trellis-tag-color", accent);
+		if (accent) inner.addClass("trellis-tag-accent");
 		if (ownNote) {
 			// Underline affordance: this tag HAS a note — clicking goes somewhere.
 			inner.addClass("trellis-has-note");
@@ -532,6 +538,14 @@ export class TrellisTreeView extends ItemView {
 					.setIcon("file-plus")
 					.onClick(() => this.cb.onNewChild(node.path))
 			);
+			if (this.cb.canHideBranch(node.path)) {
+				menu.addItem((i) =>
+					i
+						.setTitle(t("menu.hideBranch"))
+						.setIcon("eye-off")
+						.onClick(() => this.cb.onHideBranch(node.path))
+				);
+			}
 			menu.showAtMouseEvent(e);
 		});
 

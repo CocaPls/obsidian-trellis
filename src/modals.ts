@@ -271,6 +271,59 @@ export class CascadePreviewModal extends Modal {
 	}
 }
 
+export interface FilenameSyncPreviewRow {
+	path: string;
+	targetPath: string;
+}
+
+/** Turning live sync back on may affect many existing notes. Keep the toggle
+ * off until the user has seen the exact old → new paths and explicitly applies. */
+export class FilenameSyncPreviewModal extends Modal {
+	constructor(
+		app: App,
+		private readonly rows: FilenameSyncPreviewRow[],
+		private readonly onApply: () => void
+	) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: t("modal.filenameSync.title") });
+		contentEl.createEl("p", {
+			cls: "setting-item-description",
+			text: t("modal.filenameSync.desc", { n: this.rows.length }),
+		});
+		const details = contentEl.createEl("details");
+		details.createEl("summary", {
+			text: t("modal.filenameSync.showList", { n: this.rows.length }),
+		});
+		const list = details.createDiv({ cls: "trellis-bootstrap-list" });
+		for (const row of this.rows) {
+			const item = list.createDiv({ cls: "trellis-bootstrap-row" });
+			item.createDiv({ cls: "trellis-bootstrap-name", text: row.path });
+			item.createDiv({ cls: "trellis-bootstrap-tag", text: `→ ${row.targetPath}` });
+		}
+		new Setting(contentEl)
+			.addButton((button) =>
+				button
+					.setButtonText(t("modal.filenameSync.apply", { n: this.rows.length }))
+					.setCta()
+					.onClick(() => {
+						this.close();
+						this.onApply();
+					})
+			)
+			.addButton((button) =>
+				button.setButtonText(t("modal.confirm.cancel")).onClick(() => this.close())
+			);
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 /** New-note modal. Parent: prefilled by the caller (clicked node, or the active
  *  note's location for the header button) and editable WITH tag autocomplete —
  *  it picks an existing location, so completing it is safe. Segment: the user

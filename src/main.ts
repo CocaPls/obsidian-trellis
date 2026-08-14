@@ -94,6 +94,8 @@ import {
 	BulkProgressModal,
 	AlertModal,
 	ConfirmModal,
+	FilenameSyncPreviewModal,
+	type FilenameSyncPreviewRow,
 } from "./modals";
 
 import { TrellisSettingTab } from "./settings-tab";
@@ -198,6 +200,8 @@ interface TrellisSettings {
 	settingsVersion: number;
 	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
 	schema: TrellisSchema;
+	/** Live one-way frontmatter-tag → filename synchronization. */
+	filenameSyncEnabled: boolean;
 	treeViewEnabled: boolean;
 	/** Custom tab title for the tree view; "" = the localized default. */
 	treeViewName: string;
@@ -215,6 +219,8 @@ interface TrellisSettings {
 	treeLabelMode: TreeLabelMode;
 	/** Namespace used as the single axis in the classic notes-only tree. */
 	treeTagKeyNamespace: string;
+	/** Definition-stable sidebar exclusions. `relativePath` excludes descendants too. */
+	hiddenTagBranches: HiddenTagBranch[];
 	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
 	language: LangSetting;
 	/** Files+tags written by the last bootstrap apply (for undo). */
@@ -231,9 +237,15 @@ interface TrellisSettings {
 	lastNamespaceChange?: NamespaceChangeRecord;
 }
 
+interface HiddenTagBranch {
+	tagDefinitionId: string;
+	relativePath: string;
+}
+
 const DEFAULT_SETTINGS: TrellisSettings = {
 	settingsVersion: CURRENT_SETTINGS_VERSION,
 	schema: defaultSchema(),
+	filenameSyncEnabled: true,
 	treeViewEnabled: true,
 	treeViewName: "",
 	headerButtons: {
@@ -253,6 +265,7 @@ const DEFAULT_SETTINGS: TrellisSettings = {
 	treeShowUntagged: true,
 	treeLabelMode: "filename",
 	treeTagKeyNamespace: "",
+	hiddenTagBranches: [],
 	language: "auto",
 };
 
@@ -414,6 +427,12 @@ export default class TrellisPlugin extends Plugin {
 						getLabelMode: () => this.settings.treeLabelMode,
 						getShowUntagged: () => this.settings.treeShowUntagged,
 						getUntagged: () => this.untaggedNotes(),
+						getTagColor: (tagPath) => this.tagColor(tagPath),
+						onHideBranch: (tagPath) => void this.hideSidebarBranch(tagPath),
+						canHideBranch: (tagPath) => {
+							const match = matchTagKey(tagPath, this.settings.schema);
+							return Boolean(match?.tagDefinitionId && match.keyPath);
+						},
 						onToggleSort: () => void this.toggleSortDir(),
 						onNewChild: (parentTagPath) => this.openNewNoteModal(parentTagPath),
 						onNewNote: () => this.newNoteFromActive(),
@@ -619,6 +638,15 @@ export default class TrellisPlugin extends Plugin {
 				? (data.headerButtons as Partial<HeaderButtonVisibility>)
 				: {}),
 		};
+		this.settings.hiddenTagBranches = Array.isArray(loaded.hiddenTagBranches)
+			? loaded.hiddenTagBranches.filter(
+					(value): value is HiddenTagBranch =>
+						isPlainObject(value) &&
+						typeof value.tagDefinitionId === "string" &&
+						typeof value.relativePath === "string" &&
+						isValidTagPath(value.relativePath)
+				)
+			: [];
 		const schemaChanged =
 			JSON.stringify(loaded.schema ?? null) !== JSON.stringify(this.settings.schema);
 		if (
@@ -666,6 +694,111 @@ export default class TrellisPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private currentTagInventory(): TagInventory {
+		const inventory = new TagInventory(cloneSchema(this.settings.schema));
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			inventory.upsertFile({
+				path: file.path,
+				allTags: cache ? getAllTags(cache) ?? [] : [],
+				frontmatterTags: normalizeTagList(cache?.frontmatter?.tags),
+			});
+		}
+		return inventory;
+	}
+
+	/** Pause immediately. Resuming is intentionally two-step whenever current
+	 * frontmatter would rename files: inventory → exact preview → guarded batch. */
+	async requestFilenameSyncEnabled(enabled: boolean, onChanged?: () => void) {
+		if (!enabled) {
+			this.settings.filenameSyncEnabled = false;
+			await this.saveSettings();
+			onChanged?.();
+			return;
+		}
+		if (this.settings.filenameSyncEnabled) return;
+		const snapshot = this.currentTagInventory().snapshot();
+		if (snapshot.filenameCollisions.length > 0) {
+			new AlertModal(
+				this.app,
+				t("modal.filenameSync.blockedTitle"),
+				t("modal.filenameSync.blockedDesc", {
+					n: snapshot.filenameCollisions.length,
+				})
+			).open();
+			return;
+		}
+		if (snapshot.filenameDrift.length === 0) {
+			this.settings.filenameSyncEnabled = true;
+			await this.saveSettings();
+			onChanged?.();
+			return;
+		}
+		new FilenameSyncPreviewModal(this.app, snapshot.filenameDrift, () => {
+			void this.applyFilenameSyncPreview(snapshot.filenameDrift, onChanged);
+		}).open();
+	}
+
+	private async applyFilenameSyncPreview(
+		rows: FilenameSyncPreviewRow[],
+		onChanged?: () => void
+	) {
+		const operation = t("bulk.title.filenameSync");
+		if (!this.beginBulkOperation(operation)) return;
+		const renamed: { originalPath: string; currentPath: string }[] = [];
+		const failed: string[] = [];
+		const progress = new BulkProgressModal(this.app, operation);
+		progress.open();
+		try {
+			for (let index = 0; index < rows.length; index++) {
+				if (!(await progress.gate())) break;
+				const row = rows[index];
+				const file = this.app.vault.getAbstractFileByPath(row.path);
+				if (!(file instanceof TFile)) {
+					failed.push(row.path);
+					break;
+				}
+				const cache = this.app.metadataCache.getFileCache(file);
+				const tags = hashedTagList(cache?.frontmatter?.tags);
+				const currentTarget = this.syncedPathForTags(file, tags);
+				if (currentTarget !== row.targetPath) {
+					failed.push(row.path);
+					break;
+				}
+				if (!(await this.renameGuarded(file, row.targetPath))) {
+					failed.push(row.path);
+					break;
+				}
+				renamed.push({ originalPath: row.path, currentPath: file.path });
+				progress.report(index + 1, rows.length, failed.length);
+			}
+
+			if (progress.wasCancelled || failed.length > 0) {
+				const rollbackFailed: string[] = [];
+				for (const record of [...renamed].reverse()) {
+					const file = this.app.vault.getAbstractFileByPath(record.currentPath);
+					if (!(file instanceof TFile) || !(await this.renameGuarded(file, record.originalPath))) {
+						rollbackFailed.push(record.currentPath);
+					}
+				}
+				progress.finish({
+					processed: renamed.length - rollbackFailed.length,
+					skipped: [...failed, ...rollbackFailed],
+					outcome: "rolled-back",
+				});
+				return;
+			}
+
+			this.settings.filenameSyncEnabled = true;
+			await this.saveSettings();
+			this.rebuildTrees();
+			progress.finish({ processed: renamed.length, skipped: [] });
+			onChanged?.();
+		} finally {
+			this.endBulkOperation(operation);
+		}
 	}
 
 	/** Managed tag branches are independent from filename slots in 0.5. */
@@ -1114,6 +1247,7 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Sync one file's location tag into its filename tagkey (one direction). */
 	private async syncFile(file: TFile) {
+		if (!this.settings.filenameSyncEnabled) return;
 		if (this.separatorMigrationRunning) return;
 		if (this.automationApplying.has(file.path)) return;
 		if (this.bulkApplying.has(file.path)) return;
@@ -1236,7 +1370,13 @@ export default class TrellisPlugin extends Plugin {
 				(t) => t.startsWith(prefix) || t === exact
 			);
 			if (!tag) continue;
-			entries.push({ tagPath: tag.replace(/^#/, ""), notePath: file.path });
+			const tagPath = tag.replace(/^#/, "");
+			const match = matchTagKey(tagPath, this.settings.schema);
+			if (
+				match?.tagDefinitionId &&
+				this.isSidebarBranchHidden(match.tagDefinitionId, match.keyPath)
+			) continue;
+			entries.push({ tagPath, notePath: file.path });
 		}
 		this.treeCache = sortNoteTree(buildNoteTree(entries), this.noteComparator());
 		return this.treeCache;
@@ -1270,7 +1410,9 @@ export default class TrellisPlugin extends Plugin {
 			const managed = [
 				...new Set(
 					allManaged.flatMap((match) => {
-						return match.tagDefinitionId && visibleDefinitions.has(match.tagDefinitionId)
+						return match.tagDefinitionId &&
+							visibleDefinitions.has(match.tagDefinitionId) &&
+							!this.isSidebarBranchHidden(match.tagDefinitionId, match.keyPath)
 							? [`#${match.tagPath}`]
 							: [];
 					})
@@ -1291,6 +1433,56 @@ export default class TrellisPlugin extends Plugin {
 	private untaggedNotes(): string[] {
 		if (!this.untaggedCache) this.fullTagTree(); // fills both caches
 		return this.untaggedCache ?? [];
+	}
+
+	private isSidebarBranchHidden(tagDefinitionId: string, relativePath: string): boolean {
+		return this.settings.hiddenTagBranches.some(
+			(branch) =>
+				branch.tagDefinitionId === tagDefinitionId &&
+				(relativePath === branch.relativePath ||
+					relativePath.startsWith(`${branch.relativePath}/`))
+		);
+	}
+
+	async hideSidebarBranch(tagPath: string) {
+		const match = matchTagKey(tagPath, this.settings.schema);
+		if (!match?.tagDefinitionId || !match.keyPath) return;
+		if (!this.isSidebarBranchHidden(match.tagDefinitionId, match.keyPath)) {
+			this.settings.hiddenTagBranches.push({
+				tagDefinitionId: match.tagDefinitionId,
+				relativePath: match.keyPath,
+			});
+			await this.saveSettings();
+		}
+		this.rebuildTrees();
+	}
+
+	async restoreSidebarBranch(tagDefinitionId: string, relativePath: string) {
+		this.settings.hiddenTagBranches = this.settings.hiddenTagBranches.filter(
+			(branch) =>
+				branch.tagDefinitionId !== tagDefinitionId || branch.relativePath !== relativePath
+		);
+		await this.saveSettings();
+		this.rebuildTrees();
+	}
+
+	hiddenSidebarBranches(): { tagDefinitionId: string; label: string; relativePath: string }[] {
+		return this.settings.hiddenTagBranches.flatMap((branch) => {
+			const definition = tagDefinitionById(this.settings.schema, branch.tagDefinitionId);
+			if (!definition) return [];
+			return [{
+				tagDefinitionId: branch.tagDefinitionId,
+				relativePath: branch.relativePath,
+				label: `#${nsPath(this.settings.schema, definition.namespace)}/${branch.relativePath}`,
+			}];
+		});
+	}
+
+	tagColor(tagPath: string): string | undefined {
+		const match = matchTagKey(tagPath, this.settings.schema);
+		return match?.tagDefinitionId
+			? tagDefinitionById(this.settings.schema, match.tagDefinitionId)?.color
+			: undefined;
 	}
 
 	/** Flip the sidebar between the classic notes tree and the nested tag tree. */

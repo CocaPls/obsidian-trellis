@@ -158,6 +158,11 @@ const EN: Record<string, string> = {
 	"valueRule.example": "Example",
 	"setting.filenameStructureDesc":
 		"Arrange tag and name slots. Changes stay staged until preview, collision checks, and Apply complete.",
+	"setting.filenameSyncName": "Sync Trellis tags to filenames",
+	"setting.filenameSyncOn":
+		"On. Frontmatter Trellis tag changes update the configured filename slots.",
+	"setting.filenameSyncOff":
+		"Paused. Tags and the sidebar still work; filenames stay unchanged. Turning this on previews current drift first.",
 	"setting.preview": "Preview",
 	"setting.previewName": "Sample note",
 	"setting.previewUnmanaged": "No filename slots — Trellis will not rename files",
@@ -212,6 +217,7 @@ const EN: Record<string, string> = {
 	"dedup.defer": "Defer",
 	// menu
 	"menu.newHere": "New note here",
+	"menu.hideBranch": "Hide this branch from Trellis sidebar",
 	// cascade modal
 	"modal.cascade.title": "Move location and descendants",
 	"modal.cascade.desc":
@@ -229,6 +235,14 @@ const EN: Record<string, string> = {
 		"{n} note(s) will change from {from} to {to}. Any failure or cancellation rolls the completed part back.",
 	"modal.cascadePreview.showList": "Show affected notes ({n})",
 	"modal.cascadePreview.apply": "Rename — {n} note(s)",
+	"modal.filenameSync.title": "Review filename synchronization",
+	"modal.filenameSync.desc":
+		"Turning synchronization on will rename {n} note(s). Nothing changes until you apply this list.",
+	"modal.filenameSync.showList": "Show filename changes ({n})",
+	"modal.filenameSync.apply": "Synchronize — {n} note(s)",
+	"modal.filenameSync.blockedTitle": "Filename synchronization is still paused",
+	"modal.filenameSync.blockedDesc":
+		"Resolve {n} filename target collision(s) shown in Vault status before turning synchronization on.",
 	// new-note modal
 	"modal.newNote.title": "New note",
 	"modal.newNote.desc":
@@ -350,6 +364,7 @@ const EN: Record<string, string> = {
 	"bulk.title.separator": "Changing separator",
 	"bulk.title.namespace": "Changing namespace",
 	"bulk.title.namespaceUndo": "Undoing namespace change",
+	"bulk.title.filenameSync": "Synchronizing filenames",
 	"bulk.unexpectedFailure": "Unexpected migration failure",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "Done",
@@ -473,6 +488,15 @@ const EN: Record<string, string> = {
 	"setting.treeModeNotes": "Notes (classic)",
 	"setting.treeModeTags": "Nested tags",
 	"setting.showRootName": "Show namespace layers (nested mode)",
+	"setting.hiddenBranchesName": "Hidden sidebar branches",
+	"setting.hiddenBranchesDesc":
+		"{n} branch(es) are hidden only from the Trellis sidebar. Tags and filenames are unchanged.",
+	"setting.restore": "Show again",
+	"setting.statsDriftName": "Filename drift",
+	"setting.statsDriftDesc": "{n} note(s) differ from the current filename structure · {state}",
+	"setting.statsDriftActive": "live sync will reconcile them",
+	"setting.statsDriftPaused": "live sync is paused",
+	"setting.statsSidebarKeyName": "Sidebar-only Trellis tag · #{ns}",
 	"setting.showRootDesc":
 		"Show the root/namespace tags (e.g. tree) as top rows, or start directly at your hierarchy.",
 	"setting.untaggedName": "Show untagged notes (nested mode)",
@@ -605,6 +629,11 @@ const KO: Record<string, string> = {
 	"valueRule.example": "예시",
 	"setting.filenameStructureDesc":
 		"태그 슬롯과 이름 슬롯을 배치합니다. 변경은 미리보기·충돌 검사·적용을 거치기 전까지 실제 설정에 반영되지 않습니다.",
+	"setting.filenameSyncName": "트렐리 태그를 파일명에 동기화",
+	"setting.filenameSyncOn":
+		"켜짐. 속성의 트렐리 태그가 바뀌면 설정한 파일명 슬롯을 갱신합니다.",
+	"setting.filenameSyncOff":
+		"일시정지. 태그와 사이드바는 그대로 작동하고 파일명만 바꾸지 않습니다. 다시 켜면 현재 차이를 먼저 보여줍니다.",
 	"setting.preview": "미리보기",
 	"setting.previewName": "나무위키",
 	"setting.previewUnmanaged": "파일명 슬롯 없음 — 트렐리가 파일명을 바꾸지 않음",
@@ -659,6 +688,7 @@ const KO: Record<string, string> = {
 	"dedup.defer": "보류",
 	// menu
 	"menu.newHere": "여기에 새 노트",
+	"menu.hideBranch": "이 분기를 트렐리 사이드바에서 숨기기",
 	// cascade modal
 	"modal.cascade.title": "하위 위치 함께 변경",
 	"modal.cascade.desc":
@@ -676,6 +706,14 @@ const KO: Record<string, string> = {
 		"{n}개 노트가 {from}에서 {to}(으)로 바뀝니다. 실패하거나 취소하면 완료된 부분을 되돌립니다.",
 	"modal.cascadePreview.showList": "영향받는 노트 보기 ({n})",
 	"modal.cascadePreview.apply": "이름 변경 — {n}개 노트",
+	"modal.filenameSync.title": "파일명 동기화 검토",
+	"modal.filenameSync.desc":
+		"동기화를 켜면 {n}개 노트의 파일명이 바뀝니다. 이 목록을 적용하기 전에는 아무것도 바뀌지 않습니다.",
+	"modal.filenameSync.showList": "파일명 변경 보기 ({n})",
+	"modal.filenameSync.apply": "동기화 — {n}개 노트",
+	"modal.filenameSync.blockedTitle": "파일명 동기화가 계속 일시정지됩니다",
+	"modal.filenameSync.blockedDesc":
+		"볼트 현황에 표시된 파일명 대상 충돌 {n}건을 해결한 뒤 동기화를 켜세요.",
 	// new-note modal
 	"modal.newNote.title": "새 노트",
 	"modal.newNote.desc":
@@ -795,6 +833,7 @@ const KO: Record<string, string> = {
 	"bulk.title.separator": "구분자 변경 중",
 	"bulk.title.namespace": "네임스페이스 변경 중",
 	"bulk.title.namespaceUndo": "네임스페이스 변경 되돌리는 중",
+	"bulk.title.filenameSync": "파일명 동기화 중",
 	"bulk.unexpectedFailure": "예기치 않은 마이그레이션 실패",
 	"bulk.progress": "{done} / {total}",
 	"bulk.done": "완료",
@@ -918,6 +957,15 @@ const KO: Record<string, string> = {
 	"setting.treeModeNotes": "노트 (기존)",
 	"setting.treeModeTags": "중첩 태그",
 	"setting.showRootName": "네임스페이스 층 표시 (중첩 모드)",
+	"setting.hiddenBranchesName": "숨긴 사이드바 분기",
+	"setting.hiddenBranchesDesc":
+		"{n}개 분기를 트렐리 사이드바에서만 숨겼습니다. 태그와 파일명은 바뀌지 않습니다.",
+	"setting.restore": "다시 표시",
+	"setting.statsDriftName": "파일명 차이",
+	"setting.statsDriftDesc": "{n}개 노트가 현재 파일명 구조와 다릅니다 · {state}",
+	"setting.statsDriftActive": "실시간 동기화가 반영 예정",
+	"setting.statsDriftPaused": "실시간 동기화 일시정지 중",
+	"setting.statsSidebarKeyName": "사이드바 전용 트렐리 태그 · #{ns}",
 	"setting.showRootDesc":
 		"루트/네임스페이스 태그(예: tree)를 최상위 행으로 보일지, 바로 계층부터 시작할지.",
 	"setting.untaggedName": "무태그 노트 표시 (중첩 모드)",

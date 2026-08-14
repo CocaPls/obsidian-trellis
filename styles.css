@@ -370,3 +370,6 @@ button.trellis-destructive:hover {
 		flex-wrap: wrap;
 	}
 }
+.trellis-tag-accent {
+	color: var(--trellis-tag-color);
+}

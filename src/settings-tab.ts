@@ -497,6 +497,21 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.filenameStructureDesc"),
 		});
+		new Setting(containerEl)
+			.setName(t("setting.filenameSyncName"))
+			.setDesc(
+				this.plugin.settings.filenameSyncEnabled
+					? t("setting.filenameSyncOn")
+					: t("setting.filenameSyncOff")
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.filenameSyncEnabled)
+					.onChange(async (value) => {
+						await this.plugin.requestFilenameSyncEnabled(value, () => this.render());
+						this.render();
+					})
+			);
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 
@@ -963,6 +978,26 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		if (this.plugin.settings.treeViewMode === "tags") {
+			const hidden = this.plugin.hiddenSidebarBranches();
+			if (hidden.length > 0) {
+				new Setting(containerEl)
+					.setName(t("setting.hiddenBranchesName"))
+					.setDesc(t("setting.hiddenBranchesDesc", { n: hidden.length }))
+					.setHeading();
+				for (const branch of hidden) {
+					new Setting(containerEl)
+						.setName(branch.label)
+						.addButton((button) =>
+							button.setButtonText(t("setting.restore")).onClick(async () => {
+								await this.plugin.restoreSidebarBranch(
+									branch.tagDefinitionId,
+									branch.relativePath
+								);
+								this.render();
+							})
+						);
+				}
+			}
 			new Setting(containerEl)
 				.setName(t("setting.showRootName"))
 				.setDesc(t("setting.showRootDesc"))
@@ -1178,13 +1213,27 @@ export class TrellisSettingTab extends PluginSettingTab {
 				});
 			}
 		}
+		if (snapshot.filenameDrift.length > 0) {
+			new Setting(this.statsEl)
+				.setName(t("setting.statsDriftName"))
+				.setDesc(
+					t("setting.statsDriftDesc", {
+						n: snapshot.filenameDrift.length,
+						state: this.plugin.settings.filenameSyncEnabled
+							? t("setting.statsDriftActive")
+							: t("setting.statsDriftPaused"),
+					})
+				);
+		}
 		for (const key of snapshot.tagKeys) {
 			new Setting(this.statsEl)
 				.setName(
-					t("setting.statsKeyName", {
-						n: key.slotIndex + 1,
-						ns: key.fullNamespace,
-					})
+					key.slotIndex >= 0
+						? t("setting.statsKeyName", {
+								n: key.slotIndex + 1,
+								ns: key.fullNamespace,
+							})
+						: t("setting.statsSidebarKeyName", { ns: key.fullNamespace })
 				)
 				.setDesc(
 					t("setting.statsKeyDesc", {

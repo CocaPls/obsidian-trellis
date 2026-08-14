@@ -4,6 +4,7 @@ import {
 	extractNameMulti,
 	matchTagKey,
 	nsPath,
+	schemaTagDefinitions,
 	slotTagkeys,
 } from "./tagkey.ts";
 
@@ -16,6 +17,9 @@ export interface TagInventoryFile {
 }
 
 export interface TagKeyInventory {
+	tagDefinitionId: string;
+	displayName: string;
+	/** Filename slot index, or -1 when this definition is sidebar-only. */
 	slotIndex: number;
 	namespace: string;
 	fullNamespace: string;
@@ -38,6 +42,7 @@ export interface TagInventorySnapshot {
 	rootOwnedUnmatchedOccurrences: number;
 	tagKeys: TagKeyInventory[];
 	combinations: {
+		definitionIds: string[];
 		slotIndexes: number[];
 		namespaces: string[];
 		notes: number;
@@ -45,6 +50,10 @@ export interface TagInventorySnapshot {
 	filenameCollisions: {
 		targetPath: string;
 		notePaths: string[];
+	}[];
+	filenameDrift: {
+		path: string;
+		targetPath: string;
 	}[];
 }
 
@@ -77,9 +86,25 @@ function sameStrings(a: string[], b: string[]): boolean {
 	return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-/** Settings-lifetime inventory. It stores one normalized snapshot per note;
- * metadata events replace only the changed note, and aggregate counts are
- * rebuilt only after an actual tag change. */
+interface MutableDefinitionRow {
+	tagDefinitionId: string;
+	displayName: string;
+	slotIndex: number;
+	namespace: string;
+	fullNamespace: string;
+	notePaths: Set<string>;
+	occurrences: number;
+	pathCounts: Map<string, number>;
+	duplicateNotes: number;
+	inlineOnlyNotes: number;
+	namespaceNodeNotes: number;
+}
+
+/**
+ * Settings-lifetime inventory. Registered tag definitions are counted even
+ * when no filename slot references them. Frontmatter is the management source;
+ * inline matches are reported separately and never drive filename targets.
+ */
 export class TagInventory {
 	private readonly files = new Map<string, TagInventoryFile>();
 	readonly schema: TrellisSchema;
@@ -116,24 +141,27 @@ export class TagInventory {
 	}
 
 	snapshot(): TagInventorySnapshot {
-		const keyRows = this.schema.slots.flatMap((slot, slotIndex) =>
-			slot.role === "tag" && slot.namespace
-				? [
-						{
-							slotIndex,
-							namespace: slot.namespace,
-							fullNamespace: nsPath(this.schema, slot.namespace),
-							notePaths: new Set<string>(),
-							occurrences: 0,
-							pathCounts: new Map<string, number>(),
-							duplicateNotes: 0,
-							inlineOnlyNotes: 0,
-							namespaceNodeNotes: 0,
-						},
-					]
-				: []
+		const rows: MutableDefinitionRow[] = schemaTagDefinitions(this.schema).map(
+			(definition) => ({
+				tagDefinitionId: definition.id,
+				displayName: definition.name || definition.namespace,
+				slotIndex: this.schema.slots.findIndex(
+					(slot) =>
+						slot.role === "tag" &&
+						(slot.tagDefinitionId === definition.id ||
+							(!slot.tagDefinitionId && slot.namespace === definition.namespace))
+				),
+				namespace: definition.namespace,
+				fullNamespace: nsPath(this.schema, definition.namespace),
+				notePaths: new Set<string>(),
+				occurrences: 0,
+				pathCounts: new Map<string, number>(),
+				duplicateNotes: 0,
+				inlineOnlyNotes: 0,
+				namespaceNodeNotes: 0,
+			})
 		);
-		const rowBySlot = new Map(keyRows.map((row) => [row.slotIndex, row]));
+		const rowByDefinition = new Map(rows.map((row) => [row.tagDefinitionId, row]));
 		const managedNotePaths = new Set<string>();
 		const managedPaths = new Set<string>();
 		const generalTags = new Set<string>();
@@ -142,84 +170,105 @@ export class TagInventory {
 		let rootOwnedUnmatchedOccurrences = 0;
 		const ownerRoot = (this.schema.rootNamespace ?? "").trim();
 		const combinationCounts = new Map<string, number>();
-		const combinationSlots = new Map<string, number[]>();
+		const combinationDefinitions = new Map<string, string[]>();
 		const targetSources = new Map<string, Set<string>>();
+		const filenameDrift: { path: string; targetPath: string }[] = [];
 
 		for (const file of this.files.values()) {
 			const frontmatter = new Set(file.frontmatterTags);
-			const valuesBySlot = new Map<number, Set<string>>();
-			const inlineSlots = new Set<number>();
-			const namespaceNodeSlots = new Set<number>();
+			const inlineDefinitions = new Set<string>();
 
 			for (const tag of file.allTags) {
 				const match = matchTagKey(tag, this.schema);
-				if (!match) {
-					const tagPath = tag.replace(/^#/, "");
-					if (
-						ownerRoot &&
-						(tagPath === ownerRoot || tagPath.startsWith(`${ownerRoot}/`))
-					) {
-						rootOwnedUnmatchedOccurrences++;
-					} else {
-						generalOccurrences++;
-						generalTags.add(tag);
+				if (match) {
+					if (!frontmatter.has(tag) && match.tagDefinitionId) {
+						inlineDefinitions.add(match.tagDefinitionId);
 					}
 					continue;
 				}
-
-				const row = rowBySlot.get(match.slotIndex);
-				if (!row) continue;
-				row.fullNamespace = match.fullNamespace;
-				if (match.keyPath === "") {
-					namespaceNodeSlots.add(match.slotIndex);
-					continue;
+				const tagPath = tag.replace(/^#/, "");
+				if (
+					ownerRoot &&
+					(tagPath === ownerRoot || tagPath.startsWith(`${ownerRoot}/`))
+				) {
+					rootOwnedUnmatchedOccurrences++;
+				} else {
+					generalOccurrences++;
+					generalTags.add(tag);
 				}
-				const values = valuesBySlot.get(match.slotIndex) ?? new Set<string>();
-				values.add(match.tagPath);
-				valuesBySlot.set(match.slotIndex, values);
-				if (!frontmatter.has(tag)) inlineSlots.add(match.slotIndex);
 			}
 
-			for (const [slotIndex, values] of valuesBySlot) {
-				const row = rowBySlot.get(slotIndex);
+			const valuesByDefinition = new Map<string, Set<string>>();
+			const namespaceNodes = new Set<string>();
+			for (const tag of file.frontmatterTags) {
+				const match = matchTagKey(tag, this.schema);
+				if (!match?.tagDefinitionId) continue;
+				if (match.keyPath === "") {
+					namespaceNodes.add(match.tagDefinitionId);
+					continue;
+				}
+				const values = valuesByDefinition.get(match.tagDefinitionId) ?? new Set<string>();
+				values.add(match.tagPath);
+				valuesByDefinition.set(match.tagDefinitionId, values);
+			}
+
+			let ambiguous = false;
+			for (const [definitionId, values] of valuesByDefinition) {
+				const row = rowByDefinition.get(definitionId);
 				if (!row) continue;
 				managedNotePaths.add(file.path);
 				row.notePaths.add(file.path);
 				row.occurrences += values.size;
 				managedOccurrences += values.size;
-				if (values.size > 1) row.duplicateNotes++;
-				if (inlineSlots.has(slotIndex)) row.inlineOnlyNotes++;
+				if (values.size > 1) {
+					row.duplicateNotes++;
+					ambiguous = true;
+				}
 				for (const tagPath of values) {
 					managedPaths.add(tagPath);
 					row.pathCounts.set(tagPath, (row.pathCounts.get(tagPath) ?? 0) + 1);
 				}
 			}
+			for (const definitionId of inlineDefinitions) {
+				if (!valuesByDefinition.has(definitionId)) {
+					const row = rowByDefinition.get(definitionId);
+					if (row) row.inlineOnlyNotes++;
+				}
+			}
+			for (const definitionId of namespaceNodes) {
+				const row = rowByDefinition.get(definitionId);
+				if (row) row.namespaceNodeNotes++;
+			}
 
-			const activeSlots = [...valuesBySlot.keys()].sort((a, b) => a - b);
-			if (activeSlots.length > 0) {
-				const combinationKey = activeSlots.join(",");
+			const activeDefinitions = [...valuesByDefinition.keys()].sort();
+			if (activeDefinitions.length > 0) {
+				const combinationKey = activeDefinitions.join(",");
 				combinationCounts.set(
 					combinationKey,
 					(combinationCounts.get(combinationKey) ?? 0) + 1
 				);
-				combinationSlots.set(combinationKey, activeSlots);
-
-				const keys = slotTagkeys(file.allTags, this.schema);
-				const name = extractNameMulti(basenameOf(file.path), keys, this.schema);
-				const values = this.schema.slots.map((slot, index) =>
-					slot.role === "name" ? name : keys[index]
-				);
-				const targetBasename = assembleBasenameMulti(values, this.schema);
-				if (targetBasename) {
-					const targetPath = notePath(parentOf(file.path), targetBasename);
-					const sources = targetSources.get(targetPath) ?? new Set<string>();
-					sources.add(file.path);
-					targetSources.set(targetPath, sources);
-				}
+				combinationDefinitions.set(combinationKey, activeDefinitions);
 			}
-			for (const slotIndex of namespaceNodeSlots) {
-				const row = rowBySlot.get(slotIndex);
-				if (row) row.namespaceNodeNotes++;
+
+			if (!ambiguous) {
+				const keys = slotTagkeys(file.frontmatterTags, this.schema);
+				const hasFilenameValue = this.schema.slots.some(
+					(slot, index) => slot.role === "tag" && keys[index]
+				);
+				if (hasFilenameValue) {
+					const name = extractNameMulti(basenameOf(file.path), keys, this.schema);
+					const values = this.schema.slots.map((slot, index) =>
+						slot.role === "name" ? name : keys[index]
+					);
+					const targetBasename = assembleBasenameMulti(values, this.schema);
+					if (targetBasename) {
+						const targetPath = notePath(parentOf(file.path), targetBasename);
+						const sources = targetSources.get(targetPath) ?? new Set<string>();
+						sources.add(file.path);
+						targetSources.set(targetPath, sources);
+						if (targetPath !== file.path) filenameDrift.push({ path: file.path, targetPath });
+					}
+				}
 			}
 		}
 
@@ -237,11 +286,14 @@ export class TagInventory {
 			rootOwnedUnmatchedOccurrences,
 			combinations: [...combinationCounts.entries()]
 				.map(([key, notes]) => {
-					const slotIndexes = combinationSlots.get(key) ?? [];
+					const definitionIds = combinationDefinitions.get(key) ?? [];
 					return {
-						slotIndexes,
-						namespaces: slotIndexes.map(
-							(index) => this.schema.slots[index].namespace ?? ""
+						definitionIds,
+						slotIndexes: definitionIds.map(
+							(id) => rowByDefinition.get(id)?.slotIndex ?? -1
+						),
+						namespaces: definitionIds.map(
+							(id) => rowByDefinition.get(id)?.namespace ?? ""
 						),
 						notes,
 					};
@@ -249,7 +301,7 @@ export class TagInventory {
 				.sort(
 					(a, b) =>
 						b.notes - a.notes ||
-						a.slotIndexes.join(",").localeCompare(b.slotIndexes.join(","))
+						a.definitionIds.join(",").localeCompare(b.definitionIds.join(","))
 				),
 			filenameCollisions: [...targetSources.entries()]
 				.filter(([, paths]) => paths.size > 1)
@@ -258,7 +310,10 @@ export class TagInventory {
 					notePaths: [...paths].sort(),
 				}))
 				.sort((a, b) => a.targetPath.localeCompare(b.targetPath)),
-			tagKeys: keyRows.map((row) => ({
+			filenameDrift: filenameDrift.sort((a, b) => a.path.localeCompare(b.path)),
+			tagKeys: rows.map((row) => ({
+				tagDefinitionId: row.tagDefinitionId,
+				displayName: row.displayName,
 				slotIndex: row.slotIndex,
 				namespace: row.namespace,
 				fullNamespace: row.fullNamespace,
