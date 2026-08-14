@@ -323,6 +323,8 @@ const EN: Record<string, string> = {
 		"The tag hierarchy separator is identical to an adjacent slot-boundary symbol with no spaces, so the filename would be ambiguous. Change one symbol or add boundary spacing.",
 	"modal.applySchema.title": "Apply schema changes?",
 	"modal.applySchema.desc": "This updates the filename scheme. Existing files are re-synced as their tags change; nothing is renamed right now.",
+	"modal.schemaNameLoss":
+		"Removing the name-key discards the free-name portion from {n} managed filename(s). Review the exact rename list before applying.",
 	"setting.statsName": "Live vault status",
 	"setting.statsDesc":
 		"{managed} of {total} notes · {tags} managed tag value(s) · {paths} unique path(s). Updates while settings are open.",
@@ -672,6 +674,8 @@ const KO: Record<string, string> = {
 		"태그 계층 구분자와 인접한 슬롯 경계 기호가 공백 없이 같아서 파일명을 구분할 수 없습니다. 기호 하나를 바꾸거나 경계에 공백을 추가하세요.",
 	"modal.applySchema.title": "스키마 변경을 적용할까요?",
 	"modal.applySchema.desc": "파일명 규칙을 갱신합니다. 기존 파일은 태그가 바뀔 때 다시 동기화되며, 지금 당장 이름이 바뀌지는 않습니다.",
+	"modal.schemaNameLoss":
+		"네임키를 제거하면 관리 파일 {n}개의 사람용 이름 부분이 사라집니다. 적용 전에 정확한 파일명 변경 목록을 확인하세요.",
 	"setting.statsName": "현재 볼트 현황",
 	"setting.statsDesc":
 		"전체 {total}개 중 관리 노트 {managed}개 · 관리 태그값 {tags}개 · 고유 경로 {paths}개. 설정창을 연 동안 자동 갱신됩니다.",

@@ -45,6 +45,14 @@
 	color: var(--text-muted);
 }
 
+.trellis-danger-note {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-inline-start: 3px solid var(--text-error);
+	background: var(--background-modifier-error);
+	color: var(--text-error);
+	border-radius: var(--radius-s);
+}
+
 /* Bootstrap target picker — checkbox tree of folders/notes. */
 .trellis-bootstrap-tree {
 	max-height: 45vh;

@@ -787,7 +787,8 @@ export class SeparatorChangeModal extends Modal {
 		private readonly newSep: string,
 		private readonly rows: { path: string; oldName: string; newName: string }[],
 		private readonly onClosed: () => void,
-		private readonly onApply: () => void
+		private readonly onApply: () => void,
+		private readonly warning?: string
 	) {
 		super(app);
 	}
@@ -799,6 +800,12 @@ export class SeparatorChangeModal extends Modal {
 			cls: "setting-item-description",
 			text: t("modal.sep.desc", { from: this.oldSep, to: this.newSep }),
 		});
+		if (this.warning) {
+			contentEl.createEl("p", {
+				cls: "trellis-danger-note",
+				text: this.warning,
+			});
+		}
 
 		if (this.rows.length === 0) {
 			contentEl.createEl("p", { text: t("modal.sep.none") });
@@ -824,15 +831,15 @@ export class SeparatorChangeModal extends Modal {
 		}
 
 		const buttons = new Setting(contentEl);
-		buttons.addButton((b) =>
-			b
-				.setButtonText(t("modal.sep.apply", { n: this.rows.length }))
-				.setCta()
-				.onClick(() => {
+		buttons.addButton((b) => {
+			b.setButtonText(t("modal.sep.apply", { n: this.rows.length }));
+			if (this.warning) markDestructive(b);
+			else b.setCta();
+			b.onClick(() => {
 				this.onApply();
 				this.close();
-			})
-		);
+			});
+		});
 		buttons.addButton((b) =>
 			b.setButtonText(t("modal.sep.cancel")).onClick(() => this.close())
 		);

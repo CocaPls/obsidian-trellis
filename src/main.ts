@@ -45,6 +45,8 @@ import {
 	tagNamespaces,
 	separatorConflicts,
 	schemaMigratedName,
+	extractNameMulti,
+	slotTagkeys,
 	portableBasenameIssue,
 	matchTagKey,
 } from "./tagkey";
@@ -1979,6 +1981,29 @@ export default class TrellisPlugin extends Plugin {
 		return out;
 	}
 
+	/** Managed filenames whose non-empty free name would be discarded by a
+	 * schema that removes the name-key. This powers an explicit danger warning;
+	 * the exact old → new filename list remains the final source of truth. */
+	private nameKeyLossCount(newSchema: TrellisSchema): number {
+		const oldSchema = this.settings.schema;
+		if (
+			!oldSchema.slots.some((slot) => slot.role === "name") ||
+			newSchema.slots.some((slot) => slot.role === "name")
+		) {
+			return 0;
+		}
+		let count = 0;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (!cache) continue;
+			const tags = getAllTags(cache) ?? [];
+			const oldKeys = slotTagkeys(tags, oldSchema);
+			if (!oldKeys.some(Boolean)) continue;
+			if (extractNameMulti(file.basename, oldKeys, oldSchema) !== "") count++;
+		}
+		return count;
+	}
+
 	requestPrimaryFormattingChange(
 		symbol: string,
 		spacing: SeparatorSpacing,
@@ -2029,6 +2054,7 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const rows = this.previewSchemaChange(newSchema);
+		const lostNames = this.nameKeyLossCount(newSchema);
 		if (rows.length === 0) {
 			void this.applySchemaChange(newSchema, rows).finally(onDone);
 			return;
@@ -2050,7 +2076,8 @@ export default class TrellisPlugin extends Plugin {
 			() => {
 				applied = true;
 				void this.applySchemaChange(newSchema, rows).finally(onDone);
-			}
+			},
+			lostNames > 0 ? t("modal.schemaNameLoss", { n: lostNames }) : undefined
 		).open();
 	}
 
