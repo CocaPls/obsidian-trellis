@@ -15,7 +15,6 @@ import {
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
-	assembleBasenameMulti,
 	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
@@ -93,40 +92,6 @@ function cleanNamespaceInput(value: string): string {
 	return value.trim().replace(/^#/, "").replace(/\/$/, "");
 }
 
-interface FilenameHierarchyPreview {
-	label: string;
-	source: string;
-	rendered: string;
-}
-
-function filenameExample(schema: TrellisSchema): {
-	basename: string;
-	hierarchies: FilenameHierarchyPreview[];
-} {
-	const hierarchies: FilenameHierarchyPreview[] = [];
-	let tagIndex = 0;
-	const values = schema.slots.map((slot, index) => {
-		if (slot.role === "name") return t("setting.filenameExampleName");
-		const suffix = tagIndex === 0 ? "" : String(tagIndex + 1);
-		const segments = [
-			`${t("setting.filenameExampleParent")}${suffix}`,
-			`${t("setting.filenameExampleChild")}${suffix}`,
-		];
-		const rendered = segments.join(slot.segmentSeparator ?? "");
-		hierarchies.push({
-			label: t("setting.filenameHierarchyPreview", { n: index + 1 }),
-			source: segments.join(" / "),
-			rendered,
-		});
-		tagIndex++;
-		return rendered;
-	});
-	return {
-		basename: assembleBasenameMulti(values, schema),
-		hierarchies,
-	};
-}
-
 export class TrellisSettingTab extends PluginSettingTab {
 	private readonly plugin: TrellisPlugin;
 	private draftSchema: TrellisSchema | null = null;
@@ -135,7 +100,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private statsCleanups: (() => void)[] = [];
 	private activeSection: SettingsSection = "general";
 	private filenameSelection: FilenameSelection | null = null;
-	private draggedSlotIndex: number | null = null;
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	private addNewTagToFilename = false;
@@ -365,16 +329,29 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		const count = browser.createDiv({ cls: "trellis-tag-list-count" });
 		const list = browser.createDiv({ cls: "trellis-tag-list" });
-		const renderList = () => {
-			list.empty();
+		const detail = workspace.createDiv({
+			cls: "trellis-tag-detail",
+			attr: { "aria-live": "polite" },
+		});
+		const matchingDefinitions = () => {
 			const query = this.tagSearchQuery.trim().toLocaleLowerCase();
-			const shown = scopedDefinitions.filter((definition) => {
+			return scopedDefinitions.filter((definition) => {
 				if (!query) return true;
 				const path = nsPath(this.plugin.settings.schema, definition.namespace);
 				return `${definition.name} ${definition.namespace} ${path}`
 					.toLocaleLowerCase()
 					.includes(query);
 			});
+		};
+		const renderList = () => {
+			list.empty();
+			const shown = matchingDefinitions();
+			if (
+				!this.addingTagDefinition &&
+				!shown.some((definition) => definition.id === this.selectedTagDefinitionId)
+			) {
+				this.selectedTagDefinitionId = shown[0]?.id ?? null;
+			}
 			count.setText(
 				t("setting.tagListCount", {
 					shown: shown.length,
@@ -446,22 +423,15 @@ export class TrellisSettingTab extends PluginSettingTab {
 				});
 			}
 		};
-		searchInput.addEventListener("input", () => {
-			this.tagSearchQuery = searchInput.value;
-			renderList();
-		});
-		renderList();
-
-		const detail = workspace.createDiv({
-			cls: "trellis-tag-detail",
-			attr: { "aria-live": "polite" },
-		});
-		if (this.addingTagDefinition) {
-			this.renderTagDefinitionAdd(
-				detail,
-				definitions.length > 0 || this.addNewTagToFilename
-			);
-		} else {
+		const renderDetail = () => {
+			detail.empty();
+			if (this.addingTagDefinition) {
+				this.renderTagDefinitionAdd(
+					detail,
+					definitions.length > 0 || this.addNewTagToFilename
+				);
+				return;
+			}
 			const selected = definitions.find(
 				(definition) => definition.id === this.selectedTagDefinitionId
 			);
@@ -472,7 +442,14 @@ export class TrellisSettingTab extends PluginSettingTab {
 					text: t("setting.tagDetailEmpty"),
 				});
 			}
-		}
+		};
+		searchInput.addEventListener("input", () => {
+			this.tagSearchQuery = searchInput.value;
+			renderList();
+			renderDetail();
+		});
+		renderList();
+		renderDetail();
 	}
 
 	private revealTagDetail(focusInput = false) {
@@ -972,43 +949,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const selection = this.ensureFilenameSelection(schema);
-		const example = filenameExample(schema);
-		const result = containerEl.createDiv({ cls: "trellis-filename-result" });
-		const resultCopy = result.createDiv({ cls: "trellis-filename-result-copy" });
-		resultCopy.createSpan({
-			cls: "trellis-filename-result-label",
-			text: t("setting.filenameExample"),
-		});
-		resultCopy.createSpan({
-			cls: "trellis-filename-result-hint",
-			text: t("setting.filenamePreviewHint"),
-		});
-		const previewBlock = result.createEl("pre", {
-			cls: "trellis-filename-preview-block",
-		});
-		previewBlock.createEl("code", {
-			text: example.basename || "—",
-		});
-		if (example.hierarchies.length > 0) {
-			const breakdown = result.createDiv({
-				cls: "trellis-filename-hierarchy-preview",
-			});
-			for (const hierarchy of example.hierarchies) {
-				const row = breakdown.createDiv({
-					cls: "trellis-filename-hierarchy-row",
-				});
-				row.createSpan({
-					cls: "trellis-filename-hierarchy-label",
-					text: hierarchy.label,
-				});
-				row.createEl("code", { text: hierarchy.source });
-				row.createSpan({
-					cls: "trellis-filename-hierarchy-arrow",
-					text: "→",
-				});
-				row.createEl("code", { text: hierarchy.rendered });
-			}
-		}
 
 		const usedDefinitions = new Set(
 			schema.slots
@@ -1019,84 +959,57 @@ export class TrellisSettingTab extends PluginSettingTab {
 			(definition) => !definition.archived && !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
-		const composer = containerEl.createDiv({ cls: "trellis-filename-composer" });
-		const composerHeader = composer.createDiv({
-			cls: "trellis-filename-composer-header",
-		});
-		const composerCopy = composerHeader.createDiv({
-			cls: "trellis-filename-composer-copy",
-		});
-		composerCopy.createSpan({
-			cls: "trellis-filename-composer-title",
-			text: t("setting.filenameComposerTitle"),
-		});
-		composerCopy.createSpan({
-			cls: "trellis-filename-slot-count",
-			text: t("setting.filenameSlotCount", { n: schema.slots.length }),
-		});
-		composerCopy.createSpan({
-			cls: "trellis-filename-composer-hint",
-			text: t("setting.filenameComposerHint"),
-		});
-		const addActions = composerHeader.createDiv({
-			cls: "trellis-filename-add-actions",
-		});
-		const addTag = addActions.createEl("button", {
-			cls: "mod-muted",
-			attr: { type: "button" },
-		});
-		const addTagIcon = addTag.createSpan({ cls: "trellis-button-icon" });
-		setIcon(addTagIcon, "plus");
-		addTag.createSpan({ text: t("setting.addTagSlot") });
-		addTag.setAttribute(
-			"aria-label",
-			available ? t("setting.addTagSlot") : t("setting.addTagSlotCreate")
-		);
-		addTag.addEventListener("click", () => {
-			if (!available) {
-				this.addNewTagToFilename = true;
-				this.addingTagDefinition = true;
-				this.tagDefinitionFilter = "active";
-				this.tagSearchQuery = "";
-				this.render();
-				this.revealTagDetail(true);
-				return;
-			}
-			const id = nextSlotId(schema);
-			schema.slots.push({ id, role: "tag", tagDefinitionId: available.id });
-			this.filenameSelection = { kind: "slot", index: schema.slots.length - 1 };
-			this.ensureSeparators(schema);
-			this.render();
-		});
-		if (!hasName) {
-			const addName = addActions.createEl("button", {
-				cls: "mod-muted",
-				attr: { type: "button" },
+		new Setting(containerEl)
+			.setName(t("setting.filenameComposerTitle"))
+			.setDesc(t("setting.filenameComposerHint"))
+			.addButton((button) =>
+				button.setButtonText(t("setting.addTagSlot")).onClick(() => {
+					if (!available) {
+						this.addNewTagToFilename = true;
+						this.addingTagDefinition = true;
+						this.tagDefinitionFilter = "active";
+						this.tagSearchQuery = "";
+						this.render();
+						this.revealTagDetail(true);
+						return;
+					}
+					const id = nextSlotId(schema);
+					schema.slots.push({ id, role: "tag", tagDefinitionId: available.id });
+					this.filenameSelection = {
+						kind: "slot",
+						index: schema.slots.length - 1,
+					};
+					this.ensureSeparators(schema);
+					this.render();
+				})
+			)
+			.addButton((button) => {
+				button
+					.setButtonText(t("setting.addNameSlot"))
+					.setDisabled(hasName)
+					.onClick(() => {
+						const id = nextSlotId(schema);
+						schema.slots.push({ id, role: "name" });
+						this.filenameSelection = {
+							kind: "slot",
+							index: schema.slots.length - 1,
+						};
+						this.ensureSeparators(schema);
+						this.render();
+					});
 			});
-			const addNameIcon = addName.createSpan({ cls: "trellis-button-icon" });
-			setIcon(addNameIcon, "plus");
-			addName.createSpan({ text: t("setting.addNameSlot") });
-			addName.setAttribute("aria-label", t("setting.addNameSlot"));
-			addName.addEventListener("click", () => {
-				const id = nextSlotId(schema);
-				schema.slots.push({ id, role: "name" });
-				this.filenameSelection = { kind: "slot", index: schema.slots.length - 1 };
-				this.ensureSeparators(schema);
-				this.render();
-			});
-		}
 
-		const rail = composer.createDiv({ cls: "trellis-filename-rail" });
+		const sequence = containerEl.createDiv({ cls: "trellis-filename-sequence" });
 		if (schema.slots.length === 0) {
-			rail.createDiv({
-				cls: "trellis-filename-rail-empty",
+			sequence.createDiv({
+				cls: "trellis-filename-sequence-empty",
 				text: t("setting.filenameComposerEmpty"),
 			});
 		}
 		schema.slots.forEach((slot, index) => {
-			this.renderFilenameComposerSlot(rail, schema, slot, index, selection);
+			this.renderFilenameSequenceSlot(sequence, schema, slot, index, selection);
 			if (index < schema.slots.length - 1) {
-				this.renderFilenameComposerGap(rail, schema, index, selection);
+				this.renderFilenameSequenceGap(sequence, schema, index, selection);
 			}
 		});
 
@@ -1207,7 +1120,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		};
 	}
 
-	private renderFilenameComposerSlot(
+	private renderFilenameSequenceSlot(
 		containerEl: HTMLElement,
 		schema: TrellisSchema,
 		slot: KeySlot,
@@ -1215,113 +1128,34 @@ export class TrellisSettingTab extends PluginSettingTab {
 		selection: FilenameSelection | null
 	) {
 		const label = this.filenamePartLabel(schema, slot, index);
-		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
-		const card = containerEl.createDiv({ cls: "trellis-filename-slot-card" });
-		card.draggable = true;
-		card.setAttribute("aria-label", `${label.title}. ${t("setting.slotDrag")}`);
-		card.classList.toggle(
-			"is-selected",
-			selection?.kind === "slot" && selection.index === index
-		);
-
-		const select = card.createEl("button", {
-			cls: "trellis-filename-slot-select",
+		const button = containerEl.createEl("button", {
+			cls: "trellis-filename-sequence-slot",
 			attr: { type: "button" },
 		});
-		select.setAttribute(
-			"aria-pressed",
-			String(selection?.kind === "slot" && selection.index === index)
-		);
-		const top = select.createSpan({ cls: "trellis-filename-slot-top" });
-		top.createSpan({
-			cls: "trellis-filename-slot-index",
-			text: String(index + 1),
-		});
-		top.createSpan({
-			cls: "trellis-filename-slot-kind",
-			text: slot.role === "tag" ? t("setting.slotKindTag") : t("setting.slotKindName"),
-		});
-		select.createSpan({
-			cls: "trellis-filename-slot-name",
-			text:
-				slot.role === "tag"
-					? definition?.name || definition?.namespace || t("setting.slotMissingTag")
-					: t("setting.filenameExampleName"),
-		});
-		if (slot.role === "tag" && definition) {
-			select.createSpan({
-				cls: "trellis-filename-slot-meta",
-				text: `#${nsPath(schema, definition.namespace)}/…`,
+		button.createSpan({ text: label.title });
+		if (label.meta) {
+			button.createSpan({
+				cls: "trellis-filename-sequence-meta",
+				text: label.meta,
 			});
 		}
-		select.addEventListener("click", () => {
+		const selected = selection?.kind === "slot" && selection.index === index;
+		button.classList.toggle("is-selected", selected);
+		button.setAttribute("aria-pressed", String(selected));
+		button.addEventListener("click", () => {
 			this.filenameSelection = { kind: "slot", index };
 			this.render();
 		});
-
-		const remove = card.createEl("button", {
-			cls: "clickable-icon trellis-filename-slot-remove",
-			attr: {
-				type: "button",
-				"aria-label": t("setting.partRemove"),
-			},
-		});
-		setIcon(remove, "x");
-		remove.addEventListener("click", () => {
-			this.removeSlot(schema, index);
-			const next = schema.slots[Math.min(index, schema.slots.length - 1)];
-			this.filenameSelection = next
-				? { kind: "slot", index: Math.min(index, schema.slots.length - 1) }
-				: null;
-			this.render();
-		});
-
-		card.addEventListener("dragstart", (event) => {
-			this.draggedSlotIndex = index;
-			card.classList.add("is-dragging");
-			if (event.dataTransfer) {
-				event.dataTransfer.effectAllowed = "move";
-				event.dataTransfer.setData("text/plain", slot.id ?? String(index));
-			}
-		});
-		card.addEventListener("dragover", (event) => {
-			if (this.draggedSlotIndex === null) return;
-			event.preventDefault();
-			const after = event.clientX > card.getBoundingClientRect().left + card.clientWidth / 2;
-			card.classList.toggle("drop-before", !after);
-			card.classList.toggle("drop-after", after);
-			if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-		});
-		card.addEventListener("dragleave", () => {
-			card.classList.remove("drop-before", "drop-after");
-		});
-		card.addEventListener("drop", (event) => {
-			event.preventDefault();
-			const from = this.draggedSlotIndex;
-			if (from === null) return;
-			const after = event.clientX > card.getBoundingClientRect().left + card.clientWidth / 2;
-			this.moveFilenameSlot(schema, from, index + (after ? 1 : 0));
-			this.draggedSlotIndex = null;
-			this.render();
-		});
-		card.addEventListener("dragend", () => {
-			this.draggedSlotIndex = null;
-			for (const item of Array.from(
-				containerEl.querySelectorAll<HTMLElement>(".trellis-filename-slot-card")
-			)) {
-				item.classList.remove("is-dragging", "drop-before", "drop-after");
-			}
-		});
 	}
 
-	private renderFilenameComposerGap(
+	private renderFilenameSequenceGap(
 		containerEl: HTMLElement,
 		schema: TrellisSchema,
 		index: number,
 		selection: FilenameSelection | null
 	) {
 		const button = containerEl.createEl("button", {
-			cls: "trellis-filename-gap-button",
+			cls: "trellis-filename-sequence-gap",
 			attr: {
 				type: "button",
 				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),
@@ -1337,23 +1171,14 @@ export class TrellisSettingTab extends PluginSettingTab {
 			"is-selected",
 			selection?.kind === "gap" && selection.index === index
 		);
+		button.setAttribute(
+			"aria-pressed",
+			String(selection?.kind === "gap" && selection.index === index)
+		);
 		button.addEventListener("click", () => {
 			this.filenameSelection = { kind: "gap", index };
 			this.render();
 		});
-	}
-
-	private moveFilenameSlot(schema: TrellisSchema, from: number, insertion: number) {
-		if (from < 0 || from >= schema.slots.length) return;
-		const [slot] = schema.slots.splice(from, 1);
-		if (!slot) return;
-		const target = Math.max(
-			0,
-			Math.min(schema.slots.length, from < insertion ? insertion - 1 : insertion)
-		);
-		schema.slots.splice(target, 0, slot);
-		this.filenameSelection = { kind: "slot", index: target };
-		this.ensureSeparators(schema);
 	}
 
 
