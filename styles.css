@@ -324,21 +324,253 @@ button.trellis-destructive:disabled:hover {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
 
-.trellis-filename-example-code {
-	overflow: hidden;
-	max-width: 100%;
-	padding: 3px 8px;
-	border-radius: var(--radius-s);
+.trellis-filename-result {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	margin: var(--size-4-3) 0;
+	padding: var(--size-4-3) var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
 	background: var(--background-secondary);
+}
+
+.trellis-filename-result-copy,
+.trellis-filename-composer-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.trellis-filename-result-label,
+.trellis-filename-composer-title {
 	color: var(--text-normal);
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-result-hint,
+.trellis-filename-composer-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-filename-result > code {
+	overflow: hidden;
+	max-width: 55%;
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.trellis-filename-part {
-	margin: var(--size-4-3) 0;
-	padding-inline-start: var(--size-4-3);
-	border-inline-start: 2px solid var(--background-modifier-border);
+.trellis-filename-composer {
+	overflow: hidden;
+	margin-bottom: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+
+.trellis-filename-composer-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	padding: var(--size-4-3) var(--size-4-4);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.trellis-filename-add-actions {
+	display: flex;
+	flex: 0 0 auto;
+	gap: var(--size-4-2);
+}
+
+.trellis-filename-add-actions button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.trellis-button-icon,
+.trellis-button-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.trellis-filename-rail {
+	display: flex;
+	min-height: 126px;
+	align-items: center;
+	gap: var(--size-4-1);
+	overflow-x: auto;
+	padding: var(--size-4-4);
+	background: var(--background-primary);
+}
+
+.trellis-filename-rail-empty {
+	width: 100%;
+	padding: var(--size-4-4);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.trellis-filename-slot-card {
+	position: relative;
+	width: 150px;
+	min-width: 150px;
+	height: 94px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+	cursor: grab;
+	transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.trellis-filename-slot-card:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.trellis-filename-slot-card.is-selected {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.trellis-filename-slot-card.is-dragging {
+	opacity: 0.4;
+	cursor: grabbing;
+}
+
+.trellis-filename-slot-card.drop-before::before,
+.trellis-filename-slot-card.drop-after::after {
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	width: 3px;
+	border-radius: 2px;
+	background: var(--interactive-accent);
+	content: "";
+}
+
+.trellis-filename-slot-card.drop-before::before {
+	left: calc(var(--size-4-2) * -1);
+}
+
+.trellis-filename-slot-card.drop-after::after {
+	right: calc(var(--size-4-2) * -1);
+}
+
+.trellis-filename-slot-select {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: var(--size-4-3);
+	border: 0;
+	border-radius: inherit;
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-normal);
+	text-align: start;
+}
+
+.trellis-filename-slot-select:hover {
+	background: var(--background-modifier-hover);
+}
+
+.trellis-filename-slot-top {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-filename-slot-index {
+	display: inline-grid;
+	width: 18px;
+	height: 18px;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--background-modifier-hover);
+}
+
+.trellis-filename-slot-name,
+.trellis-filename-slot-meta {
+	overflow: hidden;
+	max-width: 100%;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trellis-filename-slot-name {
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-slot-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-filename-slot-remove {
+	position: absolute;
+	top: var(--size-4-1);
+	right: var(--size-4-1);
+	opacity: 0;
+}
+
+.trellis-filename-slot-card:hover .trellis-filename-slot-remove,
+.trellis-filename-slot-card:focus-within .trellis-filename-slot-remove,
+.trellis-filename-slot-card.is-selected .trellis-filename-slot-remove {
+	opacity: 1;
+}
+
+.trellis-filename-gap-button {
+	display: grid;
+	width: 38px;
+	min-width: 38px;
+	height: 54px;
+	place-items: center;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	background: transparent;
+}
+
+.trellis-filename-gap-button:hover,
+.trellis-filename-gap-button.is-selected {
+	border-color: var(--background-modifier-border);
+	background: var(--background-modifier-hover);
+}
+
+.trellis-filename-gap-button.is-selected {
+	border-color: var(--interactive-accent);
+}
+
+.trellis-filename-gap-button code {
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	white-space: pre;
+}
+
+.trellis-filename-editor {
+	min-height: 88px;
+	margin-bottom: var(--size-4-3);
+	padding: 0 var(--size-4-4) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
 }
 
 .trellis-filename-part-title .setting-item-name {
@@ -346,7 +578,7 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-filename-gap-setting {
-	margin-inline-start: var(--size-4-3);
+	margin: 0;
 }
 
 .trellis-setting-actions {
@@ -374,7 +606,21 @@ button.trellis-destructive:disabled:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-filename-part .setting-item-control,
+	.trellis-filename-result,
+	.trellis-filename-composer-header {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.trellis-filename-result > code {
+		max-width: 100%;
+	}
+
+	.trellis-filename-add-actions {
+		flex-wrap: wrap;
+	}
+
+	.trellis-filename-editor .setting-item-control,
 	.trellis-filename-gap-setting .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;

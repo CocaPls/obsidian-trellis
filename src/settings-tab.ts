@@ -5,6 +5,7 @@ import {
 	Setting,
 	TFile,
 	getAllTags,
+	setIcon,
 	type ButtonComponent,
 } from "obsidian";
 import {
@@ -21,6 +22,7 @@ import {
 	isValidSlotWrapper,
 	normalizeTagList,
 	nsPath,
+	renderSeparator,
 	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
@@ -40,6 +42,9 @@ const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
 const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
 type SettingsSection = "structure" | "general";
+type FilenameSelection =
+	| { kind: "slot"; index: number }
+	| { kind: "gap"; index: number };
 
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
@@ -94,6 +99,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private inventorySchemaFingerprint = "";
 	private statsCleanups: (() => void)[] = [];
 	private activeSection: SettingsSection = "general";
+	private filenameSelection: FilenameSelection | null = null;
+	private draggedSlotIndex: number | null = null;
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	private showArchivedTagDefinitions = false;
@@ -785,6 +792,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		});
 		const schema = this.draft();
 		this.ensureSeparators(schema);
+		const selection = this.ensureFilenameSelection(schema);
 		const exampleParts = schema.slots.map((slot, index) => {
 			if (slot.role === "name") return t("setting.filenameExampleName");
 			const definition = tagDefinitionById(schema, slot.tagDefinitionId);
@@ -793,19 +801,18 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.replace(/\s+/g, "");
 			return sample || `TAG${index + 1}`;
 		});
-		const filenameExample = new Setting(containerEl)
-			.setName(t("setting.filenamePreview"))
-			.setDesc(t("setting.filenamePreviewHint"));
-		filenameExample.controlEl.createEl("code", {
-			cls: "trellis-filename-example-code",
-			text: assembleBasenameMulti(exampleParts, schema) || "—",
+		const result = containerEl.createDiv({ cls: "trellis-filename-result" });
+		const resultCopy = result.createDiv({ cls: "trellis-filename-result-copy" });
+		resultCopy.createSpan({
+			cls: "trellis-filename-result-label",
+			text: t("setting.filenamePreview"),
 		});
-
-		schema.slots.forEach((slot, index) => {
-			this.renderFilenameSlotEditor(containerEl, schema, slot, index);
-			if (index < schema.slots.length - 1) {
-				this.renderGapEditor(containerEl, schema, index);
-			}
+		resultCopy.createSpan({
+			cls: "trellis-filename-result-hint",
+			text: t("setting.filenamePreviewHint"),
+		});
+		result.createEl("code", {
+			text: assembleBasenameMulti(exampleParts, schema) || "—",
 		});
 
 		const usedDefinitions = new Set(
@@ -817,40 +824,88 @@ export class TrellisSettingTab extends PluginSettingTab {
 			(definition) => !definition.archived && !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
-		const addSlot = new Setting(containerEl)
-			.setName(t("setting.slotAdd"))
-			.setDesc(t("setting.slotAddDesc"));
-		addSlot
-			.addButton((button) =>
-				button
-					.setButtonText(t("setting.addTagSlot"))
-					.setDisabled(!available)
-					.setTooltip(!available ? t("setting.addTagSlotUnavailable") : "")
-					.onClick(() => {
-						if (!available) return;
-						const id = nextSlotId(schema);
-						schema.slots.push({
-							id,
-							role: "tag",
-							tagDefinitionId: available.id,
-						});
-						this.ensureSeparators(schema);
-						this.render();
-					})
-			)
-			.addButton((button) =>
-				button
-					.setButtonText(t("setting.addNameSlot"))
-					.setDisabled(hasName)
-					.setTooltip(hasName ? t("setting.addNameSlotUnavailable") : "")
-					.onClick(() => {
-						if (hasName) return;
-						const id = nextSlotId(schema);
-						schema.slots.push({ id, role: "name" });
-						this.ensureSeparators(schema);
-						this.render();
-					})
-			);
+		const composer = containerEl.createDiv({ cls: "trellis-filename-composer" });
+		const composerHeader = composer.createDiv({
+			cls: "trellis-filename-composer-header",
+		});
+		const composerCopy = composerHeader.createDiv({
+			cls: "trellis-filename-composer-copy",
+		});
+		composerCopy.createSpan({
+			cls: "trellis-filename-composer-title",
+			text: t("setting.filenameComposerTitle"),
+		});
+		composerCopy.createSpan({
+			cls: "trellis-filename-composer-hint",
+			text: t("setting.filenameComposerHint"),
+		});
+		const addActions = composerHeader.createDiv({
+			cls: "trellis-filename-add-actions",
+		});
+		const addTag = addActions.createEl("button", {
+			cls: "mod-muted",
+			attr: { type: "button" },
+		});
+		const addTagIcon = addTag.createSpan({ cls: "trellis-button-icon" });
+		setIcon(addTagIcon, "plus");
+		addTag.createSpan({ text: t("setting.addTagSlot") });
+		addTag.disabled = !available;
+		addTag.setAttribute(
+			"aria-label",
+			!available ? t("setting.addTagSlotUnavailable") : t("setting.addTagSlot")
+		);
+		addTag.addEventListener("click", () => {
+			if (!available) return;
+			const id = nextSlotId(schema);
+			schema.slots.push({ id, role: "tag", tagDefinitionId: available.id });
+			this.filenameSelection = { kind: "slot", index: schema.slots.length - 1 };
+			this.ensureSeparators(schema);
+			this.render();
+		});
+		const addName = addActions.createEl("button", {
+			cls: "mod-muted",
+			attr: { type: "button" },
+		});
+		const addNameIcon = addName.createSpan({ cls: "trellis-button-icon" });
+		setIcon(addNameIcon, "plus");
+		addName.createSpan({ text: t("setting.addNameSlot") });
+		addName.disabled = hasName;
+		addName.setAttribute(
+			"aria-label",
+			hasName ? t("setting.addNameSlotUnavailable") : t("setting.addNameSlot")
+		);
+		addName.addEventListener("click", () => {
+			if (hasName) return;
+			const id = nextSlotId(schema);
+			schema.slots.push({ id, role: "name" });
+			this.filenameSelection = { kind: "slot", index: schema.slots.length - 1 };
+			this.ensureSeparators(schema);
+			this.render();
+		});
+
+		const rail = composer.createDiv({ cls: "trellis-filename-rail" });
+		if (schema.slots.length === 0) {
+			rail.createDiv({
+				cls: "trellis-filename-rail-empty",
+				text: t("setting.filenameComposerEmpty"),
+			});
+		}
+		schema.slots.forEach((slot, index) => {
+			this.renderFilenameComposerSlot(rail, schema, slot, index, selection);
+			if (index < schema.slots.length - 1) {
+				this.renderFilenameComposerGap(rail, schema, index, selection);
+			}
+		});
+
+		const editor = containerEl.createDiv({ cls: "trellis-filename-editor" });
+		if (selection?.kind === "slot") {
+			const index = selection.index;
+			if (index >= 0) {
+				this.renderFilenameSlotEditor(editor, schema, schema.slots[index], index);
+			}
+		} else if (selection?.kind === "gap") {
+			this.renderGapEditor(editor, schema, selection.index);
+		}
 
 		if (this.draftDirty()) {
 			new Setting(containerEl)
@@ -886,10 +941,30 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.addButton((button) =>
 					button.setButtonText(t("adv.revert")).onClick(() => {
 						this.draftSchema = null;
+						this.filenameSelection = null;
 						this.render();
 					})
 				);
 		}
+	}
+
+	private ensureFilenameSelection(schema: TrellisSchema): FilenameSelection | null {
+		if (
+			this.filenameSelection?.kind === "slot" &&
+			this.filenameSelection.index >= 0 &&
+			this.filenameSelection.index < schema.slots.length
+		) {
+			return this.filenameSelection;
+		}
+		if (
+			this.filenameSelection?.kind === "gap" &&
+			this.filenameSelection.index >= 0 &&
+			this.filenameSelection.index < schema.slots.length - 1
+		) {
+			return this.filenameSelection;
+		}
+		this.filenameSelection = schema.slots[0] ? { kind: "slot", index: 0 } : null;
+		return this.filenameSelection;
 	}
 
 	private renderFilenameSyncSetting(containerEl: HTMLElement) {
@@ -929,6 +1004,151 @@ export class TrellisSettingTab extends PluginSettingTab {
 		};
 	}
 
+	private renderFilenameComposerSlot(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		slot: KeySlot,
+		index: number,
+		selection: FilenameSelection | null
+	) {
+		const label = this.filenamePartLabel(schema, slot, index);
+		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+		const card = containerEl.createDiv({ cls: "trellis-filename-slot-card" });
+		card.draggable = true;
+		card.setAttribute("aria-label", `${label.title}. ${t("setting.slotDrag")}`);
+		card.classList.toggle(
+			"is-selected",
+			selection?.kind === "slot" && selection.index === index
+		);
+
+		const select = card.createEl("button", {
+			cls: "trellis-filename-slot-select",
+			attr: { type: "button" },
+		});
+		const top = select.createSpan({ cls: "trellis-filename-slot-top" });
+		top.createSpan({
+			cls: "trellis-filename-slot-index",
+			text: String(index + 1),
+		});
+		top.createSpan({
+			cls: "trellis-filename-slot-kind",
+			text: slot.role === "tag" ? t("setting.slotKindTag") : t("setting.slotKindName"),
+		});
+		select.createSpan({
+			cls: "trellis-filename-slot-name",
+			text:
+				slot.role === "tag"
+					? definition?.name || definition?.namespace || t("setting.slotMissingTag")
+					: t("setting.filenameExampleName"),
+		});
+		if (slot.role === "tag" && definition) {
+			select.createSpan({
+				cls: "trellis-filename-slot-meta",
+				text: `#${nsPath(schema, definition.namespace)}/…`,
+			});
+		}
+		select.addEventListener("click", () => {
+			this.filenameSelection = { kind: "slot", index };
+			this.render();
+		});
+
+		const remove = card.createEl("button", {
+			cls: "clickable-icon trellis-filename-slot-remove",
+			attr: {
+				type: "button",
+				"aria-label": t("setting.partRemove"),
+			},
+		});
+		setIcon(remove, "x");
+		remove.addEventListener("click", () => {
+			this.removeSlot(schema, index);
+			const next = schema.slots[Math.min(index, schema.slots.length - 1)];
+			this.filenameSelection = next
+				? { kind: "slot", index: Math.min(index, schema.slots.length - 1) }
+				: null;
+			this.render();
+		});
+
+		card.addEventListener("dragstart", (event) => {
+			this.draggedSlotIndex = index;
+			card.classList.add("is-dragging");
+			if (event.dataTransfer) {
+				event.dataTransfer.effectAllowed = "move";
+				event.dataTransfer.setData("text/plain", slot.id ?? String(index));
+			}
+		});
+		card.addEventListener("dragover", (event) => {
+			if (this.draggedSlotIndex === null) return;
+			event.preventDefault();
+			const after = event.clientX > card.getBoundingClientRect().left + card.clientWidth / 2;
+			card.classList.toggle("drop-before", !after);
+			card.classList.toggle("drop-after", after);
+			if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+		});
+		card.addEventListener("dragleave", () => {
+			card.classList.remove("drop-before", "drop-after");
+		});
+		card.addEventListener("drop", (event) => {
+			event.preventDefault();
+			const from = this.draggedSlotIndex;
+			if (from === null) return;
+			const after = event.clientX > card.getBoundingClientRect().left + card.clientWidth / 2;
+			this.moveFilenameSlot(schema, from, index + (after ? 1 : 0));
+			this.draggedSlotIndex = null;
+			this.render();
+		});
+		card.addEventListener("dragend", () => {
+			this.draggedSlotIndex = null;
+			for (const item of Array.from(
+				containerEl.querySelectorAll<HTMLElement>(".trellis-filename-slot-card")
+			)) {
+				item.classList.remove("is-dragging", "drop-before", "drop-after");
+			}
+		});
+	}
+
+	private renderFilenameComposerGap(
+		containerEl: HTMLElement,
+		schema: TrellisSchema,
+		index: number,
+		selection: FilenameSelection | null
+	) {
+		const button = containerEl.createEl("button", {
+			cls: "trellis-filename-gap-button",
+			attr: {
+				type: "button",
+				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),
+			},
+		});
+		button.createEl("code", {
+			text: renderSeparator(
+				schema.separators[index] ?? "-",
+				separatorSpacingAt(schema, index)
+			),
+		});
+		button.classList.toggle(
+			"is-selected",
+			selection?.kind === "gap" && selection.index === index
+		);
+		button.addEventListener("click", () => {
+			this.filenameSelection = { kind: "gap", index };
+			this.render();
+		});
+	}
+
+	private moveFilenameSlot(schema: TrellisSchema, from: number, insertion: number) {
+		if (from < 0 || from >= schema.slots.length) return;
+		const [slot] = schema.slots.splice(from, 1);
+		if (!slot) return;
+		const target = Math.max(
+			0,
+			Math.min(schema.slots.length, from < insertion ? insertion - 1 : insertion)
+		);
+		schema.slots.splice(target, 0, slot);
+		this.filenameSelection = { kind: "slot", index: target };
+		this.ensureSeparators(schema);
+	}
+
 
 	private renderFilenameSlotEditor(
 		containerEl: HTMLElement,
@@ -938,7 +1158,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	) {
 		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
 		const label = this.filenamePartLabel(schema, slot, index);
-		const partEl = containerEl.createDiv({ cls: "trellis-filename-part" });
+		const partEl = containerEl;
+		partEl.addClass("trellis-filename-slot-editor");
 		const heading = new Setting(partEl).setName(label.title);
 		heading.settingEl.addClass("trellis-filename-part-title");
 		if (slot.role === "tag" && definition) {
@@ -961,6 +1182,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							schema.slots[index],
 							schema.slots[index - 1],
 						];
+						this.filenameSelection = { kind: "slot", index: index - 1 };
 						this.render();
 					})
 			)
@@ -975,6 +1197,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							schema.slots[index + 1],
 							schema.slots[index],
 						];
+						this.filenameSelection = { kind: "slot", index: index + 1 };
 						this.render();
 					})
 			)
@@ -984,6 +1207,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setTooltip(t("setting.partRemove"))
 					.onClick(() => {
 						this.removeSlot(schema, index);
+						const next = schema.slots[Math.min(index, schema.slots.length - 1)];
+						this.filenameSelection = next
+							? { kind: "slot", index: Math.min(index, schema.slots.length - 1) }
+							: null;
 						this.render();
 					})
 			);
