@@ -194,7 +194,7 @@ const EN: Record<string, string> = {
 	"setting.tagArchiveButton": "Archive",
 	"setting.tagRestore": "Restore tag",
 	"setting.tagRestoreDesc":
-		"Return this definition to active choices. Sidebar visibility stays off until enabled.",
+		"Return this definition to active choices. Re-enable it in Sidebar settings if needed.",
 	"setting.tagRestoreButton": "Restore",
 	"setting.tagBadgeFilename": "Filename",
 	"setting.tagBadgeSidebar": "Sidebar",
@@ -737,7 +737,7 @@ const KO: Record<string, string> = {
 	"setting.tagArchiveButton": "보관",
 	"setting.tagRestore": "태그 복원",
 	"setting.tagRestoreDesc":
-		"활성 선택 목록으로 되돌립니다. 사이드바 표시는 필요할 때 다시 켜세요.",
+		"활성 선택 목록으로 되돌립니다. 필요하면 사이드바 설정에서 다시 표시하세요.",
 	"setting.tagRestoreButton": "복원",
 	"setting.tagBadgeFilename": "파일명",
 	"setting.tagBadgeSidebar": "사이드바",
