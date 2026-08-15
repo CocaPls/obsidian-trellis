@@ -11,17 +11,20 @@ import {
 import {
 	SeparatorSpacing,
 	TrellisSchema,
+	type BoundaryKind,
+	type FilenameTextTransform,
 	type KeySlot,
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
 	isValidHierarchySeparator,
+	isValidBoundary,
 	isValidNamespace,
-	isValidSeparator,
 	isValidSlotWrapper,
 	normalizeTagList,
 	nsPath,
 	renderSeparator,
+	boundaryKindAt,
 	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
@@ -38,6 +41,11 @@ const DASHED_DATE_FORMAT = "YYYY-MM-DD";
 const SEGMENT_PRESETS = ["", ".", "-", "_"];
 const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
 const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
+const BOUNDARY_KINDS: BoundaryKind[] = ["symbol", "space", "none"];
+const FILENAME_TEXT_TRANSFORMS: FilenameTextTransform[] = [
+	"identity",
+	"underscore-to-space",
+];
 const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
 type SettingsSection = "structure" | "general";
@@ -1157,11 +1165,15 @@ export class TrellisSettingTab extends PluginSettingTab {
 				"aria-label": t("setting.gapName", { a: index + 1, b: index + 2 }),
 			},
 		});
+		const kind = boundaryKindAt(schema, index);
 		button.createEl("code", {
-			text: renderSeparator(
-				schema.separators[index] ?? "-",
-				separatorSpacingAt(schema, index)
-			),
+			text:
+				kind === "symbol"
+					? renderSeparator(
+							schema.separators[index] ?? "-",
+							separatorSpacingAt(schema, index)
+						)
+					: t(`boundary.${kind}`),
 		});
 		button.classList.toggle(
 			"is-selected",
@@ -1262,8 +1274,31 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 				});
 		}
-		if (slot.role === "tag") this.renderHierarchySetting(partEl, slot);
+		if (slot.role === "tag") {
+			this.renderFilenameTextTransformSetting(partEl, slot);
+			this.renderHierarchySetting(partEl, slot);
+		}
 		this.renderWrapperSetting(partEl, slot);
+	}
+
+	private renderFilenameTextTransformSetting(containerEl: HTMLElement, slot: KeySlot) {
+		const current = slot.filenameTextTransform ?? "identity";
+		new Setting(containerEl)
+			.setName(t("setting.filenameTextTransform"))
+			.setDesc(t("setting.filenameTextTransformDesc"))
+			.addDropdown((dropdown) => {
+				for (const value of FILENAME_TEXT_TRANSFORMS) {
+					dropdown.addOption(value, t(`filenameTextTransform.${value}`));
+				}
+				dropdown.setValue(current).onChange((value) => {
+					if (value === "underscore-to-space") {
+						slot.filenameTextTransform = value;
+					} else {
+						delete slot.filenameTextTransform;
+					}
+					this.render();
+				});
+			});
 	}
 
 	private renderHierarchySetting(containerEl: HTMLElement, slot: KeySlot) {
@@ -1362,10 +1397,35 @@ export class TrellisSettingTab extends PluginSettingTab {
 		index: number
 	) {
 		const current = schema.separators[index] ?? "-";
+		const kind = boundaryKindAt(schema, index);
 		let customInput: HTMLInputElement | null = null;
-		const setting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName(t("setting.gapName", { a: index + 1, b: index + 2 }))
 			.setDesc(t("setting.gapDesc"))
+			.addDropdown((dropdown) => {
+				for (const value of BOUNDARY_KINDS) {
+					dropdown.addOption(value, t(`boundary.${value}`));
+				}
+				dropdown.setValue(kind).onChange((value) => {
+					if (!schema.separatorSpacing) schema.separatorSpacing = [];
+					if (value === "space") {
+						schema.separators[index] = "";
+						schema.separatorSpacing[index] = "after";
+					} else if (value === "none") {
+						schema.separators[index] = "";
+						schema.separatorSpacing[index] = "none";
+					} else {
+						schema.separators[index] = "-";
+						schema.separatorSpacing[index] = "none";
+					}
+					this.render();
+				});
+			});
+
+		if (kind !== "symbol") return;
+
+		const setting = new Setting(containerEl)
+			.setName(t("setting.separatorSymbol"))
 			.addDropdown((dropdown) => {
 				for (const preset of BOUNDARY_PRESETS) dropdown.addOption(preset, preset);
 				dropdown
@@ -1440,7 +1500,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 		const needed = Math.max(0, schema.slots.length - 1);
 		for (let index = 0; index < needed; index++) {
-			if (!isValidSeparator(schema.separators[index] ?? "")) {
+			if (!isValidBoundary(schema, index)) {
 				return t("adv.invalid.sep", { n: index + 1 });
 			}
 			if (!SPACING_OPTIONS.includes(separatorSpacingAt(schema, index))) {

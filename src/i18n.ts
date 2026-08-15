@@ -233,7 +233,7 @@ const EN: Record<string, string> = {
 	"setting.filenameComposerHint":
 		"Select a slot or separator to edit it below.",
 	"setting.filenameComposerEmpty": "Add a slot to start composing the filename.",
-	"setting.gapDesc": "Choose the separator and its surrounding spaces.",
+	"setting.gapDesc": "Connect these filename slots with a symbol, one space, or nothing.",
 	"setting.filenameSyncName": "Update filenames when tags change",
 	"setting.filenameSyncOn":
 		"When a tag changes, its filename changes too.",
@@ -246,6 +246,11 @@ const EN: Record<string, string> = {
 	"setting.partMoveDown": "Move part right",
 	"setting.partRemove": "Remove part",
 	"setting.slotSource": "Tag",
+	"setting.filenameTextTransform": "Underscores in filename",
+	"setting.filenameTextTransformDesc":
+		"The stored tag stays unchanged; only its filename text is formatted.",
+	"filenameTextTransform.identity": "Keep underscores",
+	"filenameTextTransform.underscore-to-space": "Show as spaces",
 	"setting.wrapperName": "Wrap",
 	"wrapper.none": "None",
 	"wrapper.round": "Round parentheses",
@@ -254,6 +259,9 @@ const EN: Record<string, string> = {
 	"setting.addNameSlot": "Add general slot",
 	"setting.addTagSlotCreate": "Create a managed tag and add its slot",
 	"setting.gapName": "Between parts {a} and {b}",
+	"boundary.symbol": "Symbol",
+	"boundary.space": "Space",
+	"boundary.none": "None",
 	"setting.separatorSymbol": "Symbol",
 	"setting.separatorSpacing": "Spaces",
 	"setting.filenamePending": "Filename composition changed",
@@ -776,7 +784,7 @@ const KO: Record<string, string> = {
 	"setting.filenameComposerHint":
 		"슬롯이나 구분자를 누르면 아래에서 세부 설정을 바꿀 수 있습니다.",
 	"setting.filenameComposerEmpty": "슬롯을 추가해 파일명 구성을 시작하세요.",
-	"setting.gapDesc": "구분 기호와 주변 공백을 함께 설정합니다.",
+	"setting.gapDesc": "파일명 슬롯을 기호, 공백 한 칸 또는 붙여서 연결합니다.",
 	"setting.filenameSyncName": "태그 변경 시 파일명 자동 변경",
 	"setting.filenameSyncOn":
 		"태그가 바뀌면 파일명도 함께 바꿉니다.",
@@ -789,6 +797,11 @@ const KO: Record<string, string> = {
 	"setting.partMoveDown": "항목 오른쪽으로 이동",
 	"setting.partRemove": "항목 삭제",
 	"setting.slotSource": "태그",
+	"setting.filenameTextTransform": "파일명의 언더바",
+	"setting.filenameTextTransformDesc":
+		"저장된 태그는 그대로 두고 파일명에 표시할 때만 바꿉니다.",
+	"filenameTextTransform.identity": "언더바 유지",
+	"filenameTextTransform.underscore-to-space": "공백으로 표시",
 	"setting.wrapperName": "감싸기",
 	"wrapper.none": "없음",
 	"wrapper.round": "둥근 괄호",
@@ -797,6 +810,9 @@ const KO: Record<string, string> = {
 	"setting.addNameSlot": "일반 슬롯 추가",
 	"setting.addTagSlotCreate": "관리 태그를 만들고 슬롯에 추가",
 	"setting.gapName": "{a}번과 {b}번 사이",
+	"boundary.symbol": "기호",
+	"boundary.space": "공백",
+	"boundary.none": "없음",
 	"setting.separatorSymbol": "기호",
 	"setting.separatorSpacing": "공백",
 	"setting.filenamePending": "파일명 구성 변경됨",
