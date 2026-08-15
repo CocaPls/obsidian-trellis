@@ -10,21 +10,14 @@ development milestones; `0.1.0` is the first public release.
 
 ## Unreleased
 
-- Simplify filename settings to a compact horizontal slot order with one
-  selected-item editor, removing the decorative example and drag-card layer.
-- Add searchable active/archived managed-tag views. Archived definitions keep
-  recognizing existing tags for safe removal, but leave the sidebar and active
-  choices until restored; filename-bearing definitions must be detached first.
-- Keep the tag detail pane aligned with filtered search results and expose
-  separator selection state to assistive technology.
-- Use Obsidian's mobile state as well as viewport width for the settings layout,
-  preventing the managed-tag detail pane from collapsing on phones and tablets.
-
 ## 0.5.0 — Managed tags and filename structures
 
 - Separate registered **Trellis tags** from their optional filename slots. Each
   definition and slot has a stable internal ID; legacy settings migrate without
   changing existing filenames.
+- Add searchable active/archived managed-tag views. Archived definitions keep
+  recognizing existing tags for safe removal, but leave the sidebar and active
+  choices until restored; filename-bearing definitions must be detached first.
 - Replace the experimental/simple split with one staged filename-structure
   editor: sparse tag/name slots, per-gap symbols and spacing, per-tag hierarchy
   display, optional wrappers, and validated custom portable punctuation.
@@ -46,6 +39,11 @@ development milestones; `0.1.0` is the first public release.
 - Extend guarded automation with a read-only model description, stable
   definition IDs, sidebar-only tag changes, and explicit `syncFilename: false`
   plans. Frontmatter is the sole management source; inline tags remain warnings.
+- Finish the settings UI with a compact horizontal slot order and one
+  selected-item editor instead of decorative examples or drag cards. Search
+  keeps the tag detail pane aligned with filtered results, separator buttons
+  expose their selected state, and Obsidian's mobile state prevents the detail
+  pane from collapsing on phones and tablets.
 
 ## 0.4.2 — Cross-platform filename safety
 
