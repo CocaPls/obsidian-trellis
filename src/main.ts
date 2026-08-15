@@ -662,15 +662,19 @@ export default class TrellisPlugin extends Plugin {
 		const selectedTreeDefinition =
 			definitions.find(
 				(definition) =>
-					definition.id === loaded.treeTagDefinitionId && definition.sidebarVisible
+					definition.id === loaded.treeTagDefinitionId &&
+					definition.sidebarVisible &&
+					!definition.archived
 			) ??
 			definitions.find(
 				(definition) =>
 					sameTagPath(definition.namespace, legacyTreeNamespace) &&
-					definition.sidebarVisible
+					definition.sidebarVisible &&
+					!definition.archived
 			) ??
-			definitions.find((definition) => definition.sidebarVisible) ??
-			definitions[0];
+			definitions.find(
+				(definition) => definition.sidebarVisible && !definition.archived
+			);
 		this.settings.treeTagDefinitionId = selectedTreeDefinition?.id ?? "";
 		delete this.settings.treeTagKeyNamespace;
 		this.settings.settingsVersion = CURRENT_SETTINGS_VERSION;
@@ -981,14 +985,33 @@ export default class TrellisPlugin extends Plugin {
 
 	async updateTagDefinition(
 		id: string,
-		changes: Partial<Pick<TrellisTagDefinition, "name" | "sidebarVisible" | "color">> & {
+		changes: Partial<
+			Pick<TrellisTagDefinition, "name" | "sidebarVisible" | "archived" | "color">
+		> & {
 			valueRule?: TagValueRule | null;
 		}
 	): Promise<void> {
 		const definition = this.tagDefinitions().find((candidate) => candidate.id === id);
 		if (!definition) return;
 		if (changes.name !== undefined) definition.name = changes.name.trim();
-		if (changes.sidebarVisible !== undefined) {
+		if (changes.archived !== undefined) {
+			if (changes.archived) {
+				definition.archived = true;
+				definition.sidebarVisible = false;
+				if (this.settings.treeTagDefinitionId === id) {
+					this.settings.treeTagDefinitionId =
+						this.tagDefinitions().find(
+							(candidate) =>
+								candidate.id !== id &&
+								candidate.sidebarVisible &&
+								!candidate.archived
+						)?.id ?? "";
+				}
+			} else {
+				delete definition.archived;
+			}
+		}
+		if (changes.sidebarVisible !== undefined && !definition.archived) {
 			definition.sidebarVisible = changes.sidebarVisible;
 		}
 		if (changes.color !== undefined) {
@@ -1929,10 +1952,12 @@ export default class TrellisPlugin extends Plugin {
 			this.tagDefinitions().find(
 				(definition) =>
 					definition.id === this.settings.treeTagDefinitionId &&
-					definition.sidebarVisible
+					definition.sidebarVisible &&
+					!definition.archived
 			) ??
-			this.tagDefinitions().find((definition) => definition.sidebarVisible) ??
-			this.tagDefinitions()[0]
+			this.tagDefinitions().find(
+				(definition) => definition.sidebarVisible && !definition.archived
+			)
 		);
 	}
 
@@ -1945,7 +1970,14 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	async setTreeTagDefinitionId(id: string) {
-		if (!this.tagDefinitions().some((definition) => definition.id === id)) return;
+		if (
+			!this.tagDefinitions().some(
+				(definition) =>
+					definition.id === id && definition.sidebarVisible && !definition.archived
+			)
+		) {
+			return;
+		}
 		this.settings.treeTagDefinitionId = id;
 		await this.saveSettings();
 		this.rebuildTrees();

@@ -29,6 +29,7 @@ export type AutomationErrorCode =
 	| "write-in-progress"
 	| "invalid-request"
 	| "unknown-namespace"
+	| "archived-namespace"
 	| "invalid-tag-path"
 	| "inline-tag-conflict"
 	| "duplicate-location-tags"
@@ -286,6 +287,15 @@ export function planNoteChange(
 				error: {
 					code: "unknown-namespace",
 					message: `No managed Trellis tag matches '${change.tagDefinitionId ?? change.namespace ?? ""}'.`,
+				},
+			};
+		}
+		if (definition.archived && change.tagPath !== null) {
+			return {
+				ok: false,
+				error: {
+					code: "archived-namespace",
+					message: `Managed tag '${definition.id}' is archived and cannot receive new values.`,
 				},
 			};
 		}

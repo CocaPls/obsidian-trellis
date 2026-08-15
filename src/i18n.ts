@@ -103,13 +103,12 @@ const EN: Record<string, string> = {
 		"namespace can only contain Unicode letters, marks, digits, '-' and '_' and cannot be numeric-only",
 	"notice.nsApplied": "namespace set to '{ns}'",
 	"setting.apply": "Apply",
-	"setting.intro":
-		"Define which tags Trellis owns, how they appear in filenames, and how you browse them.",
+	"setting.intro": "Manage Trellis tags, filenames, and display.",
 	"setting.navLabel": "Trellis settings sections",
 	"setting.nav.overview": "Overview",
 	"setting.nav.tags": "Managed tags",
 	"setting.nav.filename": "Filename",
-	"setting.nav.views": "Views",
+	"setting.nav.views": "Display",
 	"setting.overviewName": "Vault overview",
 	"setting.overviewDesc":
 		"Check the current operating state before changing tag or filename rules.",
@@ -142,7 +141,7 @@ const EN: Record<string, string> = {
 	"setting.section.status": "Status",
 	"setting.section.views": "Tag and sidebar display",
 	"setting.tagsDesc":
-		"Manage the tag branches used in filenames and the sidebar.",
+		"Manage active tag branches and archive definitions you no longer use.",
 	"setting.ownerAdvanced": "Shared tag root",
 	"setting.sharedAdvanced": "Shared settings",
 	"setting.ownerAdvancedDesc":
@@ -178,6 +177,20 @@ const EN: Record<string, string> = {
 	"setting.tagAdd": "Add tag",
 	"setting.tagAddDesc": "Create another tag branch.",
 	"setting.tagSelect": "Tag to edit",
+	"setting.tagArchivedShow": "Archived tags",
+	"setting.tagArchivedShowDesc":
+		"{n} archived tag(s). Show them in the tag picker when needed.",
+	"setting.tagArchivedSuffix": "Archived",
+	"setting.tagArchive": "Archive tag",
+	"setting.tagArchiveDesc":
+		"Keep its definition and existing tags, but remove it from active choices and the sidebar.",
+	"setting.tagArchiveInFilename":
+		"Remove this tag from the filename composition before archiving it.",
+	"setting.tagArchiveButton": "Archive",
+	"setting.tagRestore": "Restore tag",
+	"setting.tagRestoreDesc":
+		"Return this definition to active choices. Sidebar visibility stays off until enabled.",
+	"setting.tagRestoreButton": "Restore",
 	"setting.tagBadgeFilename": "Filename",
 	"setting.tagBadgeSidebar": "Sidebar",
 	"setting.tagNamePlaceholder": "Display name, e.g. Projects",
@@ -630,13 +643,12 @@ const KO: Record<string, string> = {
 		"네임스페이스는 유니코드 문자·숫자·'-'·'_'만 쓸 수 있고 숫자로만 구성할 수 없습니다",
 	"notice.nsApplied": "네임스페이스를 '{ns}' 로 설정했습니다",
 	"setting.apply": "적용",
-	"setting.intro":
-		"Trellis가 소유할 태그, 파일명에 표시할 방식, 탐색 화면을 설정합니다.",
+	"setting.intro": "Trellis가 관리할 태그와 파일명, 표시 방식을 설정합니다.",
 	"setting.navLabel": "Trellis 설정 구역",
 	"setting.nav.overview": "개요",
 	"setting.nav.tags": "관리 태그",
 	"setting.nav.filename": "파일명",
-	"setting.nav.views": "보기",
+	"setting.nav.views": "표시",
 	"setting.overviewName": "볼트 개요",
 	"setting.overviewDesc":
 		"태그나 파일명 규칙을 바꾸기 전에 현재 운영 상태를 확인합니다.",
@@ -669,7 +681,7 @@ const KO: Record<string, string> = {
 	"setting.section.status": "상태",
 	"setting.section.views": "태그와 사이드바 표시",
 	"setting.tagsDesc":
-		"파일명과 사이드바에서 사용할 태그 분기를 관리합니다.",
+		"사용 중인 태그 분기를 관리하고, 쓰지 않는 정의는 보관합니다.",
 	"setting.ownerAdvanced": "공통 태그 루트",
 	"setting.sharedAdvanced": "공통 설정",
 	"setting.ownerAdvancedDesc":
@@ -705,6 +717,20 @@ const KO: Record<string, string> = {
 	"setting.tagAdd": "태그 추가",
 	"setting.tagAddDesc": "새 태그 분기를 만듭니다.",
 	"setting.tagSelect": "편집할 태그",
+	"setting.tagArchivedShow": "보관한 태그",
+	"setting.tagArchivedShowDesc":
+		"보관 중인 태그 {n}개. 필요할 때만 태그 선택 목록에 표시합니다.",
+	"setting.tagArchivedSuffix": "보관됨",
+	"setting.tagArchive": "태그 보관",
+	"setting.tagArchiveDesc":
+		"정의와 기존 태그는 유지하고, 활성 선택 목록과 사이드바에서는 제외합니다.",
+	"setting.tagArchiveInFilename":
+		"파일명 구성에서 이 태그를 먼저 뺀 뒤 보관할 수 있습니다.",
+	"setting.tagArchiveButton": "보관",
+	"setting.tagRestore": "태그 복원",
+	"setting.tagRestoreDesc":
+		"활성 선택 목록으로 되돌립니다. 사이드바 표시는 필요할 때 다시 켜세요.",
+	"setting.tagRestoreButton": "복원",
 	"setting.tagBadgeFilename": "파일명",
 	"setting.tagBadgeSidebar": "사이드바",
 	"setting.tagNamePlaceholder": "표시 이름, 예: Projects",

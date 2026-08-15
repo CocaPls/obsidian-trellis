@@ -96,6 +96,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private activeSection: SettingsSection = "tags";
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
+	private showArchivedTagDefinitions = false;
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -198,6 +199,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		heading.addButton((button) =>
 			button
 				.setButtonText(t("setting.tagAdd"))
+				.setDisabled(this.addingTagDefinition)
 				.onClick(() => {
 					this.addingTagDefinition = true;
 					this.render();
@@ -243,24 +245,54 @@ export class TrellisSettingTab extends PluginSettingTab {
 			});
 
 		const definitions = this.plugin.tagDefinitions();
+		const activeDefinitions = definitions.filter((definition) => !definition.archived);
+		const archivedDefinitions = definitions.filter((definition) => definition.archived);
+		if (activeDefinitions.length === 0 && archivedDefinitions.length > 0) {
+			this.showArchivedTagDefinitions = true;
+		}
 		if (this.addingTagDefinition || definitions.length === 0) {
 			this.renderTagDefinitionAdd(containerEl, definitions.length > 0);
 		}
-		if (!definitions.some((definition) => definition.id === this.selectedTagDefinitionId)) {
-			this.selectedTagDefinitionId = definitions[0]?.id ?? null;
+		if (archivedDefinitions.length > 0) {
+			new Setting(containerEl)
+				.setName(t("setting.tagArchivedShow"))
+				.setDesc(
+					t("setting.tagArchivedShowDesc", { n: archivedDefinitions.length })
+				)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.showArchivedTagDefinitions)
+						.onChange((value) => {
+							this.showArchivedTagDefinitions = value;
+							this.render();
+						})
+				);
 		}
-		if (definitions.length > 0) {
-			if (definitions.length > 1) {
+		const selectableDefinitions = this.showArchivedTagDefinitions
+			? [...activeDefinitions, ...archivedDefinitions]
+			: activeDefinitions;
+		if (
+			!selectableDefinitions.some(
+				(definition) => definition.id === this.selectedTagDefinitionId
+			)
+		) {
+			this.selectedTagDefinitionId = selectableDefinitions[0]?.id ?? null;
+		}
+		if (selectableDefinitions.length > 0) {
+			if (selectableDefinitions.length > 1) {
 				new Setting(containerEl)
 					.setName(t("setting.tagSelect"))
 					.addDropdown((dropdown) => {
-						for (const definition of definitions) {
+						for (const definition of selectableDefinitions) {
+							const archived = definition.archived
+								? ` · ${t("setting.tagArchivedSuffix")}`
+								: "";
 							dropdown.addOption(
 								definition.id,
 								`${definition.name || definition.namespace} · #${nsPath(
 									this.plugin.settings.schema,
 									definition.namespace
-								)}/…`
+								)}/…${archived}`
 							);
 						}
 						dropdown
@@ -271,7 +303,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							});
 					});
 			}
-			const selected = definitions.find(
+			const selected = selectableDefinitions.find(
 				(definition) => definition.id === this.selectedTagDefinitionId
 			);
 			if (selected) this.renderTagDefinition(containerEl, selected);
@@ -286,14 +318,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const updateAddButton = () => {
 			addButton?.setDisabled(!isValidNamespace(cleanNamespaceInput(newNamespace)));
 		};
-		const setting = new Setting(containerEl)
+		new Setting(containerEl)
 			.setName(t("setting.tagAdd"))
 			.setDesc(t("setting.tagAddDesc"))
+			.setHeading();
+		new Setting(containerEl)
+			.setName(t("setting.tagDisplayName"))
 			.addText((text) =>
 				text
 					.setPlaceholder(t("setting.tagNamePlaceholder"))
 					.onChange((value) => (newName = value))
-			)
+			);
+		new Setting(containerEl)
+			.setName(t("setting.tagNamespace"))
 			.addText((text) =>
 				text
 					.setPlaceholder(t("setting.tagNamespacePlaceholder"))
@@ -301,7 +338,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 						newNamespace = value;
 						updateAddButton();
 					})
-			)
+			);
+		const actions = new Setting(containerEl)
 			.addButton((button) => {
 				addButton = button;
 				button
@@ -325,8 +363,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					});
 			});
+		actions.infoEl.remove();
+		actions.settingEl.addClass("trellis-setting-actions");
 		if (cancellable) {
-			setting.addButton((button) =>
+			actions.addButton((button) =>
 				button.setButtonText(t("modal.confirm.cancel")).onClick(() => {
 					this.addingTagDefinition = false;
 					this.render();
@@ -338,7 +378,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
 		new Setting(containerEl)
 			.setName(definition.name || definition.namespace)
-			.setDesc(`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`)
+			.setDesc(
+				`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…${
+					definition.archived ? ` · ${t("setting.tagArchivedSuffix")}` : ""
+				}`
+			)
 			.setHeading();
 		const card = containerEl;
 
@@ -394,17 +438,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 			});
 
-		new Setting(card)
-			.setName(t("setting.tagSidebarVisible"))
-			.setDesc(t("setting.tagSidebarVisibleDesc"))
-			.addToggle((toggle) =>
-				toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
-					await this.plugin.updateTagDefinition(definition.id, {
-						sidebarVisible: value,
-					});
-					this.render();
-				})
-			);
+		if (!definition.archived) {
+			new Setting(card)
+				.setName(t("setting.tagSidebarVisible"))
+				.setDesc(t("setting.tagSidebarVisibleDesc"))
+				.addToggle((toggle) =>
+					toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
+						await this.plugin.updateTagDefinition(definition.id, {
+							sidebarVisible: value,
+						});
+						this.render();
+					})
+				);
+		}
 
 		new Setting(containerEl)
 			.setName(t("setting.tagColor"))
@@ -429,8 +475,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 			.setName(t("setting.valueRule"))
 			.setDesc(t("setting.valueRuleDesc"))
 			.addDropdown((dropdown) =>
-					dropdown
-						.addOption("", t("valueRule.none"))
+				dropdown
+					.addOption("", t("valueRule.none"))
 					.addOption("alternating", t("valueRule.alternating"))
 					.addOption("sequence", t("valueRule.sequence"))
 					.addOption("date", t("valueRule.date"))
@@ -444,6 +490,41 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		if (definition.valueRule) this.renderValueRuleOptions(containerEl, definition);
+
+		const inFilename = this.plugin.settings.schema.slots.some(
+			(slot) => slot.role === "tag" && slot.tagDefinitionId === definition.id
+		);
+		if (definition.archived) {
+			new Setting(containerEl)
+				.setName(t("setting.tagRestore"))
+				.setDesc(t("setting.tagRestoreDesc"))
+				.addButton((button) =>
+					button.setButtonText(t("setting.tagRestoreButton")).onClick(async () => {
+						await this.plugin.updateTagDefinition(definition.id, { archived: false });
+						this.render();
+					})
+				);
+		} else {
+			new Setting(containerEl)
+				.setName(t("setting.tagArchive"))
+				.setDesc(
+					inFilename
+						? t("setting.tagArchiveInFilename")
+						: t("setting.tagArchiveDesc")
+				)
+				.addButton((button) =>
+					button
+						.setButtonText(t("setting.tagArchiveButton"))
+						.setDisabled(inFilename)
+						.onClick(async () => {
+							await this.plugin.updateTagDefinition(definition.id, {
+								archived: true,
+							});
+							this.showArchivedTagDefinitions = true;
+							this.render();
+						})
+				);
+		}
 
 		new Setting(containerEl)
 			.setName(t("setting.tagRemove"))
@@ -748,7 +829,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				.map((slot) => slot.tagDefinitionId)
 		);
 		const available = schemaTagDefinitions(schema).find(
-			(definition) => !usedDefinitions.has(definition.id)
+			(definition) => !definition.archived && !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
 		if (available || !hasName) {
@@ -899,7 +980,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 
-		const definitions = schemaTagDefinitions(schema);
+		const definitions = schemaTagDefinitions(schema).filter(
+			(candidate) => !candidate.archived || candidate.id === slot.tagDefinitionId
+		);
 		if (slot.role === "tag" && (definitions.length > 1 || !definition)) {
 			new Setting(partEl)
 				.setName(t("setting.slotSource"))

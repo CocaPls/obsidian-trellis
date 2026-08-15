@@ -212,6 +212,47 @@ test("stable definition ids can change sidebar-only tags without renaming", () =
 	assert.deepEqual(planned.value.next.frontmatterTags, ["place/A/01", "state/done"]);
 });
 
+test("archived tags stay managed for removal but reject new values", () => {
+	const withArchive: TrellisSchema = {
+		tagDefinitions: [
+			{ id: "place", name: "Place", namespace: "place", sidebarVisible: true },
+			{
+				id: "state",
+				name: "State",
+				namespace: "state",
+				sidebarVisible: false,
+				archived: true,
+			},
+		],
+		slots: [
+			{ id: "slot-place", role: "tag", tagDefinitionId: "place" },
+			{ id: "slot-name", role: "name" },
+		],
+		separators: ["-"],
+	};
+	const note: TrellisNoteState = {
+		path: "A01-note.md",
+		basename: "A01-note",
+		extension: "md",
+		mtime: 1,
+		allTags: ["#place/A/01", "#state/wip"],
+		frontmatterTags: ["place/A/01", "state/wip"],
+	};
+	const add = planNoteChange(note, withArchive, {
+		path: note.path,
+		tagChanges: [{ tagDefinitionId: "state", tagPath: "state/done" }],
+	});
+	assert.equal(add.ok ? "ok" : add.error.code, "archived-namespace");
+
+	const remove = planNoteChange(note, withArchive, {
+		path: note.path,
+		tagChanges: [{ tagDefinitionId: "state", tagPath: null }],
+	});
+	assert.equal(remove.ok, true);
+	if (!remove.ok) return;
+	assert.deepEqual(remove.value.next.frontmatterTags, ["place/A/01"]);
+});
+
 test("automation can explicitly change a filename-bearing tag without renaming", () => {
 	const result = planNoteChange(state, schema, {
 		path: state.path,

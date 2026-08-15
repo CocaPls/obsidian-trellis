@@ -60,6 +60,8 @@ export interface TrellisTagDefinition {
 	/** Relative branch below rootNamespace, e.g. "bp". */
 	namespace: string;
 	sidebarVisible: boolean;
+	/** Retained for existing notes, but excluded from new-use settings and views. */
+	archived?: boolean;
 	color?: string;
 	valueRule?: TagValueRule;
 }
@@ -291,13 +293,15 @@ export function normalizeSchemaModel(schema: TrellisSchema): TrellisSchema {
 			? definition.id
 			: uniqueId("tag", namespace, definitionIds);
 		definitionIds.add(id);
-		definitions.push({
+		const normalized: TrellisTagDefinition = {
 			...definition,
 			id,
 			name: definition.name?.trim() || namespace,
 			namespace,
-			sidebarVisible: definition.sidebarVisible !== false,
-		});
+			sidebarVisible: definition.archived ? false : definition.sidebarVisible !== false,
+		};
+		if (!definition.archived) delete normalized.archived;
+		definitions.push(normalized);
 	}
 
 	for (const slot of next.slots) {

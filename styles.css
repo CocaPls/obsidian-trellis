@@ -304,6 +304,11 @@ button.trellis-destructive:disabled:hover {
 	line-height: 1.4;
 }
 
+.trellis-settings input[type="color"] {
+	flex: 0 0 26px;
+	width: 26px;
+}
+
 .trellis-settings-toggle-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -344,7 +349,27 @@ button.trellis-destructive:disabled:hover {
 	margin-inline-start: var(--size-4-3);
 }
 
+.trellis-setting-actions {
+	justify-content: flex-end;
+}
+
+.trellis-setting-actions .setting-item-control {
+	flex: 0 0 auto;
+}
+
 @media (max-width: 600px) {
+	.trellis-settings-nav {
+		gap: 0;
+		overflow-x: hidden;
+	}
+
+	.trellis-settings-nav-item {
+		min-width: 0;
+		flex: 1 1 0;
+		padding-inline: var(--size-4-1);
+		text-align: center;
+	}
+
 	.trellis-settings-toggle-grid {
 		grid-template-columns: 1fr;
 	}

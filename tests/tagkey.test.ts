@@ -203,6 +203,25 @@ test("schema normalization merges case-only duplicate tag definitions by stable 
 	assert.equal(normalized.slots[0].tagDefinitionId, "bp-lower");
 });
 
+test("schema normalization preserves archived tags and keeps them out of the sidebar", () => {
+	const archived: TrellisSchema = {
+		tagDefinitions: [
+			{
+				id: "state",
+				name: "State",
+				namespace: "state",
+				sidebarVisible: true,
+				archived: true,
+			},
+		],
+		slots: [{ id: "slot-name", role: "name" }],
+		separators: [],
+	};
+	const normalized = normalizeSchemaModel(archived);
+	assert.equal(normalized.tagDefinitions?.[0].archived, true);
+	assert.equal(normalized.tagDefinitions?.[0].sidebarVisible, false);
+});
+
 test("duplicateLocationGroups flags a namespace carrying 2+ location tags", () => {
 	// one location tag (plus unrelated) → clean
 	assert.deepEqual(duplicateLocationGroups(["#trel/S88/B07", "#status/wip"], cfg), []);
