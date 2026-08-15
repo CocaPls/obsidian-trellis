@@ -248,25 +248,19 @@ button.trellis-destructive:disabled:hover {
 	display: none;
 }
 
-/* Settings use task-level navigation so the user never has to scan one long
-   implementation-shaped form. */
+/* Settings stay close to Obsidian's native rows. Trellis only adds the small
+   amount of structure needed to separate its three responsibilities. */
 .trellis-settings-intro {
 	margin-top: 0;
 	margin-bottom: var(--size-4-4);
 }
 
 .trellis-settings-nav {
-	position: sticky;
-	top: 0;
-	z-index: var(--layer-popover);
 	display: flex;
-	gap: var(--size-4-1);
+	gap: var(--size-4-4);
 	overflow-x: auto;
 	margin-bottom: var(--size-4-5);
-	padding: var(--size-4-1);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .trellis-settings-nav-item.has-pending::after {
@@ -281,22 +275,25 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-settings-nav-item {
-	flex: 1 0 auto;
+	flex: 0 0 auto;
+	padding: var(--size-4-2) var(--size-4-1);
 	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
 	box-shadow: none;
 	background: transparent;
 	color: var(--text-muted);
 }
 
 .trellis-settings-nav-item:hover {
-	background: var(--background-modifier-hover);
+	background: transparent;
 	color: var(--text-normal);
 }
 
 .trellis-settings-nav-item.is-active {
-	background: var(--background-primary);
 	color: var(--text-normal);
-	box-shadow: var(--shadow-s);
+	border-bottom-color: var(--interactive-accent);
+	box-shadow: none;
 }
 
 .trellis-settings-panel > .setting-item-heading:not(:first-child) {
@@ -305,90 +302,6 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-settings .setting-item-description {
 	line-height: 1.4;
-}
-
-.trellis-tag-definition-list {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--size-4-2);
-	margin: var(--size-4-4) 0 var(--size-4-3);
-}
-
-.trellis-tag-definition-add {
-	margin: var(--size-4-3) 0;
-	padding-inline: var(--size-4-3);
-	border: 1px solid var(--interactive-accent);
-	border-radius: var(--radius-s);
-	background: var(--background-secondary);
-}
-
-.trellis-tag-definition-choice {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	align-items: center;
-	gap: var(--size-4-2);
-	min-width: 0;
-	padding: var(--size-4-3);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	box-shadow: none;
-	background: var(--background-secondary);
-	text-align: start;
-}
-
-.trellis-tag-definition-choice:hover,
-.trellis-tag-definition-choice.is-selected {
-	border-color: var(--background-modifier-border-hover);
-	background: var(--background-modifier-hover);
-}
-
-.trellis-tag-definition-choice.is-selected {
-	box-shadow: inset 3px 0 0 var(--interactive-accent);
-}
-
-.trellis-tag-definition-color {
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	background: var(--trellis-tag-color);
-}
-
-.trellis-tag-definition-text {
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.trellis-tag-definition-name {
-	overflow: hidden;
-	font-weight: var(--font-medium);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.trellis-tag-definition-path {
-	overflow: hidden;
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.trellis-tag-definition-badges {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: var(--size-4-1);
-}
-
-.trellis-tag-definition-badge {
-	padding: 2px 6px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 999px;
-	background: var(--background-primary);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
 }
 
 .trellis-settings-toggle-grid {
@@ -402,27 +315,6 @@ button.trellis-destructive:disabled:hover {
 	padding-block: var(--size-4-2);
 }
 
-.trellis-sidebar-options.is-disabled {
-	opacity: 0.55;
-}
-
-.trellis-sidebar-disabled-note {
-	margin: 0;
-	padding: var(--size-4-3) 0;
-}
-
-/* Live tag inventory stays compact; path samples are subordinate and indented
-   so this read-only status does not compete with the actual schema controls. */
-.trellis-tag-inventory {
-	margin-bottom: var(--size-4-3);
-}
-
-.trellis-inventory-danger .setting-item-name,
-.trellis-inventory-danger .setting-item-description {
-	color: var(--text-error);
-}
-
-/* Keep section descriptions close to their headings. */
 .trellis-section-description {
 	margin: calc(var(--size-4-2) * -1) 0 var(--size-4-3);
 }
@@ -438,30 +330,31 @@ button.trellis-destructive:disabled:hover {
 	white-space: nowrap;
 }
 
-.trellis-settings-panel > .setting-item-heading.trellis-filename-part-heading {
-	margin-top: var(--size-4-4);
+.trellis-filename-part {
+	margin: var(--size-4-3) 0;
+	padding-inline-start: var(--size-4-3);
+	border-inline-start: 2px solid var(--background-modifier-border);
+}
+
+.trellis-filename-part-title .setting-item-name {
+	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-gap-setting {
+	margin-inline-start: var(--size-4-3);
 }
 
 @media (max-width: 600px) {
-	.trellis-tag-definition-list {
-		grid-template-columns: 1fr;
-	}
-
 	.trellis-settings-toggle-grid {
 		grid-template-columns: 1fr;
 	}
 
-	.trellis-tag-definition-add {
-		align-items: flex-start;
-		flex-wrap: wrap;
-	}
-
-	.trellis-tag-definition-add .setting-item-control {
+	.trellis-filename-part .setting-item-control,
+	.trellis-filename-gap-setting .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;
 		flex-wrap: wrap;
 	}
-
 }
 .trellis-tag-accent {
 	color: var(--trellis-tag-color);

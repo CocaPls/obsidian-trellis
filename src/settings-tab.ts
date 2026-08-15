@@ -39,7 +39,7 @@ const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
 const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
 const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
-type SettingsSection = "overview" | "tags" | "filename" | "views";
+type SettingsSection = "tags" | "filename" | "views";
 
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
@@ -92,10 +92,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private draftSchema: TrellisSchema | null = null;
 	private tagInventory: TagInventory | null = null;
 	private inventorySchemaFingerprint = "";
-	private statsEl: HTMLElement | null = null;
-	private statsTimer: number | null = null;
 	private statsCleanups: (() => void)[] = [];
-	private activeSection: SettingsSection = "overview";
+	private activeSection: SettingsSection = "tags";
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	constructor(app: App, plugin: TrellisPlugin) {
@@ -134,14 +132,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 				"aria-labelledby": `trellis-settings-tab-${this.activeSection}`,
 			},
 		});
-		if (this.activeSection === "overview") this.renderOverview(panel);
-		else if (this.activeSection === "tags") this.renderTagDefinitions(panel);
+		if (this.activeSection === "tags") this.renderTagDefinitions(panel);
 		else if (this.activeSection === "filename") this.renderFilenameStructure(panel);
 		else this.renderViews(panel);
 	}
 
 	private renderNavigation(containerEl: HTMLElement) {
-		const sections: SettingsSection[] = ["overview", "tags", "filename", "views"];
+		const sections: SettingsSection[] = ["tags", "filename", "views"];
 		const nav = containerEl.createDiv({
 			cls: "trellis-settings-nav",
 			attr: { role: "tablist", "aria-label": t("setting.navLabel") },
@@ -189,87 +186,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 	}
 
-	private renderOverview(containerEl: HTMLElement) {
-		new Setting(containerEl).setName(t("setting.overviewName")).setHeading();
-		containerEl.createEl("p", {
-			cls: "setting-item-description trellis-section-description",
-			text: t("setting.overviewDesc"),
-		});
-		const snapshot = this.tagInventory?.snapshot();
-		if (snapshot) {
-			const hasFilenameIssues =
-				snapshot.filenameDrift.length > 0 || snapshot.filenameCollisions.length > 0;
-			const vaultStatus = new Setting(containerEl)
-				.setName(t("setting.overviewStatus"))
-				.setDesc(
-					t("setting.overviewStatusDesc", {
-						managed: snapshot.managedNotes,
-						total: snapshot.totalNotes,
-						paths: snapshot.uniqueManagedPaths,
-						drift: snapshot.filenameDrift.length,
-						collisions: snapshot.filenameCollisions.length,
-					})
-				);
-			vaultStatus.controlEl.createSpan({
-				text: t(hasFilenameIssues ? "setting.statusReview" : "setting.statusOk"),
-			});
-		}
-
-		new Setting(containerEl)
-			.setName(t("setting.overviewFilename"))
-			.setDesc(
-				this.plugin.settings.filenameSyncEnabled
-					? t("setting.filenameSyncOn")
-					: t("setting.filenameSyncOff")
-			)
-			.addButton((button) =>
-				button.setButtonText(t("setting.configureFilename")).onClick(() => {
-					this.activeSection = "filename";
-					this.render();
-				})
-			);
-		new Setting(containerEl)
-			.setName(t("setting.overviewViews"))
-			.setDesc(
-				this.plugin.settings.treeViewEnabled
-					? t("setting.treeEnabled")
-					: t("setting.treeDisabled")
-			)
-			.addButton((button) =>
-				button.setButtonText(t("setting.configureViews")).onClick(() => {
-					this.activeSection = "views";
-					this.render();
-				})
-			);
-
-		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
-		new Setting(containerEl)
-			.setName(t("setting.langName"))
-			.setDesc(t("setting.langDesc"))
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("auto", t("setting.langAuto"))
-					.addOption("ko", "한국어")
-					.addOption("en", "English")
-					.setValue(this.plugin.settings.language)
-					.onChange(async (value) => {
-						this.plugin.settings.language =
-							value === "ko" || value === "en" ? value : "auto";
-						setLang(this.plugin.settings.language);
-						await this.plugin.saveSettings();
-						this.plugin.rebuildTrees();
-						this.plugin.applyTreeViewName();
-						this.render();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName(t("setting.statusDisclosure"))
-			.setDesc(t("setting.statusDisclosureDesc"))
-			.setHeading();
-		this.renderStats(containerEl);
-	}
-
 	private resetDraft() {
 		this.draftSchema = null;
 		this.inventorySchemaFingerprint = "";
@@ -299,11 +215,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 			rootApply?.setDisabled(next === currentRoot || Boolean(next && !isValidNamespace(next)));
 		};
 		new Setting(containerEl)
-			.setName(t("setting.sharedAdvanced"))
-			.setDesc(t("setting.ownerAdvancedDesc"))
-			.setHeading();
-		new Setting(containerEl)
 			.setName(t("setting.ownerAdvanced"))
+			.setDesc(t("setting.ownerAdvancedDesc"))
 			.addText((text) =>
 				text
 					.setPlaceholder(ROOT_NAMESPACE_PLACEHOLDER)
@@ -338,10 +251,25 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 		if (definitions.length > 0) {
 			if (definitions.length > 1) {
-				const list = containerEl.createDiv({ cls: "trellis-tag-definition-list" });
-				for (const definition of definitions) {
-					this.renderTagDefinitionChoice(list, definition);
-				}
+				new Setting(containerEl)
+					.setName(t("setting.tagSelect"))
+					.addDropdown((dropdown) => {
+						for (const definition of definitions) {
+							dropdown.addOption(
+								definition.id,
+								`${definition.name || definition.namespace} · #${nsPath(
+									this.plugin.settings.schema,
+									definition.namespace
+								)}/…`
+							);
+						}
+						dropdown
+							.setValue(this.selectedTagDefinitionId ?? "")
+							.onChange((value) => {
+								this.selectedTagDefinitionId = value;
+								this.render();
+							});
+					});
 			}
 			const selected = definitions.find(
 				(definition) => definition.id === this.selectedTagDefinitionId
@@ -397,7 +325,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					});
 			});
-		setting.settingEl.addClass("trellis-tag-definition-add");
 		if (cancellable) {
 			setting.addButton((button) =>
 				button.setButtonText(t("modal.confirm.cancel")).onClick(() => {
@@ -406,49 +333,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 		}
-	}
-
-	private renderTagDefinitionChoice(
-		containerEl: HTMLElement,
-		definition: TrellisTagDefinition
-	) {
-		const selected = definition.id === this.selectedTagDefinitionId;
-		const inFilename = this.plugin.settings.schema.slots.some(
-			(slot) => slot.role === "tag" && slot.tagDefinitionId === definition.id
-		);
-		const button = containerEl.createEl("button", {
-			cls: "trellis-tag-definition-choice",
-			attr: { type: "button", "aria-pressed": String(selected) },
-		});
-		button.classList.toggle("is-selected", selected);
-		const color = button.createSpan({ cls: "trellis-tag-definition-color" });
-		color.style.setProperty("--trellis-tag-color", definition.color || "#7c6df2");
-		const text = button.createSpan({ cls: "trellis-tag-definition-text" });
-		text.createSpan({
-			cls: "trellis-tag-definition-name",
-			text: definition.name || definition.namespace,
-		});
-		text.createEl("code", {
-			cls: "trellis-tag-definition-path",
-			text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
-		});
-		const badges = button.createSpan({ cls: "trellis-tag-definition-badges" });
-		if (inFilename) {
-			badges.createSpan({
-				cls: "trellis-tag-definition-badge",
-				text: t("setting.tagBadgeFilename"),
-			});
-		}
-		if (definition.sidebarVisible) {
-			badges.createSpan({
-				cls: "trellis-tag-definition-badge",
-				text: t("setting.tagBadgeSidebar"),
-			});
-		}
-		button.addEventListener("click", () => {
-			this.selectedTagDefinitionId = definition.id;
-			this.render();
-		});
 	}
 
 	private renderTagDefinition(containerEl: HTMLElement, definition: TrellisTagDefinition) {
@@ -522,10 +406,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl)
-			.setName(t("setting.tagAdvanced"))
-			.setDesc(t("setting.tagAdvancedDesc"))
-			.setHeading();
 		new Setting(containerEl)
 			.setName(t("setting.tagColor"))
 			.setDesc(t("setting.tagColorDesc"))
@@ -629,6 +509,27 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		this.renderSidebar(containerEl);
+
+		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
+		new Setting(containerEl)
+			.setName(t("setting.langName"))
+			.setDesc(t("setting.langDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("auto", t("setting.langAuto"))
+					.addOption("ko", "한국어")
+					.addOption("en", "English")
+					.setValue(this.plugin.settings.language)
+					.onChange(async (value) => {
+						this.plugin.settings.language =
+							value === "ko" || value === "en" ? value : "auto";
+						setLang(this.plugin.settings.language);
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+						this.plugin.applyTreeViewName();
+						this.render();
+					})
+			);
 	}
 
 	private renderValueRuleOptions(containerEl: HTMLElement, definition: TrellisTagDefinition) {
@@ -948,8 +849,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 	) {
 		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
 		const label = this.filenamePartLabel(schema, slot, index);
-		const heading = new Setting(containerEl).setName(label.title).setHeading();
-		heading.settingEl.addClass("trellis-filename-part-heading");
+		const partEl = containerEl.createDiv({ cls: "trellis-filename-part" });
+		const heading = new Setting(partEl).setName(label.title);
+		heading.settingEl.addClass("trellis-filename-part-title");
 		if (slot.role === "tag" && definition) {
 			heading.setDesc(
 				`${definition.name || definition.namespace} · #${nsPath(
@@ -999,7 +901,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		const definitions = schemaTagDefinitions(schema);
 		if (slot.role === "tag" && (definitions.length > 1 || !definition)) {
-			new Setting(containerEl)
+			new Setting(partEl)
 				.setName(t("setting.slotSource"))
 				.addDropdown((dropdown) => {
 					for (const candidate of definitions) {
@@ -1014,8 +916,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 				});
 		}
-		if (slot.role === "tag") this.renderHierarchySetting(containerEl, slot);
-		this.renderWrapperSetting(containerEl, slot);
+		if (slot.role === "tag") this.renderHierarchySetting(partEl, slot);
+		this.renderWrapperSetting(partEl, slot);
 	}
 
 	private renderHierarchySetting(containerEl: HTMLElement, slot: KeySlot) {
@@ -1229,15 +1131,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 				})
 			);
 
+		if (!this.plugin.settings.treeViewEnabled) return;
 		const options = containerEl.createDiv({ cls: "trellis-sidebar-options" });
-		if (!this.plugin.settings.treeViewEnabled) {
-			options.addClass("is-disabled");
-			options.setAttribute("aria-disabled", "true");
-			options.createEl("p", {
-				cls: "setting-item-description trellis-sidebar-disabled-note",
-				text: t("setting.treeOptionsDisabled"),
-			});
-		}
 		const visible = this.plugin
 			.tagDefinitions()
 			.filter((definition) => definition.sidebarVisible);
@@ -1391,15 +1286,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						})
 				);
 		}
-		if (!this.plugin.settings.treeViewEnabled) {
-			options
-				.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
-					"input, select, button"
-				)
-				.forEach((control) => {
-					control.disabled = true;
-				});
-		}
 	}
 
 	private inventoryFile(file: TFile): TagInventoryFile {
@@ -1428,20 +1314,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 	}
 
-	private scheduleStatsRender() {
-		if (this.statsTimer !== null) window.clearTimeout(this.statsTimer);
-		this.statsTimer = window.setTimeout(() => {
-			this.statsTimer = null;
-			if (this.activeSection === "overview") this.render();
-			else this.renderStatsContents();
-		}, 200);
-	}
-
 	private updateInventoryFile(file: TFile) {
 		if (file.extension !== "md" || !this.tagInventory) return;
-		if (this.tagInventory.upsertFile(this.inventoryFile(file))) {
-			this.scheduleStatsRender();
-		}
+		this.tagInventory.upsertFile(this.inventoryFile(file));
 	}
 
 	private startStatsWatch() {
@@ -1455,18 +1330,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 		});
 		this.statsCleanups.push(() => this.app.vault.offref(created));
 		const deleted = this.app.vault.on("delete", (file) => {
-			if (file instanceof TFile && this.tagInventory?.removeFile(file.path)) {
-				this.scheduleStatsRender();
-			}
+			if (file instanceof TFile) this.tagInventory?.removeFile(file.path);
 		});
 		this.statsCleanups.push(() => this.app.vault.offref(deleted));
 		const renamed = this.app.vault.on("rename", (file, oldPath) => {
-			if (
-				file instanceof TFile &&
-				file.extension === "md" &&
-				this.tagInventory?.renameFile(oldPath, this.inventoryFile(file))
-			) {
-				this.scheduleStatsRender();
+			if (file instanceof TFile && file.extension === "md") {
+				this.tagInventory?.renameFile(oldPath, this.inventoryFile(file));
 			}
 		});
 		this.statsCleanups.push(() => this.app.vault.offref(renamed));
@@ -1474,103 +1343,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 	private stopStatsWatch() {
 		for (const cleanup of this.statsCleanups.splice(0)) cleanup();
-		if (this.statsTimer !== null) window.clearTimeout(this.statsTimer);
-		this.statsTimer = null;
-		this.statsEl = null;
 		this.tagInventory = null;
 		this.inventorySchemaFingerprint = "";
-	}
-
-	private renderStats(containerEl: HTMLElement) {
-		this.statsEl = containerEl.createDiv({ cls: "trellis-tag-inventory" });
-		this.renderStatsContents();
-	}
-
-	private renderStatsContents() {
-		if (!this.statsEl?.isConnected) return;
-		this.ensureTagInventory();
-		const inventory = this.tagInventory;
-		if (!inventory) return;
-		const snapshot = inventory.snapshot();
-		this.statsEl.empty();
-		new Setting(this.statsEl)
-			.setName(t("setting.statsName"))
-			.setDesc(
-				t("setting.statsDesc", {
-					managed: snapshot.managedNotes,
-					total: snapshot.totalNotes,
-					tags: snapshot.managedOccurrences,
-					paths: snapshot.uniqueManagedPaths,
-				})
-			);
-		new Setting(this.statsEl)
-			.setName(t("setting.statsGeneralName"))
-			.setDesc(
-				t("setting.statsGeneralDesc", {
-					tags: snapshot.generalOccurrences,
-					unique: snapshot.uniqueGeneralTags,
-				})
-			);
-		const unmanaged = snapshot.totalNotes - snapshot.managedNotes;
-		new Setting(this.statsEl)
-			.setName(t("setting.statsCombinationsName"))
-			.setDesc(
-				t("setting.statsCombinationsDesc", {
-					n: snapshot.combinations.length,
-					unmanaged,
-				})
-			);
-		if (snapshot.filenameCollisions.length > 0) {
-			const setting = new Setting(this.statsEl)
-				.setName(t("setting.statsCollisionName"))
-				.setDesc(
-					t("setting.statsCollisionDesc", {
-						n: snapshot.filenameCollisions.length,
-					})
-				);
-			setting.settingEl.addClass("trellis-inventory-danger");
-		}
-		if (snapshot.filenameDrift.length > 0) {
-			new Setting(this.statsEl)
-				.setName(t("setting.statsDriftName"))
-				.setDesc(
-					t("setting.statsDriftDesc", {
-						n: snapshot.filenameDrift.length,
-						state: this.plugin.settings.filenameSyncEnabled
-							? t("setting.statsDriftActive")
-							: t("setting.statsDriftPaused"),
-					})
-				);
-		}
-		for (const key of snapshot.tagKeys) {
-			new Setting(this.statsEl)
-				.setName(
-					key.slotIndex >= 0
-						? t("setting.statsKeyName", {
-								n: key.slotIndex + 1,
-								ns: key.fullNamespace,
-							})
-						: t("setting.statsSidebarKeyName", { ns: key.fullNamespace })
-				)
-				.setDesc(
-					t("setting.statsKeyDesc", {
-						notes: key.notes,
-						tags: key.occurrences,
-						paths: key.uniquePaths,
-						duplicates: key.duplicateNotes,
-						inline: key.inlineOnlyNotes,
-						roots: key.namespaceNodeNotes,
-					})
-				);
-		}
-		if (snapshot.rootOwnedUnmatchedOccurrences > 0) {
-			new Setting(this.statsEl)
-				.setName(t("setting.statsRootUnknownName"))
-				.setDesc(
-					t("setting.statsRootUnknownDesc", {
-						n: snapshot.rootOwnedUnmatchedOccurrences,
-					})
-				);
-		}
 	}
 }
