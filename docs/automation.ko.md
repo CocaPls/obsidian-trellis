@@ -40,6 +40,17 @@ console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled
 각 태그 정의에는 안정 ID와 현재 `archived` 상태가 포함됩니다. 보관된 정의도 기존
 태그를 안전하게 제거할 수 있도록 계속 식별되지만 새 값을 받을 활성 대상은 아닙니다.
 
+`filenameSlots`에는 태그 슬롯별 파일명 전용 표시 필드도 들어 있습니다.
+`filenameTextTransform: "underscore-to-space"`는 frontmatter 태그를 그대로 둔 채
+파일명에서만 `_`를 일반 공백으로 표시합니다. 슬롯 `i` 뒤의 경계는
+`separators[i]`와 `separatorSpacing[i]`를 함께 읽습니다.
+
+- 비어 있지 않은 separator는 설정된 주변 공백을 가진 기호입니다.
+- 빈 separator와 `"after"`는 일반 공백 한 칸입니다.
+- 빈 separator와 `"none"`은 채워진 슬롯을 바로 붙입니다.
+
+비어 있는 슬롯은 사용되지 않는 경계와 함께 접힙니다.
+
 ## 1. 검사
 
 검사는 읽기 전용입니다.

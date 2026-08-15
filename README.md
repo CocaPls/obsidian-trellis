@@ -47,8 +47,9 @@ code by hand and Trellis restores it from the tag on the next sync.
   including filenames and wikilinks, with rollback and undo.
 - **Existing-vault import** that derives tags from filename codes for a selected
   vault, folder, or note scope, with dry run, progress controls, and undo.
-- **Safe filename structures** with sparse tag/name slots, gap spacing, custom
-  portable separators, hierarchy display, and optional slot wrappers.
+- **Safe filename structures** with sparse tag/name slots, symbol/space/empty
+  gaps, custom portable separators, hierarchy display, optional slot wrappers,
+  and filename-only underscore-to-space formatting.
 - **Managed-tag registry and inventory** independent from filename projection,
   including search, reversible archiving, sidebar-only tags, combinations,
   drift, and collision reporting.
@@ -89,8 +90,10 @@ multiple optional projections without switching to a separate advanced mode.
   #projects/PRJ/01 + #areas/ENG/02  →  PRJ01-project-overview--ENG02
   ```
 
-  Each tag slot has its own registered source, hierarchy display, and optional
-  wrapper. Applying a structure change requires a preview; ambiguous or
+  Each tag slot has its own registered source, hierarchy display, optional
+  wrapper, and filename-only underscore formatting. The stored Obsidian tag is
+  never rewritten by that display option. Each gap can be a symbol, one space,
+  or nothing. Applying a structure change requires a preview; ambiguous or
   colliding layouts are rejected. The name slot is optional. With a global
   `[A]-[B]-[C]` structure, each note may carry only the tags it needs: `A`,
   `A-B`, `A-C`, and `B-C` coexist while

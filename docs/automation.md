@@ -41,6 +41,17 @@ Each tag definition includes its stable ID and current `archived` state. An
 archived definition remains identifiable so existing tags can be removed safely,
 but it is not an active target for new values.
 
+`filenameSlots` also includes filename-only formatting for each tag slot.
+`filenameTextTransform: "underscore-to-space"` displays `_` as a normal space
+in the filename while leaving the frontmatter tag unchanged. For the boundary
+after slot `i`, read `separators[i]` together with `separatorSpacing[i]`:
+
+- a non-empty separator is a symbol with the configured surrounding spacing;
+- an empty separator with `"after"` is one plain space;
+- an empty separator with `"none"` joins populated slots directly.
+
+Empty slots collapse together with their unused boundaries.
+
 ## 1. Inspect
 
 Inspection is read-only:

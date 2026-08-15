@@ -165,6 +165,57 @@ test("no-name schema can remove one tag-key while another remains", () => {
 	assert.deepEqual(result.value.next.frontmatterTags, ["tree/T/01"]);
 });
 
+test("automation plans a three-tag filename projection without changing stored tags", () => {
+	const wikiSchema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "namespace" },
+			{
+				role: "tag",
+				namespace: "title",
+				segmentSeparator: "·",
+				filenameTextTransform: "underscore-to-space",
+			},
+			{
+				role: "tag",
+				namespace: "disambiguator",
+				filenameTextTransform: "underscore-to-space",
+				wrapper: { kind: "round" },
+			},
+		],
+		separators: ["-", ""],
+		separatorSpacing: ["none", "none"],
+	};
+	const note: TrellisNoteState = {
+		path: "Notes/old.md",
+		basename: "old",
+		extension: "md",
+		mtime: 1,
+		allTags: [
+			"#namespace/PAW",
+			"#title/Obsidian/플러그인_개발",
+			"#disambiguator/개인용_도구",
+		],
+		frontmatterTags: [
+			"namespace/PAW",
+			"title/Obsidian/플러그인_개발",
+			"disambiguator/개인용_도구",
+		],
+	};
+	const result = planNoteChange(note, wikiSchema, { path: note.path });
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.equal(
+		result.value.next.path,
+		"Notes/PAW-Obsidian·플러그인 개발(개인용 도구).md"
+	);
+	assert.deepEqual(result.value.next.frontmatterTags, note.frontmatterTags);
+	assert.deepEqual(note.frontmatterTags, [
+		"namespace/PAW",
+		"title/Obsidian/플러그인_개발",
+		"disambiguator/개인용_도구",
+	]);
+});
+
 test("plan snapshot becomes stale after a note or schema change", () => {
 	const planned = planNoteChange(state, schema, { path: state.path, nameChange: "배" });
 	assert.equal(planned.ok, true);
