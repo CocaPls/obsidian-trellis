@@ -186,9 +186,15 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 	}
 
-	private resetDraft() {
-		this.draftSchema = null;
-		this.inventorySchemaFingerprint = "";
+	private filenameUsesTagDefinition(id: string): boolean {
+		const schemas = this.draftSchema
+			? [this.plugin.settings.schema, this.draftSchema]
+			: [this.plugin.settings.schema];
+		return schemas.some((schema) =>
+			schema.slots.some(
+				(slot) => slot.role === "tag" && slot.tagDefinitionId === id
+			)
+		);
 	}
 
 	private renderStructure(containerEl: HTMLElement) {
@@ -243,7 +249,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 							new Notice(t("notice.rootBadChar"));
 							return;
 						}
-						this.resetDraft();
 						this.plugin.requestRootChange(next, () => this.render());
 					});
 			});
@@ -363,7 +368,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						}
 						this.selectedTagDefinitionId = id;
 						this.addingTagDefinition = false;
-						this.resetDraft();
 						this.render();
 					});
 			});
@@ -433,7 +437,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 							new Notice(t("notice.nsBadChar"));
 							return;
 						}
-						this.resetDraft();
 						this.plugin.requestTagDefinitionNamespaceChange(
 							definition.id,
 							clean,
@@ -495,9 +498,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			);
 		if (definition.valueRule) this.renderValueRuleOptions(containerEl, definition);
 
-		const inFilename = this.plugin.settings.schema.slots.some(
-			(slot) => slot.role === "tag" && slot.tagDefinitionId === definition.id
-		);
+		const inFilename = this.filenameUsesTagDefinition(definition.id);
 		if (definition.archived) {
 			new Setting(containerEl)
 				.setName(t("setting.tagRestore"))
@@ -538,10 +539,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					.setButtonText(t("setting.tagRemoveButton"))
 					.setClass("trellis-destructive")
 					.setDisabled(
-						this.plugin.settings.schema.slots.some(
-							(slot) =>
-								slot.role === "tag" && slot.tagDefinitionId === definition.id
-						) ||
+						this.filenameUsesTagDefinition(definition.id) ||
 							Boolean(
 								this.tagInventory
 									?.snapshot()
@@ -555,7 +553,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 							return;
 						}
 						this.selectedTagDefinitionId = null;
-						this.resetDraft();
 						this.render();
 					})
 			);
@@ -820,13 +817,17 @@ export class TrellisSettingTab extends PluginSettingTab {
 			(definition) => !definition.archived && !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
-		if (available || !hasName) {
-			const addSlot = new Setting(containerEl)
-				.setName(t("setting.slotAdd"))
-				.setDesc(t("setting.slotAddDesc"));
-			if (available) {
-				addSlot.addButton((button) =>
-					button.setButtonText(t("setting.addTagSlot")).onClick(() => {
+		const addSlot = new Setting(containerEl)
+			.setName(t("setting.slotAdd"))
+			.setDesc(t("setting.slotAddDesc"));
+		addSlot
+			.addButton((button) =>
+				button
+					.setButtonText(t("setting.addTagSlot"))
+					.setDisabled(!available)
+					.setTooltip(!available ? t("setting.addTagSlotUnavailable") : "")
+					.onClick(() => {
+						if (!available) return;
 						const id = nextSlotId(schema);
 						schema.slots.push({
 							id,
@@ -836,19 +837,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.ensureSeparators(schema);
 						this.render();
 					})
-				);
-			}
-			if (!hasName) {
-				addSlot.addButton((button) =>
-					button.setButtonText(t("setting.addNameSlot")).onClick(() => {
+			)
+			.addButton((button) =>
+				button
+					.setButtonText(t("setting.addNameSlot"))
+					.setDisabled(hasName)
+					.setTooltip(hasName ? t("setting.addNameSlotUnavailable") : "")
+					.onClick(() => {
+						if (hasName) return;
 						const id = nextSlotId(schema);
 						schema.slots.push({ id, role: "name" });
 						this.ensureSeparators(schema);
 						this.render();
 					})
-				);
-			}
-		}
+			);
 
 		if (this.draftDirty()) {
 			new Setting(containerEl)

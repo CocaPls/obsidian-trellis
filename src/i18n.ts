@@ -187,7 +187,7 @@ const EN: Record<string, string> = {
 	"setting.tagArchiveDesc":
 		"Keep its definition and existing tags, but remove it from active choices and the sidebar.",
 	"setting.tagArchiveInFilename":
-		"Remove this tag from the filename composition before archiving it.",
+		"Remove this tag from the filename composition and apply that change before archiving it.",
 	"setting.tagArchiveButton": "Archive",
 	"setting.tagRestore": "Restore tag",
 	"setting.tagRestoreDesc":
@@ -255,6 +255,8 @@ const EN: Record<string, string> = {
 		"Add a tag slot or the general note-title slot when needed.",
 	"setting.addTagSlot": "Add tag slot",
 	"setting.addNameSlot": "Add general slot",
+	"setting.addTagSlotUnavailable": "Add or free a managed tag first.",
+	"setting.addNameSlotUnavailable": "Only one general slot is supported.",
 	"setting.gapName": "Between parts {a} and {b}",
 	"setting.separatorSymbol": "Symbol",
 	"setting.separatorSpacing": "Spaces",
@@ -729,7 +731,7 @@ const KO: Record<string, string> = {
 	"setting.tagArchiveDesc":
 		"정의와 기존 태그는 유지하고, 활성 선택 목록과 사이드바에서는 제외합니다.",
 	"setting.tagArchiveInFilename":
-		"파일명 구성에서 이 태그를 먼저 뺀 뒤 보관할 수 있습니다.",
+		"파일명 구성에서 이 태그를 뺀 변경을 적용한 뒤 보관할 수 있습니다.",
 	"setting.tagArchiveButton": "보관",
 	"setting.tagRestore": "태그 복원",
 	"setting.tagRestoreDesc":
@@ -797,6 +799,8 @@ const KO: Record<string, string> = {
 		"필요할 때 태그 슬롯이나 노트 제목용 일반 슬롯을 더합니다.",
 	"setting.addTagSlot": "태그 슬롯 추가",
 	"setting.addNameSlot": "일반 슬롯 추가",
+	"setting.addTagSlotUnavailable": "관리 태그를 추가하거나 기존 태그 슬롯을 비워야 합니다.",
+	"setting.addNameSlotUnavailable": "일반 슬롯은 하나만 사용할 수 있습니다.",
 	"setting.gapName": "{a}번과 {b}번 사이",
 	"setting.separatorSymbol": "기호",
 	"setting.separatorSpacing": "공백",
