@@ -114,6 +114,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	display() {
 		this.stopStatsWatch();
 		this.startStatsWatch();
+		this.addingTagDefinition = false;
 		this.render();
 	}
 
