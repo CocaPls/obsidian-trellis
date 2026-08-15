@@ -474,7 +474,7 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-tag-detail {
 	min-width: 0;
-	padding: 0 var(--size-4-4) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-4) var(--size-4-2);
 }
 
 .trellis-settings-toggle-grid {
@@ -792,7 +792,7 @@ button.trellis-destructive:disabled:hover {
 .trellis-filename-editor {
 	min-height: 88px;
 	margin-bottom: var(--size-4-3);
-	padding: 0 var(--size-4-4) var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-4) var(--size-4-2);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-primary);
