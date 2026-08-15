@@ -39,7 +39,7 @@ const BOUNDARY_PRESETS = ["-", "_", ".", "·"];
 const SPACING_OPTIONS: SeparatorSpacing[] = ["none", "before", "after", "both"];
 const WRAPPER_OPTIONS: SlotWrapperKind[] = ["none", "round", "custom"];
 
-type SettingsSection = "tags" | "filename" | "views";
+type SettingsSection = "structure" | "general";
 
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
@@ -93,7 +93,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private tagInventory: TagInventory | null = null;
 	private inventorySchemaFingerprint = "";
 	private statsCleanups: (() => void)[] = [];
-	private activeSection: SettingsSection = "tags";
+	private activeSection: SettingsSection = "structure";
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	private showArchivedTagDefinitions = false;
@@ -133,13 +133,12 @@ export class TrellisSettingTab extends PluginSettingTab {
 				"aria-labelledby": `trellis-settings-tab-${this.activeSection}`,
 			},
 		});
-		if (this.activeSection === "tags") this.renderTagDefinitions(panel);
-		else if (this.activeSection === "filename") this.renderFilenameStructure(panel);
-		else this.renderViews(panel);
+		if (this.activeSection === "structure") this.renderStructure(panel);
+		else this.renderGeneralSettings(panel);
 	}
 
 	private renderNavigation(containerEl: HTMLElement) {
-		const sections: SettingsSection[] = ["tags", "filename", "views"];
+		const sections: SettingsSection[] = ["structure", "general"];
 		const nav = containerEl.createDiv({
 			cls: "trellis-settings-nav",
 			attr: { role: "tablist", "aria-label": t("setting.navLabel") },
@@ -161,7 +160,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 			button.classList.toggle("is-active", selected);
 			button.classList.toggle(
 				"has-pending",
-				section === "filename" && this.draftDirty()
+				section === "structure" && this.draftDirty()
 			);
 			const activate = () => {
 				this.activeSection = section;
@@ -190,6 +189,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private resetDraft() {
 		this.draftSchema = null;
 		this.inventorySchemaFingerprint = "";
+	}
+
+	private renderStructure(containerEl: HTMLElement) {
+		this.renderFilenameStructure(containerEl);
+		this.renderTagDefinitions(containerEl);
 	}
 
 	private renderTagDefinitions(containerEl: HTMLElement) {
@@ -557,8 +561,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 			);
 	}
 
-	private renderViews(containerEl: HTMLElement) {
-		new Setting(containerEl).setName(t("setting.section.views")).setHeading();
+	private renderGeneralSettings(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
+		this.renderFilenameSyncSetting(containerEl);
 		const exampleName = "Projects";
 		const examplePath = "projects/website/design";
 		const exampleTerminal = "design";
@@ -589,9 +594,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 						void this.plugin.setPropertyTagDisplay(mode);
 					})
 			);
-		this.renderSidebar(containerEl);
-
-		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
 		new Setting(containerEl)
 			.setName(t("setting.langName"))
 			.setDesc(t("setting.langDesc"))
@@ -611,6 +613,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.render();
 					})
 			);
+		this.renderSidebar(containerEl);
 	}
 
 	private renderValueRuleOptions(containerEl: HTMLElement, definition: TrellisTagDefinition) {
@@ -783,21 +786,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.filenameStructureDesc"),
 		});
-		new Setting(containerEl)
-			.setName(t("setting.filenameSyncName"))
-			.setDesc(
-				this.plugin.settings.filenameSyncEnabled
-					? t("setting.filenameSyncOn")
-					: t("setting.filenameSyncOff")
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.filenameSyncEnabled)
-					.onChange(async (value) => {
-						await this.plugin.requestFilenameSyncEnabled(value, () => this.render());
-						this.render();
-					})
-			);
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const exampleParts = schema.slots.map((slot, index) => {
@@ -900,6 +888,24 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 				);
 		}
+	}
+
+	private renderFilenameSyncSetting(containerEl: HTMLElement) {
+		new Setting(containerEl)
+			.setName(t("setting.filenameSyncName"))
+			.setDesc(
+				this.plugin.settings.filenameSyncEnabled
+					? t("setting.filenameSyncOn")
+					: t("setting.filenameSyncOff")
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.filenameSyncEnabled)
+					.onChange(async (value) => {
+						await this.plugin.requestFilenameSyncEnabled(value, () => this.render());
+						this.render();
+					})
+			);
 	}
 
 	private filenamePartLabel(

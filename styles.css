@@ -249,7 +249,7 @@ button.trellis-destructive:disabled:hover {
 }
 
 /* Settings stay close to Obsidian's native rows. Trellis only adds the small
-   amount of structure needed to separate its three responsibilities. */
+   amount of structure needed to separate schema editing from general behavior. */
 .trellis-settings-intro {
 	margin-top: 0;
 	margin-bottom: var(--size-4-4);
