@@ -235,11 +235,9 @@ const EN: Record<string, string> = {
 	"valueRule.example": "Example",
 	"setting.filenameStructureDesc":
 		"Arrange filename slots from left to right.",
-	"setting.filenameSchema": "Current structure",
-	"setting.filenameSchemaHint":
-		"Braces are slot values. A bracketed tag slot is omitted with its separator when empty.",
-	"setting.filenameSchemaName": "note title",
-	"setting.filenameSchemaTag": "tag {n}",
+	"setting.filenamePreviewHint":
+		"Preview with the current slot order, boundaries, hierarchy display, and wrapping.",
+	"setting.filenameHierarchyPreview": "{name} hierarchy",
 	"setting.filenameComposerTitle": "Filename slots",
 	"setting.filenameComposerHint":
 		"Drag slots to reorder. Select a slot or separator to edit it.",
@@ -252,7 +250,7 @@ const EN: Record<string, string> = {
 	"setting.filenameSeparatorPart": "Separator",
 	"setting.gapDesc": "Choose the separator and its surrounding spaces.",
 	"setting.filenameExample": "Example filename",
-	"setting.filenameExampleName": "note-title",
+	"setting.filenameExampleName": "note title",
 	"setting.filenameSyncName": "Update filenames when tags change",
 	"setting.filenameSyncOn":
 		"When a tag changes, its filename changes too.",
@@ -799,11 +797,9 @@ const KO: Record<string, string> = {
 	"valueRule.example": "예시",
 	"setting.filenameStructureDesc":
 		"파일명 슬롯을 왼쪽부터 원하는 순서로 배치합니다.",
-	"setting.filenameSchema": "현재 구조",
-	"setting.filenameSchemaHint":
-		"중괄호는 슬롯 값입니다. 대괄호로 묶인 태그 슬롯은 값이 없으면 구분자와 함께 생략됩니다.",
-	"setting.filenameSchemaName": "노트 제목",
-	"setting.filenameSchemaTag": "태그 {n}",
+	"setting.filenamePreviewHint":
+		"현재 슬롯 순서와 구분자·계층 표시·감싸기를 적용한 모습입니다.",
+	"setting.filenameHierarchyPreview": "{name} 계층",
 	"setting.filenameComposerTitle": "파일명 슬롯",
 	"setting.filenameComposerHint":
 		"슬롯을 끌어 순서를 바꾸고, 슬롯이나 구분자를 눌러 세부 설정을 편집합니다.",
@@ -816,7 +812,7 @@ const KO: Record<string, string> = {
 	"setting.filenameSeparatorPart": "구분자",
 	"setting.gapDesc": "구분 기호와 주변 공백을 함께 설정합니다.",
 	"setting.filenameExample": "파일명 예시",
-	"setting.filenameExampleName": "노트제목",
+	"setting.filenameExampleName": "노트 제목",
 	"setting.filenameSyncName": "태그 변경 시 파일명 자동 변경",
 	"setting.filenameSyncOn":
 		"태그가 바뀌면 파일명도 함께 바꿉니다.",

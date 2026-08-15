@@ -15,6 +15,7 @@ import {
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
+	assembleBasenameMulti,
 	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
@@ -26,7 +27,6 @@ import {
 	separatorConflicts,
 	separatorSpacingAt,
 	tagDefinitionById,
-	wrapperPair,
 } from "./tagkey";
 import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
@@ -93,48 +93,40 @@ function cleanNamespaceInput(value: string): string {
 	return value.trim().replace(/^#/, "").replace(/\/$/, "");
 }
 
-function filenameSchemaNotation(schema: TrellisSchema): string {
-	const nameIndex = schema.slots.findIndex((slot) => slot.role === "name");
-	const tokenAt = (slot: KeySlot, index: number) => {
+interface FilenameHierarchyPreview {
+	label: string;
+	source: string;
+	rendered: string;
+}
+
+function filenameExample(schema: TrellisSchema): {
+	basename: string;
+	hierarchies: FilenameHierarchyPreview[];
+} {
+	const hierarchies: FilenameHierarchyPreview[] = [];
+	let tagIndex = 0;
+	const values = schema.slots.map((slot, index) => {
+		if (slot.role === "name") return t("setting.filenameExampleName");
+		const first = String.fromCharCode(65 + (tagIndex * 2) % 26);
+		const last = String.fromCharCode(65 + (tagIndex * 2 + 1) % 26);
+		const segments = [first, String(tagIndex + 1).padStart(2, "0"), last];
+		const rendered = segments.join(slot.segmentSeparator ?? "");
 		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
-		const label =
-			slot.role === "name"
-				? t("setting.filenameSchemaName")
-				: definition?.name || definition?.namespace || t("setting.filenameSchemaTag", { n: index + 1 });
-		const { left, right } = wrapperPair(slot.wrapper);
-		return `${left}{${label}}${right}`;
+		hierarchies.push({
+			label:
+				definition?.name ||
+				definition?.namespace ||
+				t("setting.slotTitle", { n: index + 1, type: t("setting.slotKindTag") }),
+			source: segments.join(" / "),
+			rendered,
+		});
+		tagIndex++;
+		return rendered;
+	});
+	return {
+		basename: assembleBasenameMulti(values, schema),
+		hierarchies,
 	};
-	if (nameIndex < 0) {
-		return schema.slots
-			.map((slot, index) => {
-				const separator = index > 0
-					? renderSeparator(
-							schema.separators[index - 1] ?? "",
-							separatorSpacingAt(schema, index - 1)
-						)
-					: "";
-				return `${separator}${tokenAt(slot, index)}`;
-			})
-			.join("");
-	}
-	return schema.slots
-		.map((slot, index) => {
-			const token = tokenAt(slot, index);
-			if (slot.role === "name") return token;
-			if (index < nameIndex) {
-				const separator = renderSeparator(
-					schema.separators[index] ?? "",
-					separatorSpacingAt(schema, index)
-				);
-				return `[${token}${separator}]`;
-			}
-			const separator = renderSeparator(
-				schema.separators[index - 1] ?? "",
-				separatorSpacingAt(schema, index - 1)
-			);
-			return `[${separator}${token}]`;
-		})
-		.join("");
 }
 
 export class TrellisSettingTab extends PluginSettingTab {
@@ -940,22 +932,45 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const selection = this.ensureFilenameSelection(schema);
+		const example = filenameExample(schema);
 		const result = containerEl.createDiv({ cls: "trellis-filename-result" });
 		const resultCopy = result.createDiv({ cls: "trellis-filename-result-copy" });
 		resultCopy.createSpan({
 			cls: "trellis-filename-result-label",
-			text: t("setting.filenameSchema"),
+			text: t("setting.filenameExample"),
 		});
 		resultCopy.createSpan({
 			cls: "trellis-filename-result-hint",
-			text: t("setting.filenameSchemaHint"),
+			text: t("setting.filenamePreviewHint"),
 		});
-		const schemaBlock = result.createEl("pre", {
-			cls: "trellis-filename-schema-block",
+		const previewBlock = result.createEl("pre", {
+			cls: "trellis-filename-preview-block",
 		});
-		schemaBlock.createEl("code", {
-			text: filenameSchemaNotation(schema) || "—",
+		previewBlock.createEl("code", {
+			text: example.basename || "—",
 		});
+		if (example.hierarchies.length > 0) {
+			const breakdown = result.createDiv({
+				cls: "trellis-filename-hierarchy-preview",
+			});
+			for (const hierarchy of example.hierarchies) {
+				const row = breakdown.createDiv({
+					cls: "trellis-filename-hierarchy-row",
+				});
+				row.createSpan({
+					cls: "trellis-filename-hierarchy-label",
+					text: t("setting.filenameHierarchyPreview", {
+						name: hierarchy.label,
+					}),
+				});
+				row.createEl("code", { text: hierarchy.source });
+				row.createSpan({
+					cls: "trellis-filename-hierarchy-arrow",
+					text: "→",
+				});
+				row.createEl("code", { text: hierarchy.rendered });
+			}
+		}
 
 		const usedDefinitions = new Set(
 			schema.slots

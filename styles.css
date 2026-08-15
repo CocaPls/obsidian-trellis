@@ -520,7 +520,7 @@ button.trellis-destructive:disabled:hover {
 	font-size: var(--font-ui-smaller);
 }
 
-.trellis-filename-schema-block {
+.trellis-filename-preview-block {
 	overflow-x: auto;
 	margin: var(--size-4-3) 0 0;
 	padding: var(--size-4-3) var(--size-4-4);
@@ -531,13 +531,43 @@ button.trellis-destructive:disabled:hover {
 	word-break: break-word;
 }
 
-.trellis-filename-schema-block > code {
+.trellis-filename-preview-block > code {
 	padding: 0;
 	background: transparent;
 	color: var(--text-normal);
 	font-size: var(--font-ui-large);
 	font-weight: var(--font-medium);
 	font-variant-ligatures: none;
+}
+
+.trellis-filename-hierarchy-preview {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	margin-top: var(--size-4-3);
+}
+
+.trellis-filename-hierarchy-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	min-width: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-filename-hierarchy-label {
+	min-width: 5rem;
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+}
+
+.trellis-filename-hierarchy-row code {
+	overflow-wrap: anywhere;
+}
+
+.trellis-filename-hierarchy-arrow {
+	color: var(--text-faint);
 }
 
 .trellis-filename-composer {
