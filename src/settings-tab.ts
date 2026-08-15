@@ -45,6 +45,7 @@ type SettingsSection = "structure" | "general";
 type FilenameSelection =
 	| { kind: "slot"; index: number }
 	| { kind: "gap"; index: number };
+type TagDefinitionFilter = "active" | "archived" | "all";
 
 function cloneSchema(schema: TrellisSchema): TrellisSchema {
 	return {
@@ -103,7 +104,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private draggedSlotIndex: number | null = null;
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
-	private showArchivedTagDefinitions = false;
+	private tagDefinitionFilter: TagDefinitionFilter = "active";
+	private tagSearchQuery = "";
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -210,18 +212,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderTagDefinitions(containerEl: HTMLElement) {
-		const heading = new Setting(containerEl)
-			.setName(t("setting.section.tags"))
-			.setHeading();
-		heading.addButton((button) =>
-			button
-				.setButtonText(t("setting.tagAdd"))
-				.setDisabled(this.addingTagDefinition)
-				.onClick(() => {
-					this.addingTagDefinition = true;
-					this.render();
-				})
-		);
+		new Setting(containerEl).setName(t("setting.section.tags")).setHeading();
 		containerEl.createEl("p", {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
@@ -258,73 +249,181 @@ export class TrellisSettingTab extends PluginSettingTab {
 						}
 						this.plugin.requestRootChange(next, () => this.render());
 					});
-			});
+				});
 
 		const definitions = this.plugin.tagDefinitions();
 		const activeDefinitions = definitions.filter((definition) => !definition.archived);
 		const archivedDefinitions = definitions.filter((definition) => definition.archived);
 		if (activeDefinitions.length === 0 && archivedDefinitions.length > 0) {
-			this.showArchivedTagDefinitions = true;
+			this.tagDefinitionFilter = "archived";
 		}
-		if (this.addingTagDefinition || definitions.length === 0) {
-			this.renderTagDefinitionAdd(containerEl, definitions.length > 0);
-		}
-		if (archivedDefinitions.length > 0) {
-			new Setting(containerEl)
-				.setName(t("setting.tagArchivedShow"))
-				.setDesc(
-					t("setting.tagArchivedShowDesc", { n: archivedDefinitions.length })
-				)
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.showArchivedTagDefinitions)
-						.onChange((value) => {
-							this.showArchivedTagDefinitions = value;
-							this.render();
-						})
-				);
-		}
-		const selectableDefinitions = this.showArchivedTagDefinitions
-			? [...activeDefinitions, ...archivedDefinitions]
-			: activeDefinitions;
+		if (definitions.length === 0) this.addingTagDefinition = true;
+		const scopedDefinitions =
+			this.tagDefinitionFilter === "active"
+				? activeDefinitions
+				: this.tagDefinitionFilter === "archived"
+					? archivedDefinitions
+					: [...activeDefinitions, ...archivedDefinitions];
 		if (
-			!selectableDefinitions.some(
+			!this.addingTagDefinition &&
+			!scopedDefinitions.some(
 				(definition) => definition.id === this.selectedTagDefinitionId
 			)
 		) {
-			this.selectedTagDefinitionId = selectableDefinitions[0]?.id ?? null;
-		}
-		if (selectableDefinitions.length > 0) {
-			if (selectableDefinitions.length > 1) {
-				new Setting(containerEl)
-					.setName(t("setting.tagSelect"))
-					.addDropdown((dropdown) => {
-						for (const definition of selectableDefinitions) {
-							const archived = definition.archived
-								? ` · ${t("setting.tagArchivedSuffix")}`
-								: "";
-							dropdown.addOption(
-								definition.id,
-								`${definition.name || definition.namespace} · #${nsPath(
-									this.plugin.settings.schema,
-									definition.namespace
-								)}/…${archived}`
-							);
-						}
-						dropdown
-							.setValue(this.selectedTagDefinitionId ?? "")
-							.onChange((value) => {
-								this.selectedTagDefinitionId = value;
-								this.render();
-							});
-					});
-			}
-			const selected = selectableDefinitions.find(
-				(definition) => definition.id === this.selectedTagDefinitionId
-			);
-			if (selected) this.renderTagDefinition(containerEl, selected);
+			this.selectedTagDefinitionId = scopedDefinitions[0]?.id ?? null;
 		}
 
+		const workspace = containerEl.createDiv({ cls: "trellis-tag-workspace" });
+		const browser = workspace.createDiv({ cls: "trellis-tag-browser" });
+		const toolbar = browser.createDiv({ cls: "trellis-tag-toolbar" });
+		const search = toolbar.createDiv({ cls: "trellis-tag-search" });
+		const searchIcon = search.createSpan({ cls: "trellis-tag-search-icon" });
+		setIcon(searchIcon, "search");
+		const searchInput = search.createEl("input", {
+			type: "search",
+			placeholder: t("setting.tagSearchPlaceholder"),
+			value: this.tagSearchQuery,
+			attr: { "aria-label": t("setting.tagSearch") },
+		});
+		const controls = toolbar.createDiv({ cls: "trellis-tag-toolbar-controls" });
+		const filter = controls.createEl("select", {
+			attr: { "aria-label": t("setting.tagFilter") },
+		});
+		filter.createEl("option", {
+			value: "active",
+			text: t("setting.tagFilterActive", { n: activeDefinitions.length }),
+		});
+		filter.createEl("option", {
+			value: "archived",
+			text: t("setting.tagFilterArchived", { n: archivedDefinitions.length }),
+		});
+		filter.createEl("option", {
+			value: "all",
+			text: t("setting.tagFilterAll", { n: definitions.length }),
+		});
+		filter.value = this.tagDefinitionFilter;
+		filter.addEventListener("change", () => {
+			this.tagDefinitionFilter =
+				filter.value === "archived" || filter.value === "all"
+					? filter.value
+					: "active";
+			this.addingTagDefinition = false;
+			this.render();
+		});
+		const add = controls.createEl("button", {
+			attr: { type: "button" },
+		});
+		const addIcon = add.createSpan({ cls: "trellis-button-icon" });
+		setIcon(addIcon, "plus");
+		add.createSpan({ text: t("setting.tagAdd") });
+		add.disabled = this.addingTagDefinition;
+		add.addEventListener("click", () => {
+			this.addingTagDefinition = true;
+			this.render();
+		});
+
+		const count = browser.createDiv({ cls: "trellis-tag-list-count" });
+		const list = browser.createDiv({ cls: "trellis-tag-list" });
+		const renderList = () => {
+			list.empty();
+			const query = this.tagSearchQuery.trim().toLocaleLowerCase();
+			const shown = scopedDefinitions.filter((definition) => {
+				if (!query) return true;
+				const path = nsPath(this.plugin.settings.schema, definition.namespace);
+				return `${definition.name} ${definition.namespace} ${path}`
+					.toLocaleLowerCase()
+					.includes(query);
+			});
+			count.setText(
+				t("setting.tagListCount", {
+					shown: shown.length,
+					total: scopedDefinitions.length,
+				})
+			);
+			if (shown.length === 0) {
+				list.createDiv({
+					cls: "trellis-tag-list-empty",
+					text: t("setting.tagListEmpty"),
+				});
+				return;
+			}
+			for (const definition of shown) {
+				const row = list.createEl("button", {
+					cls: "trellis-tag-list-row",
+					attr: { type: "button" },
+				});
+				row.classList.toggle(
+					"is-selected",
+					!this.addingTagDefinition &&
+						definition.id === this.selectedTagDefinitionId
+				);
+				row.setAttribute(
+					"aria-pressed",
+					String(
+						!this.addingTagDefinition &&
+							definition.id === this.selectedTagDefinitionId
+					)
+				);
+				const dot = row.createSpan({ cls: "trellis-tag-list-dot" });
+				dot.style.setProperty(
+					"--trellis-tag-list-color",
+					definition.color || "var(--interactive-accent)"
+				);
+				const copy = row.createSpan({ cls: "trellis-tag-list-copy" });
+				copy.createSpan({
+					cls: "trellis-tag-list-name",
+					text: definition.name || definition.namespace,
+				});
+				copy.createSpan({
+					cls: "trellis-tag-list-path",
+					text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
+				});
+				const badges = row.createSpan({ cls: "trellis-tag-list-badges" });
+				if (this.filenameUsesTagDefinition(definition.id)) {
+					badges.createSpan({
+						cls: "trellis-tag-list-badge",
+						text: t("setting.tagBadgeFilename"),
+					});
+				}
+				if (definition.archived) {
+					badges.createSpan({
+						cls: "trellis-tag-list-badge is-archived",
+						text: t("setting.tagArchivedSuffix"),
+					});
+				} else if (definition.sidebarVisible) {
+					badges.createSpan({
+						cls: "trellis-tag-list-badge",
+						text: t("setting.tagBadgeSidebar"),
+					});
+				}
+				row.addEventListener("click", () => {
+					this.selectedTagDefinitionId = definition.id;
+					this.addingTagDefinition = false;
+					this.render();
+				});
+			}
+		};
+		searchInput.addEventListener("input", () => {
+			this.tagSearchQuery = searchInput.value;
+			renderList();
+		});
+		renderList();
+
+		const detail = workspace.createDiv({ cls: "trellis-tag-detail" });
+		if (this.addingTagDefinition) {
+			this.renderTagDefinitionAdd(detail, definitions.length > 0);
+		} else {
+			const selected = definitions.find(
+				(definition) => definition.id === this.selectedTagDefinitionId
+			);
+			if (selected) this.renderTagDefinition(detail, selected);
+			else {
+				detail.createDiv({
+					cls: "trellis-tag-detail-empty",
+					text: t("setting.tagDetailEmpty"),
+				});
+			}
+		}
 	}
 
 	private renderTagDefinitionAdd(containerEl: HTMLElement, cancellable: boolean) {
@@ -375,6 +474,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 						}
 						this.selectedTagDefinitionId = id;
 						this.addingTagDefinition = false;
+						this.tagDefinitionFilter = "active";
+						this.tagSearchQuery = "";
 						this.render();
 					});
 			});
@@ -510,10 +611,11 @@ export class TrellisSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName(t("setting.tagRestore"))
 				.setDesc(t("setting.tagRestoreDesc"))
-				.addButton((button) =>
-					button.setButtonText(t("setting.tagRestoreButton")).onClick(async () => {
-						await this.plugin.updateTagDefinition(definition.id, { archived: false });
-						this.render();
+					.addButton((button) =>
+						button.setButtonText(t("setting.tagRestoreButton")).onClick(async () => {
+							await this.plugin.updateTagDefinition(definition.id, { archived: false });
+							this.tagDefinitionFilter = "active";
+							this.render();
 					})
 				);
 		} else {
@@ -532,7 +634,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 							await this.plugin.updateTagDefinition(definition.id, {
 								archived: true,
 							});
-							this.showArchivedTagDefinitions = true;
+							this.tagDefinitionFilter = "archived";
 							this.render();
 						})
 				);
@@ -1025,6 +1127,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "trellis-filename-slot-select",
 			attr: { type: "button" },
 		});
+		select.setAttribute(
+			"aria-pressed",
+			String(selection?.kind === "slot" && selection.index === index)
+		);
 		const top = select.createSpan({ cls: "trellis-filename-slot-top" });
 		top.createSpan({
 			cls: "trellis-filename-slot-index",

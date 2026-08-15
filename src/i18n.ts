@@ -143,7 +143,7 @@ const EN: Record<string, string> = {
 	"setting.section.status": "Status",
 	"setting.section.views": "Tag and sidebar display",
 	"setting.tagsDesc":
-		"Manage active tag branches and archive definitions you no longer use.",
+		"Search and edit managed tag branches. Archive definitions you no longer use.",
 	"setting.ownerAdvanced": "Shared tag root",
 	"setting.sharedAdvanced": "Shared settings",
 	"setting.ownerAdvancedDesc":
@@ -179,6 +179,15 @@ const EN: Record<string, string> = {
 	"setting.tagAdd": "Add tag",
 	"setting.tagAddDesc": "Create another tag branch.",
 	"setting.tagSelect": "Tag to edit",
+	"setting.tagSearch": "Search managed tags",
+	"setting.tagSearchPlaceholder": "Search name or namespace…",
+	"setting.tagFilter": "Tag status",
+	"setting.tagFilterActive": "Active {n}",
+	"setting.tagFilterArchived": "Archived {n}",
+	"setting.tagFilterAll": "All {n}",
+	"setting.tagListCount": "Showing {shown} of {total}",
+	"setting.tagListEmpty": "No tags match this view.",
+	"setting.tagDetailEmpty": "Select a tag to edit its settings.",
 	"setting.tagArchivedShow": "Archived tags",
 	"setting.tagArchivedShowDesc":
 		"{n} archived tag(s). Show them in the tag picker when needed.",
@@ -695,7 +704,7 @@ const KO: Record<string, string> = {
 	"setting.section.status": "상태",
 	"setting.section.views": "태그와 사이드바 표시",
 	"setting.tagsDesc":
-		"사용 중인 태그 분기를 관리하고, 쓰지 않는 정의는 보관합니다.",
+		"관리 태그를 검색하고 편집합니다. 쓰지 않는 정의는 보관할 수 있습니다.",
 	"setting.ownerAdvanced": "공통 태그 루트",
 	"setting.sharedAdvanced": "공통 설정",
 	"setting.ownerAdvancedDesc":
@@ -731,6 +740,15 @@ const KO: Record<string, string> = {
 	"setting.tagAdd": "태그 추가",
 	"setting.tagAddDesc": "새 태그 분기를 만듭니다.",
 	"setting.tagSelect": "편집할 태그",
+	"setting.tagSearch": "관리 태그 검색",
+	"setting.tagSearchPlaceholder": "이름 또는 네임스페이스 검색…",
+	"setting.tagFilter": "태그 상태",
+	"setting.tagFilterActive": "활성 {n}",
+	"setting.tagFilterArchived": "보관 {n}",
+	"setting.tagFilterAll": "전체 {n}",
+	"setting.tagListCount": "{total}개 중 {shown}개 표시",
+	"setting.tagListEmpty": "조건에 맞는 태그가 없습니다.",
+	"setting.tagDetailEmpty": "편집할 태그를 선택하세요.",
 	"setting.tagArchivedShow": "보관한 태그",
 	"setting.tagArchivedShowDesc":
 		"보관 중인 태그 {n}개. 필요할 때만 태그 선택 목록에 표시합니다.",

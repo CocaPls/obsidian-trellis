@@ -309,6 +309,174 @@ button.trellis-destructive:disabled:hover {
 	width: 26px;
 }
 
+.trellis-tag-workspace {
+	display: grid;
+	grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--size-4-3);
+	margin-top: var(--size-4-3);
+}
+
+.trellis-tag-browser,
+.trellis-tag-detail {
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.trellis-tag-toolbar {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	padding: var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.trellis-tag-search {
+	position: relative;
+}
+
+.trellis-tag-search-icon {
+	position: absolute;
+	top: 50%;
+	left: var(--size-4-2);
+	display: grid;
+	width: var(--icon-s);
+	height: var(--icon-s);
+	place-items: center;
+	color: var(--text-faint);
+	pointer-events: none;
+	transform: translateY(-50%);
+}
+
+.trellis-tag-search input[type="search"] {
+	width: 100%;
+	padding-inline-start: calc(var(--icon-s) + var(--size-4-4));
+}
+
+.trellis-tag-toolbar-controls {
+	display: flex;
+	gap: var(--size-4-2);
+}
+
+.trellis-tag-toolbar-controls select {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.trellis-tag-toolbar-controls button {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.trellis-tag-list-count {
+	padding: var(--size-4-2) var(--size-4-3) var(--size-4-1);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-tag-list {
+	display: flex;
+	max-height: 430px;
+	flex-direction: column;
+	gap: 2px;
+	overflow-y: auto;
+	padding: 0 var(--size-4-1) var(--size-4-1);
+}
+
+.trellis-tag-list button.trellis-tag-list-row {
+	display: grid;
+	width: 100%;
+	height: auto;
+	min-height: 54px;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	border: 0;
+	border-radius: var(--radius-s);
+	box-shadow: none;
+	background: transparent;
+	color: var(--text-normal);
+	text-align: start;
+}
+
+.trellis-tag-list button.trellis-tag-list-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.trellis-tag-list button.trellis-tag-list-row.is-selected {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.trellis-tag-list-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--trellis-tag-list-color);
+}
+
+.trellis-tag-list-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.trellis-tag-list-name,
+.trellis-tag-list-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.trellis-tag-list-name {
+	font-weight: var(--font-medium);
+}
+
+.trellis-tag-list-path {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.trellis-tag-list-badges {
+	display: flex;
+	max-width: 70px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 3px;
+}
+
+.trellis-tag-list-badge {
+	padding: 1px 5px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: 10px;
+	line-height: 1.5;
+}
+
+.trellis-tag-list-badge.is-archived {
+	opacity: 0.75;
+}
+
+.trellis-tag-list-empty,
+.trellis-tag-detail-empty {
+	padding: var(--size-4-6) var(--size-4-4);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.trellis-tag-detail {
+	min-width: 0;
+	padding: 0 var(--size-4-4) var(--size-4-2);
+}
+
 .trellis-settings-toggle-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -467,7 +635,7 @@ button.trellis-destructive:disabled:hover {
 	right: calc(var(--size-4-2) * -1);
 }
 
-.trellis-filename-slot-select {
+.trellis-filename-slot-card > button.trellis-filename-slot-select {
 	display: flex;
 	width: 100%;
 	height: 100%;
@@ -484,7 +652,7 @@ button.trellis-destructive:disabled:hover {
 	text-align: start;
 }
 
-.trellis-filename-slot-select:hover {
+.trellis-filename-slot-card > button.trellis-filename-slot-select:hover {
 	background: var(--background-modifier-hover);
 }
 
@@ -606,6 +774,14 @@ button.trellis-destructive:disabled:hover {
 		grid-template-columns: 1fr;
 	}
 
+	.trellis-tag-workspace {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.trellis-tag-list {
+		max-height: 240px;
+	}
+
 	.trellis-filename-result,
 	.trellis-filename-composer-header {
 		align-items: stretch;
@@ -621,7 +797,8 @@ button.trellis-destructive:disabled:hover {
 	}
 
 	.trellis-filename-editor .setting-item-control,
-	.trellis-filename-gap-setting .setting-item-control {
+	.trellis-filename-gap-setting .setting-item-control,
+	.trellis-tag-detail .setting-item-control {
 		width: 100%;
 		justify-content: flex-start;
 		flex-wrap: wrap;
