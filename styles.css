@@ -504,8 +504,33 @@ button.trellis-destructive:disabled:hover {
 .trellis-filename-composer-copy {
 	display: flex;
 	min-width: 0;
-	flex-direction: column;
 	gap: 2px;
+}
+
+.trellis-filename-result-copy {
+	flex-direction: column;
+}
+
+.trellis-filename-composer-copy {
+	display: grid;
+	grid-template-columns: auto auto;
+	align-items: center;
+	justify-content: start;
+	column-gap: var(--size-4-2);
+}
+
+.trellis-filename-composer-hint {
+	grid-column: 1 / -1;
+}
+
+.trellis-filename-slot-count {
+	justify-self: start;
+	padding: 1px var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
 }
 
 .trellis-filename-result-label,
@@ -572,7 +597,7 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-filename-composer {
 	overflow: hidden;
-	margin-bottom: var(--size-4-3);
+	margin-bottom: var(--size-4-2);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-secondary);
@@ -775,6 +800,10 @@ button.trellis-destructive:disabled:hover {
 
 .trellis-filename-part-title .setting-item-name {
 	font-weight: var(--font-semibold);
+}
+
+.trellis-filename-part-title {
+	padding-block: var(--size-4-2);
 }
 
 .trellis-filename-gap-setting {

@@ -237,7 +237,7 @@ const EN: Record<string, string> = {
 		"Arrange filename slots from left to right.",
 	"setting.filenamePreviewHint":
 		"Preview with the current slot order, boundaries, hierarchy display, and wrapping.",
-	"setting.filenameHierarchyPreview": "{name} hierarchy",
+	"setting.filenameHierarchyPreview": "Tag slot {n} hierarchy",
 	"setting.filenameComposerTitle": "Filename slots",
 	"setting.filenameComposerHint":
 		"Drag slots to reorder. Select a slot or separator to edit it.",
@@ -250,7 +250,9 @@ const EN: Record<string, string> = {
 	"setting.filenameSeparatorPart": "Separator",
 	"setting.gapDesc": "Choose the separator and its surrounding spaces.",
 	"setting.filenameExample": "Example filename",
-	"setting.filenameExampleName": "note title",
+	"setting.filenameExampleName": "title",
+	"setting.filenameExampleParent": "parent",
+	"setting.filenameExampleChild": "child",
 	"setting.filenameSyncName": "Update filenames when tags change",
 	"setting.filenameSyncOn":
 		"When a tag changes, its filename changes too.",
@@ -273,8 +275,8 @@ const EN: Record<string, string> = {
 		"Add a tag slot or the general note-title slot when needed.",
 	"setting.addTagSlot": "Add tag slot",
 	"setting.addNameSlot": "Add general slot",
-	"setting.addTagSlotUnavailable": "Add or free a managed tag first.",
-	"setting.addNameSlotUnavailable": "Only one general slot is supported.",
+	"setting.addTagSlotCreate": "Create a managed tag and add its slot",
+	"setting.filenameSlotCount": "{n} slots",
 	"setting.gapName": "Between parts {a} and {b}",
 	"setting.separatorSymbol": "Symbol",
 	"setting.separatorSpacing": "Spaces",
@@ -799,7 +801,7 @@ const KO: Record<string, string> = {
 		"파일명 슬롯을 왼쪽부터 원하는 순서로 배치합니다.",
 	"setting.filenamePreviewHint":
 		"현재 슬롯 순서와 구분자·계층 표시·감싸기를 적용한 모습입니다.",
-	"setting.filenameHierarchyPreview": "{name} 계층",
+	"setting.filenameHierarchyPreview": "태그 슬롯 {n} 계층",
 	"setting.filenameComposerTitle": "파일명 슬롯",
 	"setting.filenameComposerHint":
 		"슬롯을 끌어 순서를 바꾸고, 슬롯이나 구분자를 눌러 세부 설정을 편집합니다.",
@@ -812,7 +814,9 @@ const KO: Record<string, string> = {
 	"setting.filenameSeparatorPart": "구분자",
 	"setting.gapDesc": "구분 기호와 주변 공백을 함께 설정합니다.",
 	"setting.filenameExample": "파일명 예시",
-	"setting.filenameExampleName": "노트 제목",
+	"setting.filenameExampleName": "제목",
+	"setting.filenameExampleParent": "상위",
+	"setting.filenameExampleChild": "하위",
 	"setting.filenameSyncName": "태그 변경 시 파일명 자동 변경",
 	"setting.filenameSyncOn":
 		"태그가 바뀌면 파일명도 함께 바꿉니다.",
@@ -835,8 +839,8 @@ const KO: Record<string, string> = {
 		"필요할 때 태그 슬롯이나 노트 제목용 일반 슬롯을 더합니다.",
 	"setting.addTagSlot": "태그 슬롯 추가",
 	"setting.addNameSlot": "일반 슬롯 추가",
-	"setting.addTagSlotUnavailable": "관리 태그를 추가하거나 기존 태그 슬롯을 비워야 합니다.",
-	"setting.addNameSlotUnavailable": "일반 슬롯은 하나만 사용할 수 있습니다.",
+	"setting.addTagSlotCreate": "관리 태그를 만들고 슬롯에 추가",
+	"setting.filenameSlotCount": "{n}개",
 	"setting.gapName": "{a}번과 {b}번 사이",
 	"setting.separatorSymbol": "기호",
 	"setting.separatorSpacing": "공백",
