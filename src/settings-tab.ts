@@ -348,18 +348,20 @@ export class TrellisSettingTab extends PluginSettingTab {
 			this.addNewTagToFilename = false;
 			this.render();
 		});
-		const add = controls.createEl("button", {
-			attr: { type: "button" },
-		});
-		const addIcon = add.createSpan({ cls: "trellis-button-icon" });
-		setIcon(addIcon, "plus");
-		add.createSpan({ text: t("setting.tagAdd") });
-		add.disabled = this.addingTagDefinition;
-		add.addEventListener("click", () => {
-			this.addNewTagToFilename = false;
-			this.addingTagDefinition = true;
-			this.render();
-		});
+		if (!this.addingTagDefinition) {
+			const add = controls.createEl("button", {
+				attr: { type: "button" },
+			});
+			const addIcon = add.createSpan({ cls: "trellis-button-icon" });
+			setIcon(addIcon, "plus");
+			add.createSpan({ text: t("setting.tagAdd") });
+			add.addEventListener("click", () => {
+				this.addNewTagToFilename = false;
+				this.addingTagDefinition = true;
+				this.render();
+				this.revealTagDetail(true);
+			});
+		}
 
 		const count = browser.createDiv({ cls: "trellis-tag-list-count" });
 		const list = browser.createDiv({ cls: "trellis-tag-list" });
@@ -440,6 +442,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 					this.addingTagDefinition = false;
 					this.addNewTagToFilename = false;
 					this.render();
+					this.revealTagDetail();
 				});
 			}
 		};
@@ -449,7 +452,10 @@ export class TrellisSettingTab extends PluginSettingTab {
 		});
 		renderList();
 
-		const detail = workspace.createDiv({ cls: "trellis-tag-detail" });
+		const detail = workspace.createDiv({
+			cls: "trellis-tag-detail",
+			attr: { "aria-live": "polite" },
+		});
 		if (this.addingTagDefinition) {
 			this.renderTagDefinitionAdd(
 				detail,
@@ -467,6 +473,19 @@ export class TrellisSettingTab extends PluginSettingTab {
 				});
 			}
 		}
+	}
+
+	private revealTagDetail(focusInput = false) {
+		const reveal = () => {
+			const detail = this.containerEl.querySelector<HTMLElement>(
+				".trellis-tag-detail"
+			);
+			detail?.scrollIntoView({ block: "nearest" });
+			if (focusInput) detail?.querySelector<HTMLInputElement>("input")?.focus();
+		};
+		const view = this.containerEl.ownerDocument.defaultView;
+		if (view) view.setTimeout(reveal, 0);
+		else reveal();
 	}
 
 	private renderTagDefinitionAdd(containerEl: HTMLElement, cancellable: boolean) {
@@ -1040,17 +1059,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 				this.tagDefinitionFilter = "active";
 				this.tagSearchQuery = "";
 				this.render();
-				const focusTagForm = () => {
-					this.containerEl
-						.querySelector<HTMLElement>(".trellis-tag-workspace")
-						?.scrollIntoView({ block: "center" });
-					this.containerEl
-						.querySelector<HTMLInputElement>(".trellis-tag-detail input")
-						?.focus();
-				};
-				const view = this.containerEl.ownerDocument.defaultView;
-				if (view) view.requestAnimationFrame(focusTagForm);
-				else focusTagForm();
+				this.revealTagDetail(true);
 				return;
 			}
 			const id = nextSlotId(schema);
