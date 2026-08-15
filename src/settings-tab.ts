@@ -93,7 +93,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private tagInventory: TagInventory | null = null;
 	private inventorySchemaFingerprint = "";
 	private statsCleanups: (() => void)[] = [];
-	private activeSection: SettingsSection = "structure";
+	private activeSection: SettingsSection = "general";
 	private selectedTagDefinitionId: string | null = null;
 	private addingTagDefinition = false;
 	private showArchivedTagDefinitions = false;
@@ -138,7 +138,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	}
 
 	private renderNavigation(containerEl: HTMLElement) {
-		const sections: SettingsSection[] = ["structure", "general"];
+		const sections: SettingsSection[] = ["general", "structure"];
 		const nav = containerEl.createDiv({
 			cls: "trellis-settings-nav",
 			attr: { role: "tablist", "aria-label": t("setting.navLabel") },
