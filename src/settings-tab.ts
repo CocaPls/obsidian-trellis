@@ -607,20 +607,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 					});
 			});
 
-		if (!definition.archived) {
-			new Setting(card)
-				.setName(t("setting.tagSidebarVisible"))
-				.setDesc(t("setting.tagSidebarVisibleDesc"))
-				.addToggle((toggle) =>
-					toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
-						await this.plugin.updateTagDefinition(definition.id, {
-							sidebarVisible: value,
-						});
-						this.render();
-					})
-				);
-		}
-
 		new Setting(containerEl)
 			.setName(t("setting.tagColor"))
 			.setDesc(t("setting.tagColorDesc"))
@@ -1493,30 +1479,37 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 		if (!this.plugin.settings.treeViewEnabled) return;
 		const options = containerEl.createDiv({ cls: "trellis-sidebar-options" });
-		const visible = this.plugin
+		const definitions = this.plugin
 			.tagDefinitions()
-			.filter((definition) => definition.sidebarVisible);
-		if (visible.length > 1) {
-			new Setting(options)
-				.setName(t("setting.treeTagKeyName"))
-				.setDesc(t("setting.treeTagKeyDesc"))
-				.addDropdown((dropdown) => {
-					for (const definition of visible) {
-						dropdown.addOption(
-							definition.id,
-							`${definition.name || definition.namespace} · #${nsPath(
-								this.plugin.settings.schema,
-								definition.namespace
-							)}/…`
-						);
-					}
-					dropdown
-						.setValue(this.plugin.treeTagDefinitionId())
-						.onChange((id) =>
-							void this.plugin.setTreeTagDefinitionId(id)
-						);
-				});
+			.filter((definition) => !definition.archived);
+		new Setting(options)
+			.setName(t("setting.sidebarTagsName"))
+			.setDesc(t("setting.sidebarTagsDesc"))
+			.setHeading();
+		if (definitions.length > 0) {
+			const visibility = options.createDiv({
+				cls: "trellis-settings-toggle-grid trellis-sidebar-tag-grid",
+			});
+			for (const definition of definitions) {
+				new Setting(visibility)
+					.setName(definition.name || definition.namespace)
+					.setDesc(`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`)
+					.addToggle((toggle) =>
+						toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
+							await this.plugin.updateTagDefinition(definition.id, {
+								sidebarVisible: value,
+							});
+							this.render();
+						})
+					);
+			}
+		} else {
+			options.createDiv({
+				cls: "setting-item-description trellis-sidebar-tags-empty",
+				text: t("setting.sidebarTagsEmpty"),
+			});
 		}
+		const visible = definitions.filter((definition) => definition.sidebarVisible);
 
 		new Setting(options)
 			.setName(t("setting.treeLabelName"))
@@ -1533,6 +1526,41 @@ export class TrellisSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(options)
+			.setName(t("setting.treeModeName"))
+			.setDesc(t("setting.treeModeDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("notes", t("setting.treeModeNotes"))
+					.addOption("tags", t("setting.treeModeTags"))
+					.setValue(this.plugin.settings.treeViewMode)
+					.onChange(async (value) => {
+						this.plugin.settings.treeViewMode = value === "tags" ? "tags" : "notes";
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+						this.render();
+					})
+			);
+		if (this.plugin.settings.treeViewMode === "notes" && visible.length > 1) {
+			new Setting(options)
+				.setName(t("setting.treeTagKeyName"))
+				.setDesc(t("setting.treeTagKeyDesc"))
+				.addDropdown((dropdown) => {
+					for (const definition of visible) {
+						dropdown.addOption(
+							definition.id,
+							`${definition.name || definition.namespace} · #${nsPath(
+								this.plugin.settings.schema,
+								definition.namespace
+							)}/…`
+						);
+					}
+					dropdown
+						.setValue(this.plugin.treeTagDefinitionId())
+						.onChange((id) => void this.plugin.setTreeTagDefinitionId(id));
+				});
+		}
+
+		new Setting(options)
 			.setName(t("setting.sortName"))
 			.setDesc(t("setting.sortDesc"))
 			.addDropdown((dropdown) =>
@@ -1546,22 +1574,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 							value === "mtime" || value === "ctime" ? value : "tagkey";
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
-					})
-			);
-
-		new Setting(options)
-			.setName(t("setting.treeModeName"))
-			.setDesc(t("setting.treeModeDesc"))
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("notes", t("setting.treeModeNotes"))
-					.addOption("tags", t("setting.treeModeTags"))
-					.setValue(this.plugin.settings.treeViewMode)
-					.onChange(async (value) => {
-						this.plugin.settings.treeViewMode = value === "tags" ? "tags" : "notes";
-						await this.plugin.saveSettings();
-						this.plugin.rebuildTrees();
-						this.render();
 					})
 			);
 		if (this.plugin.settings.treeViewMode === "tags") {

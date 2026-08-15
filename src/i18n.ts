@@ -166,8 +166,6 @@ const EN: Record<string, string> = {
 	"setting.tagDisplayNameDesc": "Name shown in Trellis.",
 	"setting.tagNamespace": "Tag namespace",
 	"setting.tagNamespaceDesc": "The tag's actual root path. Changes are previewed first.",
-	"setting.tagSidebarVisible": "Show in sidebar",
-	"setting.tagSidebarVisibleDesc": "Turn off to hide this branch from the Trellis tree.",
 	"setting.tagColor": "Color",
 	"setting.tagColorDesc":
 		"Optional accent for this Trellis tag in the sidebar and compact property labels.",
@@ -384,9 +382,12 @@ const EN: Record<string, string> = {
 	"setting.treeName": "Show Trellis in the sidebar",
 	"setting.treeDesc":
 		"Browse managed tags and notes as a tree.",
-	"setting.treeTagKeyName": "Tag used in the note tree",
+	"setting.sidebarTagsName": "Tags shown in sidebar",
+	"setting.sidebarTagsDesc": "Select any number of active managed tags.",
+	"setting.sidebarTagsEmpty": "No active managed tags.",
+	"setting.treeTagKeyName": "Note-tree axis tag",
 	"setting.treeTagKeyDesc":
-		"Choose the branch used by the note-focused view.",
+		"The notes view arranges notes by one visible managed tag.",
 	"setting.treeLabelName": "Sidebar view name",
 	"setting.treeLabelDesc": "Leave blank to use the default name.",
 	"setting.headerButtonsName": "Tree actions",
@@ -708,8 +709,6 @@ const KO: Record<string, string> = {
 	"setting.tagDisplayNameDesc": "Trellis 화면에 보이는 이름입니다.",
 	"setting.tagNamespace": "태그 네임스페이스",
 	"setting.tagNamespaceDesc": "태그의 실제 시작 경로입니다. 변경 전 영향을 미리 보여줍니다.",
-	"setting.tagSidebarVisible": "사이드바에 표시",
-	"setting.tagSidebarVisibleDesc": "끄면 이 분기를 Trellis 트리에서 숨깁니다.",
 	"setting.tagColor": "색상",
 	"setting.tagColorDesc":
 		"사이드바와 속성 축약 표시에 사용할 선택적 강조색입니다.",
@@ -925,9 +924,12 @@ const KO: Record<string, string> = {
 	"setting.treeName": "사이드바에 Trellis 표시",
 	"setting.treeDesc":
 		"관리 태그와 노트를 트리로 탐색합니다.",
-	"setting.treeTagKeyName": "노트 트리에 사용할 태그",
+	"setting.sidebarTagsName": "사이드바에 보일 태그",
+	"setting.sidebarTagsDesc": "활성 관리 태그를 여러 개 선택할 수 있습니다.",
+	"setting.sidebarTagsEmpty": "활성 관리 태그가 없습니다.",
+	"setting.treeTagKeyName": "노트 트리 기준 태그",
 	"setting.treeTagKeyDesc":
-		"노트 중심 보기에서 사용할 태그 분기를 고릅니다.",
+		"노트 보기에서는 표시 중인 관리 태그 하나를 기준으로 노트를 배열합니다.",
 	"setting.treeLabelName": "사이드바 뷰 이름",
 	"setting.treeLabelDesc": "비우면 기본 이름을 사용합니다.",
 	"setting.headerButtonsName": "트리 동작",
