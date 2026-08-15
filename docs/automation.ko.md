@@ -37,6 +37,9 @@ const model = automation.describe();
 console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled);
 ```
 
+각 태그 정의에는 안정 ID와 현재 `archived` 상태가 포함됩니다. 보관된 정의도 기존
+태그를 안전하게 제거할 수 있도록 계속 식별되지만 새 값을 받을 활성 대상은 아닙니다.
+
 ## 1. 검사
 
 검사는 읽기 전용입니다.
@@ -81,6 +84,8 @@ if (planned.ok) console.log(planned.value);
   `would-unmanage-note`로 차단하며, 명시한 경우 현재 파일명을 보존합니다.
 - `namespace`도 호환 조회용으로 남지만 안정적인 `tagDefinitionId`를 권장합니다.
   ID 방식은 파일명 슬롯이 없는 사이드바 전용 트렐리 태그도 바꿀 수 있습니다.
+- 보관된 정의는 `tagPath: null`만 허용합니다. 값을 넣거나 바꾸면 설정에서 정의를
+  복원하기 전까지 `archived-namespace`를 반환합니다.
 - 루트가 설정돼 있다면 `tagPath`에는 `work/projects/PRJ/01/DOC/02`처럼 루트까지
   포함합니다.
 - 인덱스 노트는 빈 `nameChange`도 허용됩니다.
@@ -124,7 +129,7 @@ if (!applied.ok) {
   요청은 `write-in-progress`를 반환합니다.
 
 주요 오류 코드는 `note-not-found`, `metadata-unavailable`, `invalid-request`,
-`stale-plan`, `write-in-progress`, `inline-tag-conflict`,
+`archived-namespace`, `stale-plan`, `write-in-progress`, `inline-tag-conflict`,
 `duplicate-location-tags`, `would-unmanage-note`, `target-exists`,
 `frontmatter-write-failed`, `rename-failed`입니다. 항상 `ok`로 분기하고 구조화된
 오류를 로그에 보존하세요.

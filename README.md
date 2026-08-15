@@ -50,7 +50,8 @@ code by hand and Trellis restores it from the tag on the next sync.
 - **Safe filename structures** with sparse tag/name slots, gap spacing, custom
   portable separators, hierarchy display, and optional slot wrappers.
 - **Managed-tag registry and inventory** independent from filename projection,
-  including sidebar-only tags, combinations, drift, and collision reporting.
+  including search, reversible archiving, sidebar-only tags, combinations,
+  drift, and collision reporting.
 - **Korean and English UI**, following Obsidian's language by default.
 
 ## Install
@@ -107,6 +108,9 @@ Trellis tag. A definition can be filename-bearing, sidebar-only, or hidden from
 the sidebar. The classic notes-only tree lets you choose one visible tag as its axis.
 Subtree moves may also transfer a reviewed branch between definitions, which
 supports deliberate hierarchy split/merge workflows.
+Definitions no longer in active use can be archived after they leave the filename
+structure. Their existing tags remain recognizable for cleanup, while the
+definition leaves active choices and the sidebar until restored.
 Import existing filenames still reads the primary outer code because arbitrary
 multi-slot filenames are not always reversibly parseable without their tags.
 
@@ -128,10 +132,11 @@ multi-slot filenames are not always reversibly parseable without their tags.
 
 ![Settings tab](screenshots/settings.png)
 
-The settings cover registered Trellis tags, filename synchronization and slot
-structure, tree behavior, compact Properties labels, visible header actions,
-language, and a live per-definition inventory with combinations, drift, and
-filename collisions.
+The settings use two focused sections: general behavior, and filename/tags. The
+latter combines a searchable managed-tag browser with a compact horizontal slot
+order and one selected-item editor. It also covers filename synchronization,
+compact Properties labels, and a live per-definition inventory with combinations,
+drift, and filename collisions.
 
 Vault-wide setting changes are staged first. Trellis shows the exact affected
 files, checks collisions and parse ambiguity, then applies through Obsidian's

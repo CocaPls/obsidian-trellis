@@ -37,6 +37,10 @@ const model = automation.describe();
 console.log(model.tagDefinitions, model.filenameSlots, model.filenameSyncEnabled);
 ```
 
+Each tag definition includes its stable ID and current `archived` state. An
+archived definition remains identifiable so existing tags can be removed safely,
+but it is not an active target for new values.
+
 ## 1. Inspect
 
 Inspection is read-only:
@@ -83,6 +87,8 @@ if (planned.ok) console.log(planned.value);
   preserved.
 - `namespace` remains as a compatibility lookup, but stable
   `tagDefinitionId` is preferred and also supports sidebar-only Trellis tags.
+- An archived definition accepts only `tagPath: null`; assigning or changing a
+  value returns `archived-namespace` until the definition is restored in settings.
 - `tagPath` must include the configured root when one exists, for example
   `work/projects/PRJ/01/DOC/02`.
 - An empty `nameChange` is allowed for an index note.
@@ -127,9 +133,10 @@ request and rejects modified output.
   bulk operations. A competing request returns `write-in-progress`.
 
 Common error codes include `note-not-found`, `metadata-unavailable`,
-`invalid-request`, `stale-plan`, `write-in-progress`, `inline-tag-conflict`,
-`duplicate-location-tags`, `would-unmanage-note`, `target-exists`, `frontmatter-write-failed`, and
-`rename-failed`. Always branch on `ok` and retain the structured error for logs.
+`invalid-request`, `archived-namespace`, `stale-plan`, `write-in-progress`,
+`inline-tag-conflict`, `duplicate-location-tags`, `would-unmanage-note`,
+`target-exists`, `frontmatter-write-failed`, and `rename-failed`. Always branch
+on `ok` and retain the structured error for logs.
 
 ## Operational guidance
 

@@ -446,7 +446,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 		searchInput.addEventListener("input", () => {
 			this.tagSearchQuery = searchInput.value;
 			renderList();
-			renderDetail();
+			if (!this.addingTagDefinition) renderDetail();
 		});
 		renderList();
 		renderDetail();
@@ -959,34 +959,43 @@ export class TrellisSettingTab extends PluginSettingTab {
 			(definition) => !definition.archived && !usedDefinitions.has(definition.id)
 		);
 		const hasName = schema.slots.some((slot) => slot.role === "name");
-		new Setting(containerEl)
+		const composerSetting = new Setting(containerEl)
 			.setName(t("setting.filenameComposerTitle"))
 			.setDesc(t("setting.filenameComposerHint"))
 			.addButton((button) =>
-				button.setButtonText(t("setting.addTagSlot")).onClick(() => {
-					if (!available) {
-						this.addNewTagToFilename = true;
-						this.addingTagDefinition = true;
-						this.tagDefinitionFilter = "active";
-						this.tagSearchQuery = "";
+				button
+					.setButtonText(
+						available ? t("setting.addTagSlot") : t("setting.addTagSlotCreate")
+					)
+					.onClick(() => {
+						if (!available) {
+							this.addNewTagToFilename = true;
+							this.addingTagDefinition = true;
+							this.tagDefinitionFilter = "active";
+							this.tagSearchQuery = "";
+							this.render();
+							this.revealTagDetail(true);
+							return;
+						}
+						const id = nextSlotId(schema);
+						schema.slots.push({
+							id,
+							role: "tag",
+							tagDefinitionId: available.id,
+						});
+						this.filenameSelection = {
+							kind: "slot",
+							index: schema.slots.length - 1,
+						};
+						this.ensureSeparators(schema);
 						this.render();
-						this.revealTagDetail(true);
-						return;
-					}
-					const id = nextSlotId(schema);
-					schema.slots.push({ id, role: "tag", tagDefinitionId: available.id });
-					this.filenameSelection = {
-						kind: "slot",
-						index: schema.slots.length - 1,
-					};
-					this.ensureSeparators(schema);
-					this.render();
-				})
-			)
-			.addButton((button) => {
+					})
+			);
+		composerSetting.settingEl.addClass("trellis-filename-composer-setting");
+		if (!hasName) {
+			composerSetting.addButton((button) =>
 				button
 					.setButtonText(t("setting.addNameSlot"))
-					.setDisabled(hasName)
 					.onClick(() => {
 						const id = nextSlotId(schema);
 						schema.slots.push({ id, role: "name" });
@@ -996,8 +1005,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 						};
 						this.ensureSeparators(schema);
 						this.render();
-					});
-			});
+					})
+			);
+		}
 
 		const sequence = containerEl.createDiv({ cls: "trellis-filename-sequence" });
 		if (schema.slots.length === 0) {

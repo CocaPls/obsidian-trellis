@@ -10,6 +10,16 @@ development milestones; `0.1.0` is the first public release.
 
 ## Unreleased
 
+- Simplify filename settings to a compact horizontal slot order with one
+  selected-item editor, removing the decorative example and drag-card layer.
+- Add searchable active/archived managed-tag views. Archived definitions keep
+  recognizing existing tags for safe removal, but leave the sidebar and active
+  choices until restored; filename-bearing definitions must be detached first.
+- Keep the tag detail pane aligned with filtered search results and expose
+  separator selection state to assistive technology.
+- Use Obsidian's mobile state as well as viewport width for the settings layout,
+  preventing the managed-tag detail pane from collapsing on phones and tablets.
+
 ## 0.5.0 — Managed tags and filename structures
 
 - Separate registered **Trellis tags** from their optional filename slots. Each

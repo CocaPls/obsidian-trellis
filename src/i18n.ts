@@ -178,7 +178,6 @@ const EN: Record<string, string> = {
 		"Available only when no filename slot or note still uses this tag branch.",
 	"setting.tagAdd": "Add tag",
 	"setting.tagAddDesc": "Create another tag branch.",
-	"setting.tagSelect": "Tag to edit",
 	"setting.tagSearch": "Search managed tags",
 	"setting.tagSearchPlaceholder": "Search name or namespace…",
 	"setting.tagFilter": "Tag status",
@@ -188,9 +187,6 @@ const EN: Record<string, string> = {
 	"setting.tagListCount": "Showing {shown} of {total}",
 	"setting.tagListEmpty": "No tags match this view.",
 	"setting.tagDetailEmpty": "Select a tag to edit its settings.",
-	"setting.tagArchivedShow": "Archived tags",
-	"setting.tagArchivedShowDesc":
-		"{n} archived tag(s). Show them in the tag picker when needed.",
 	"setting.tagArchivedSuffix": "Archived",
 	"setting.tagArchive": "Archive tag",
 	"setting.tagArchiveDesc":
@@ -256,10 +252,6 @@ const EN: Record<string, string> = {
 	"wrapper.none": "None",
 	"wrapper.round": "Round parentheses",
 	"wrapper.custom": "Custom pair…",
-	"setting.slotActions": "Slot actions",
-	"setting.slotAdd": "Add a filename part",
-	"setting.slotAddDesc":
-		"Add a tag slot or the general note-title slot when needed.",
 	"setting.addTagSlot": "Add tag slot",
 	"setting.addNameSlot": "Add general slot",
 	"setting.addTagSlotCreate": "Create a managed tag and add its slot",
@@ -728,7 +720,6 @@ const KO: Record<string, string> = {
 		"파일명 슬롯과 노트가 이 태그 분기를 더 이상 사용하지 않을 때만 삭제할 수 있습니다.",
 	"setting.tagAdd": "태그 추가",
 	"setting.tagAddDesc": "새 태그 분기를 만듭니다.",
-	"setting.tagSelect": "편집할 태그",
 	"setting.tagSearch": "관리 태그 검색",
 	"setting.tagSearchPlaceholder": "이름 또는 네임스페이스 검색…",
 	"setting.tagFilter": "태그 상태",
@@ -738,9 +729,6 @@ const KO: Record<string, string> = {
 	"setting.tagListCount": "{total}개 중 {shown}개 표시",
 	"setting.tagListEmpty": "조건에 맞는 태그가 없습니다.",
 	"setting.tagDetailEmpty": "편집할 태그를 선택하세요.",
-	"setting.tagArchivedShow": "보관한 태그",
-	"setting.tagArchivedShowDesc":
-		"보관 중인 태그 {n}개. 필요할 때만 태그 선택 목록에 표시합니다.",
 	"setting.tagArchivedSuffix": "보관됨",
 	"setting.tagArchive": "태그 보관",
 	"setting.tagArchiveDesc":
@@ -806,10 +794,6 @@ const KO: Record<string, string> = {
 	"wrapper.none": "없음",
 	"wrapper.round": "둥근 괄호",
 	"wrapper.custom": "사용자 지정 쌍…",
-	"setting.slotActions": "슬롯 조작",
-	"setting.slotAdd": "파일명 항목 추가",
-	"setting.slotAddDesc":
-		"필요할 때 태그 슬롯이나 노트 제목용 일반 슬롯을 더합니다.",
 	"setting.addTagSlot": "태그 슬롯 추가",
 	"setting.addNameSlot": "일반 슬롯 추가",
 	"setting.addTagSlotCreate": "관리 태그를 만들고 슬롯에 추가",

@@ -608,6 +608,12 @@ button.trellis-destructive:disabled:hover {
 		max-height: 240px;
 	}
 
+	.trellis-filename-composer-setting {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.trellis-filename-composer-setting .setting-item-control,
 	.trellis-filename-editor .setting-item-control,
 	.trellis-filename-gap-setting .setting-item-control,
 	.trellis-tag-detail .setting-item-control {
@@ -615,6 +621,41 @@ button.trellis-destructive:disabled:hover {
 		justify-content: flex-start;
 		flex-wrap: wrap;
 	}
+}
+
+.is-mobile .trellis-settings-nav {
+	gap: 0;
+	overflow-x: hidden;
+}
+
+.is-mobile .trellis-settings-nav-item {
+	min-width: 0;
+	flex: 1 1 0;
+	padding-inline: var(--size-4-1);
+	text-align: center;
+}
+
+.is-mobile .trellis-settings-toggle-grid,
+.is-mobile .trellis-tag-workspace {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.is-mobile .trellis-tag-list {
+	max-height: 240px;
+}
+
+.is-mobile .trellis-filename-composer-setting {
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.is-mobile .trellis-filename-composer-setting .setting-item-control,
+.is-mobile .trellis-filename-editor .setting-item-control,
+.is-mobile .trellis-filename-gap-setting .setting-item-control,
+.is-mobile .trellis-tag-detail .setting-item-control {
+	width: 100%;
+	justify-content: flex-start;
+	flex-wrap: wrap;
 }
 .trellis-tag-accent {
 	color: var(--trellis-tag-color);
