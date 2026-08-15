@@ -493,12 +493,8 @@ button.trellis-destructive:disabled:hover {
 }
 
 .trellis-filename-result {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-4);
 	margin: var(--size-4-3) 0;
-	padding: var(--size-4-3) var(--size-4-4);
+	padding: var(--size-4-4);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-secondary);
@@ -524,18 +520,24 @@ button.trellis-destructive:disabled:hover {
 	font-size: var(--font-ui-smaller);
 }
 
-.trellis-filename-result > code {
-	overflow: hidden;
-	max-width: 55%;
-	padding: var(--size-4-2) var(--size-4-3);
+.trellis-filename-schema-block {
+	overflow-x: auto;
+	margin: var(--size-4-3) 0 0;
+	padding: var(--size-4-3) var(--size-4-4);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	background: var(--background-primary);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.trellis-filename-schema-block > code {
+	padding: 0;
+	background: transparent;
 	color: var(--text-normal);
 	font-size: var(--font-ui-large);
 	font-weight: var(--font-medium);
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	font-variant-ligatures: none;
 }
 
 .trellis-filename-composer {
@@ -782,14 +784,9 @@ button.trellis-destructive:disabled:hover {
 		max-height: 240px;
 	}
 
-	.trellis-filename-result,
 	.trellis-filename-composer-header {
 		align-items: stretch;
 		flex-direction: column;
-	}
-
-	.trellis-filename-result > code {
-		max-width: 100%;
 	}
 
 	.trellis-filename-add-actions {

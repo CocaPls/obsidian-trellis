@@ -15,7 +15,6 @@ import {
 	type SlotWrapperKind,
 	type TagValueRule,
 	type TrellisTagDefinition,
-	assembleBasenameMulti,
 	isValidHierarchySeparator,
 	isValidNamespace,
 	isValidSeparator,
@@ -27,6 +26,7 @@ import {
 	separatorConflicts,
 	separatorSpacingAt,
 	tagDefinitionById,
+	wrapperPair,
 } from "./tagkey";
 import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
@@ -91,6 +91,50 @@ function defaultRule(kind: string): TagValueRule | undefined {
 
 function cleanNamespaceInput(value: string): string {
 	return value.trim().replace(/^#/, "").replace(/\/$/, "");
+}
+
+function filenameSchemaNotation(schema: TrellisSchema): string {
+	const nameIndex = schema.slots.findIndex((slot) => slot.role === "name");
+	const tokenAt = (slot: KeySlot, index: number) => {
+		const definition = tagDefinitionById(schema, slot.tagDefinitionId);
+		const label =
+			slot.role === "name"
+				? t("setting.filenameSchemaName")
+				: definition?.name || definition?.namespace || t("setting.filenameSchemaTag", { n: index + 1 });
+		const { left, right } = wrapperPair(slot.wrapper);
+		return `${left}{${label}}${right}`;
+	};
+	if (nameIndex < 0) {
+		return schema.slots
+			.map((slot, index) => {
+				const separator = index > 0
+					? renderSeparator(
+							schema.separators[index - 1] ?? "",
+							separatorSpacingAt(schema, index - 1)
+						)
+					: "";
+				return `${separator}${tokenAt(slot, index)}`;
+			})
+			.join("");
+	}
+	return schema.slots
+		.map((slot, index) => {
+			const token = tokenAt(slot, index);
+			if (slot.role === "name") return token;
+			if (index < nameIndex) {
+				const separator = renderSeparator(
+					schema.separators[index] ?? "",
+					separatorSpacingAt(schema, index)
+				);
+				return `[${token}${separator}]`;
+			}
+			const separator = renderSeparator(
+				schema.separators[index - 1] ?? "",
+				separatorSpacingAt(schema, index - 1)
+			);
+			return `[${separator}${token}]`;
+		})
+		.join("");
 }
 
 export class TrellisSettingTab extends PluginSettingTab {
@@ -896,26 +940,21 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const schema = this.draft();
 		this.ensureSeparators(schema);
 		const selection = this.ensureFilenameSelection(schema);
-		const exampleParts = schema.slots.map((slot, index) => {
-			if (slot.role === "name") return t("setting.filenameExampleName");
-			const definition = tagDefinitionById(schema, slot.tagDefinitionId);
-			const sample = (definition?.name || definition?.namespace || `TAG${index + 1}`)
-				.trim()
-				.replace(/\s+/g, "");
-			return sample || `TAG${index + 1}`;
-		});
 		const result = containerEl.createDiv({ cls: "trellis-filename-result" });
 		const resultCopy = result.createDiv({ cls: "trellis-filename-result-copy" });
 		resultCopy.createSpan({
 			cls: "trellis-filename-result-label",
-			text: t("setting.filenamePreview"),
+			text: t("setting.filenameSchema"),
 		});
 		resultCopy.createSpan({
 			cls: "trellis-filename-result-hint",
-			text: t("setting.filenamePreviewHint"),
+			text: t("setting.filenameSchemaHint"),
 		});
-		result.createEl("code", {
-			text: assembleBasenameMulti(exampleParts, schema) || "—",
+		const schemaBlock = result.createEl("pre", {
+			cls: "trellis-filename-schema-block",
+		});
+		schemaBlock.createEl("code", {
+			text: filenameSchemaNotation(schema) || "—",
 		});
 
 		const usedDefinitions = new Set(

@@ -235,8 +235,11 @@ const EN: Record<string, string> = {
 	"valueRule.example": "Example",
 	"setting.filenameStructureDesc":
 		"Arrange filename slots from left to right.",
-	"setting.filenamePreview": "Filename result",
-	"setting.filenamePreviewHint": "Sample output using the current structure.",
+	"setting.filenameSchema": "Current structure",
+	"setting.filenameSchemaHint":
+		"Braces are slot values. A bracketed tag slot is omitted with its separator when empty.",
+	"setting.filenameSchemaName": "note title",
+	"setting.filenameSchemaTag": "tag {n}",
 	"setting.filenameComposerTitle": "Filename slots",
 	"setting.filenameComposerHint":
 		"Drag slots to reorder. Select a slot or separator to edit it.",
@@ -796,8 +799,11 @@ const KO: Record<string, string> = {
 	"valueRule.example": "예시",
 	"setting.filenameStructureDesc":
 		"파일명 슬롯을 왼쪽부터 원하는 순서로 배치합니다.",
-	"setting.filenamePreview": "파일명 결과",
-	"setting.filenamePreviewHint": "현재 구성 규칙을 적용한 예시입니다.",
+	"setting.filenameSchema": "현재 구조",
+	"setting.filenameSchemaHint":
+		"중괄호는 슬롯 값입니다. 대괄호로 묶인 태그 슬롯은 값이 없으면 구분자와 함께 생략됩니다.",
+	"setting.filenameSchemaName": "노트 제목",
+	"setting.filenameSchemaTag": "태그 {n}",
 	"setting.filenameComposerTitle": "파일명 슬롯",
 	"setting.filenameComposerHint":
 		"슬롯을 끌어 순서를 바꾸고, 슬롯이나 구분자를 눌러 세부 설정을 편집합니다.",
