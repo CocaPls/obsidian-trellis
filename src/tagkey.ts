@@ -26,6 +26,8 @@ export type KeyRole = SlotType;
  */
 export type SegmentSeparator = string;
 export type SeparatorSpacing = "none" | "before" | "after" | "both";
+export type BoundaryKind = "symbol" | "space" | "none";
+export type FilenameTextTransform = "identity" | "underscore-to-space";
 
 export type SlotWrapperKind = "none" | "round" | "custom";
 
@@ -100,6 +102,9 @@ export interface KeySlot {
 	scheme?: SchemeId;
 	/** Visible joiner for hierarchy segments in this tagkey. Absent = hidden. */
 	segmentSeparator?: SegmentSeparator;
+	/** Optional one-way text projection used only when rendering this tag slot
+	 * into a filename. The stored Obsidian tag is never changed. */
+	filenameTextTransform?: FilenameTextTransform;
 	/** Optional visual wrapper for this slot. */
 	wrapper?: SlotWrapper;
 }
@@ -373,6 +378,23 @@ export function boundarySeparator(schema: TrellisSchema, index: number): string 
 	return renderSeparator(schema.separators[index] ?? "", separatorSpacingAt(schema, index));
 }
 
+/** User-facing kind of one slot boundary. Empty symbol + `after` is the
+ * canonical persisted representation of one plain space; empty + `none` means
+ * no boundary at all. Existing non-empty symbols keep the legacy spacing model. */
+export function boundaryKindAt(schema: TrellisSchema, index: number): BoundaryKind {
+	const symbol = schema.separators[index] ?? "";
+	if (symbol !== "") return "symbol";
+	return separatorSpacingAt(schema, index) === "after" ? "space" : "none";
+}
+
+/** A boundary is either a safe symbol, one canonical space, or absent. */
+export function isValidBoundary(schema: TrellisSchema, index: number): boolean {
+	const symbol = schema.separators[index] ?? "";
+	const spacing = separatorSpacingAt(schema, index);
+	if (symbol === "") return spacing === "none" || spacing === "after";
+	return isValidSeparator(symbol);
+}
+
 export function wrapperPair(wrapper?: SlotWrapper): { left: string; right: string } {
 	if (!wrapper || wrapper.kind === "none") return { left: "", right: "" };
 	if (wrapper.kind === "round") return { left: "(", right: ")" };
@@ -393,6 +415,28 @@ export function unwrapSlotValue(value: string, slot: KeySlot): string {
 	if (!value.startsWith(left) || !value.endsWith(right)) return value;
 	if (value.length < left.length + right.length) return value;
 	return value.slice(left.length, value.length - right.length);
+}
+
+/** Render one stored tag segment into a filename without mutating tag data. */
+export function tagSegmentToFilename(segment: string, slot: KeySlot): string {
+	return slot.role === "tag" && slot.filenameTextTransform === "underscore-to-space"
+		? segment.replace(/_/g, " ")
+		: segment;
+}
+
+/** Exact inverse used only by reviewed reverse paths such as Bootstrap. */
+export function filenameSegmentToTag(segment: string, slot: KeySlot): string {
+	return slot.role === "tag" && slot.filenameTextTransform === "underscore-to-space"
+		? segment.replace(/ /g, "_")
+		: segment;
+}
+
+/** Project a relative managed-tag path through one filename tag slot. */
+export function tagPathToFilenameKey(path: string, slot: KeySlot): string {
+	return path
+		.split("/")
+		.map((segment) => tagSegmentToFilename(segment, slot))
+		.join(slot.segmentSeparator ?? "");
 }
 
 /**
@@ -601,7 +645,7 @@ export function tagToTagkey(tag: string, schema: TrellisSchema): string | null {
 		return null;
 	}
 	const slot = schema.slots.find((s) => s.role === "tag");
-	return match.keyPath.split("/").join(slot?.segmentSeparator ?? "");
+	return slot ? tagPathToFilenameKey(match.keyPath, slot) : null;
 }
 
 /**
@@ -636,16 +680,28 @@ export function parentTagPath(tagPath: string): string {
  */
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
 	const slot = schema.slots.find((s) => s.role === "tag");
+	if (!slot) return null;
 	const segmentSeparator = slot?.segmentSeparator ?? "";
 	if (segmentSeparator) {
-		const segs = tagkey.split(segmentSeparator);
+		const segs = tagkey
+			.split(segmentSeparator)
+			.map((segment) => filenameSegmentToTag(segment, slot));
 		if (
 			segs.some((segment) => !isValidTagSegment(segment)) ||
-			segs.join(segmentSeparator) !== tagkey
+			tagPathToFilenameKey(segs.join("/"), slot) !== tagkey
 		) {
 			return null;
 		}
 		return `${primaryNsPath(schema)}/${segs.join("/")}`;
+	}
+	const decodedSingle = filenameSegmentToTag(tagkey, slot);
+	if (
+		slot.filenameTextTransform === "underscore-to-space" &&
+		tagkey.includes(" ") &&
+		isValidTagSegment(decodedSingle) &&
+		tagPathToFilenameKey(decodedSingle, slot) === tagkey
+	) {
+		return `${primaryNsPath(schema)}/${decodedSingle}`;
 	}
 	// A scheme on the primary slot parses first (it may accept single-run IDs
 	// the generic guard rejects — a Zettel timestamp is ONE digit run); when the
@@ -876,8 +932,10 @@ export interface SeparatorConflict {
 
 /** Detect separator combinations that cannot round-trip without losing data.
  *
- * Two cases are ambiguous:
+ * Three cases are ambiguous:
  * - a tag hierarchy joiner is identical to an adjacent unspaced boundary;
+ * - a name slot touches an empty boundary, which the current filename parser
+ *   cannot distinguish from arbitrary free text;
  * - with a name slot, one rendered boundary is a proper prefix of another.
  *   In the latter case a title beginning/ending with the extra punctuation can
  *   be mistaken for the longer boundary ("-" vs "--") and silently trimmed.
@@ -901,6 +959,15 @@ export function separatorConflicts(schema: TrellisSchema): SeparatorConflict[] {
 
 	const nameSlotIndex = schema.slots.findIndex((slot) => slot.role === "name");
 	if (nameSlotIndex !== -1) {
+		for (const gapIndex of [nameSlotIndex - 1, nameSlotIndex]) {
+			if (
+				gapIndex >= 0 &&
+				gapIndex < schema.separators.length &&
+				boundarySeparator(schema, gapIndex) === ""
+			) {
+				conflicts.push({ slotIndex: nameSlotIndex, gapIndex });
+			}
+		}
 		const boundaries = schema.separators
 			.map((_, gapIndex) => ({ gapIndex, rendered: boundarySeparator(schema, gapIndex) }))
 			.filter(({ rendered }) => rendered !== "");
@@ -974,21 +1041,27 @@ export function portableBasenameIssue(basename: string): PortableBasenameIssue |
 export function tagToTagkeyNs(
 	tag: string,
 	namespace: string,
-	segmentSeparator: SegmentSeparator = ""
+	segmentSeparator: SegmentSeparator = "",
+	filenameTextTransform: FilenameTextTransform = "identity"
 ): string | null {
 	const path = tagPathRelativeToNamespace(tag, namespace);
 	if (!path) return null;
-	return path.split("/").join(segmentSeparator);
+	return tagPathToFilenameKey(path, {
+		role: "tag",
+		segmentSeparator,
+		filenameTextTransform,
+	});
 }
 
 /** First location tag under a namespace → its tagkey, or null. */
 export function pickTagkeyNs(
 	tags: string[],
 	namespace: string,
-	segmentSeparator: SegmentSeparator = ""
+	segmentSeparator: SegmentSeparator = "",
+	filenameTextTransform: FilenameTextTransform = "identity"
 ): string | null {
 	for (const t of tags) {
-		const k = tagToTagkeyNs(t, namespace, segmentSeparator);
+		const k = tagToTagkeyNs(t, namespace, segmentSeparator, filenameTextTransform);
 		if (k !== null) return k;
 	}
 	return null;
@@ -1009,9 +1082,7 @@ export function slotTagkeys(
 		const match = matchTagKey(tag, schema);
 		if (!match || match.keyPath === "" || keys[match.slotIndex] !== null) continue;
 		const slot = schema.slots[match.slotIndex];
-		keys[match.slotIndex] = match.keyPath
-			.split("/")
-			.join(slot.segmentSeparator ?? "");
+		keys[match.slotIndex] = tagPathToFilenameKey(match.keyPath, slot);
 	}
 	return keys;
 }
@@ -1030,7 +1101,7 @@ export function assembleBasenameMulti(
 	for (let i = 0; i < schema.slots.length; i++) {
 		const v = values[i];
 		if (v === null || v === undefined || v === "") continue;
-		if (any) out += boundarySeparator(schema, i - 1) || primarySeparator(schema);
+		if (any) out += boundarySeparator(schema, i - 1);
 		out += renderSlotValue(v, schema.slots[i]);
 		any = true;
 	}

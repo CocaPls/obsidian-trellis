@@ -66,6 +66,7 @@ import {
 	sameTagPath,
 	tagPathInNamespace,
 	tagPathRelativeToNamespace,
+	tagPathToFilenameKey,
 } from "./tagkey";
 import {
 	TrellisTreeView,
@@ -326,6 +327,12 @@ function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
 		const before = /^\s/.test(raw);
 		const after = /\s$/.test(raw);
 		normalized.separators[i] = raw.trim();
+		if (normalized.separators[i] === "") {
+			// Canonical empty-boundary storage: `after` means exactly one plain
+			// space; `none` means concatenation. Old/manual whitespace-only values
+			// become one space instead of the invalid two-space `both` state.
+			return saved === "after" || before || after ? "after" : "none";
+		}
 		if (saved && SEPARATOR_SPACING.includes(saved)) return saved;
 		if (before && after) return "both";
 		if (before) return "before";
@@ -1819,9 +1826,7 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.tagValueExists", { value: segment }));
 			return;
 		}
-		const tagkey = slot
-			? match.keyPath.split("/").join(slot.segmentSeparator ?? "")
-			: "";
+		const tagkey = slot ? tagPathToFilenameKey(match.keyPath, slot) : "";
 		const safeTitle = title.trim().replace(/[\\/:*?"<>|]/g, "");
 		const values = schema.slots.map((s, i) =>
 			i === idx ? tagkey : s.role === "name" ? safeTitle : null

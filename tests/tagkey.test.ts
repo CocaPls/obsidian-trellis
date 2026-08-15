@@ -48,6 +48,9 @@ import {
 	unwrapSlotValue,
 	isValidHierarchySeparator,
 	isValidSlotWrapper,
+	isValidBoundary,
+	boundaryKindAt,
+	tagPathToFilenameKey,
 	sameTagPath,
 	tagPathInNamespace,
 	tagPathRelativeToNamespace,
@@ -555,6 +558,39 @@ test("boundary symbol and spacing are stored and rendered independently", () => 
 	);
 });
 
+test("slot boundaries support one plain space or no separator", () => {
+	const spaced: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "kind" }, { role: "tag", namespace: "title" }],
+		separators: [""],
+		separatorSpacing: ["after"],
+	};
+	assert.equal(boundaryKindAt(spaced, 0), "space");
+	assert.equal(boundarySeparator(spaced, 0), " ");
+	assert.equal(isValidBoundary(spaced, 0), true);
+	assert.equal(assembleBasenameMulti(["PAW", "Obsidian"], spaced), "PAW Obsidian");
+
+	const joined = { ...spaced, separatorSpacing: ["none" as const] };
+	assert.equal(boundaryKindAt(joined, 0), "none");
+	assert.equal(boundarySeparator(joined, 0), "");
+	assert.equal(isValidBoundary(joined, 0), true);
+	assert.equal(assembleBasenameMulti(["배", "과일"], joined), "배과일");
+
+	assert.equal(isValidBoundary({ ...spaced, separatorSpacing: ["both"] }, 0), false);
+});
+
+test("a general slot cannot touch a separator-free boundary", () => {
+	const schema: TrellisSchema = {
+		slots: [{ role: "tag", namespace: "kind" }, { role: "name" }],
+		separators: [""],
+		separatorSpacing: ["none"],
+	};
+	assert.deepEqual(separatorConflicts(schema), [{ slotIndex: 1, gapIndex: 0 }]);
+	assert.deepEqual(
+		separatorConflicts({ ...schema, separatorSpacing: ["after"] }),
+		[]
+	);
+});
+
 test("tag-slot segment separators preserve hierarchy visibly and Bootstrap reverses it", () => {
 	const schema: TrellisSchema = {
 		slots: [
@@ -841,6 +877,66 @@ test("no-name sparse schema keeps global order and only joins present tag-keys",
 		"A01-C03"
 	);
 	assert.equal(syncedBasenameMulti("A01", ["#ordinary/x"], sparse), null);
+});
+
+test("tag slots can project underscores as filename spaces without changing tags", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "namespace" },
+			{
+				role: "tag",
+				namespace: "title",
+				segmentSeparator: "·",
+				filenameTextTransform: "underscore-to-space",
+			},
+			{
+				role: "tag",
+				namespace: "disambiguator",
+				filenameTextTransform: "underscore-to-space",
+				wrapper: { kind: "round" },
+			},
+		],
+		separators: ["-", ""],
+		separatorSpacing: ["none", "none"],
+	};
+	const tags = [
+		"#namespace/PAW",
+		"#title/Obsidian/플러그인_개발",
+		"#disambiguator/개인용_도구",
+	];
+	assert.deepEqual(slotTagkeys(tags, schema), [
+		"PAW",
+		"Obsidian·플러그인 개발",
+		"개인용 도구",
+	]);
+	assert.equal(
+		syncedBasenameMulti("old", tags, schema),
+		"PAW-Obsidian·플러그인 개발(개인용 도구)"
+	);
+	assert.equal(
+		tagPathToFilenameKey("나무위키_연구/업무기록", schema.slots[1]),
+		"나무위키 연구·업무기록"
+	);
+	assert.deepEqual(tags, [
+		"#namespace/PAW",
+		"#title/Obsidian/플러그인_개발",
+		"#disambiguator/개인용_도구",
+	]);
+});
+
+test("separator-free wrapped sparse slots collapse exactly", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "namespace" },
+			{ role: "tag", namespace: "title" },
+			{ role: "tag", namespace: "disambiguator", wrapper: { kind: "round" } },
+		],
+		separators: ["-", ""],
+		separatorSpacing: ["none", "none"],
+	};
+	assert.equal(assembleBasenameMulti([null, "사과", null], schema), "사과");
+	assert.equal(assembleBasenameMulti([null, "배", "과일"], schema), "배(과일)");
+	assert.equal(assembleBasenameMulti(["PAW", "Trellis", null], schema), "PAW-Trellis");
 });
 
 test("extractNameMulti anchors the name between known tag slots", () => {
@@ -1353,6 +1449,33 @@ test("bootstrap extraction removes the primary slot wrapper", () => {
 	assert.equal(
 		extractTagkey("(UI01)", { ...prefix, slots: [prefix.slots[0]], separators: [] }),
 		"UI01"
+	);
+});
+
+test("bootstrap reverses filename-only underscore-to-space projection", () => {
+	const visibleHierarchy: TrellisSchema = {
+		slots: [
+			{
+				role: "tag",
+				namespace: "title",
+				segmentSeparator: "·",
+				filenameTextTransform: "underscore-to-space",
+			},
+		],
+		separators: [],
+	};
+	assert.equal(
+		tagkeyToTagPath("Obsidian·플러그인 개발", visibleHierarchy),
+		"title/Obsidian/플러그인_개발"
+	);
+
+	const oneSegment: TrellisSchema = {
+		...visibleHierarchy,
+		slots: [{ ...visibleHierarchy.slots[0], segmentSeparator: "" }],
+	};
+	assert.equal(
+		tagkeyToTagPath("나무위키 연구", oneSegment),
+		"title/나무위키_연구"
 	);
 });
 
