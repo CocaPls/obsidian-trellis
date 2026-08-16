@@ -34,6 +34,7 @@ import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
 import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
+import { cloneSchema } from "./settings-model";
 import type TrellisPlugin from "./main";
 
 const ROOT_NAMESPACE_PLACEHOLDER = "work";
@@ -53,24 +54,6 @@ type FilenameSelection =
 	| { kind: "slot"; index: number }
 	| { kind: "gap"; index: number };
 type TagDefinitionFilter = "active" | "archived" | "all";
-
-function cloneSchema(schema: TrellisSchema): TrellisSchema {
-	return {
-		rootNamespace: schema.rootNamespace,
-		tagDefinitions: schema.tagDefinitions?.map((definition) => ({
-			...definition,
-			valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
-		})),
-		slots: schema.slots.map((slot) => ({
-			...slot,
-			wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
-		})),
-		separators: [...schema.separators],
-		separatorSpacing: schema.separatorSpacing
-			? [...schema.separatorSpacing]
-			: undefined,
-	};
-}
 
 function nextSlotId(schema: TrellisSchema): string {
 	const used = new Set(schema.slots.map((slot) => slot.id));

@@ -16,7 +16,6 @@ import {
 	SeparatorSpacing,
 	SchemeId,
 	defaultSchema,
-	schemaFromLegacy,
 	primaryNamespace,
 	primaryNsPath,
 	nsPath,
@@ -52,7 +51,6 @@ import {
 	slotTagkeys,
 	portableBasenameIssue,
 	matchTagKey,
-	CURRENT_SETTINGS_VERSION,
 	normalizeSchemaModel,
 	tagDefinitionById,
 	schemaTagDefinitions,
@@ -61,8 +59,6 @@ import {
 	slotValueRule,
 	type TrellisTagDefinition,
 	type TagValueRule,
-	isValidHierarchySeparator,
-	isValidSlotWrapper,
 	sameTagPath,
 	tagPathInNamespace,
 	tagPathRelativeToNamespace,
@@ -71,9 +67,8 @@ import {
 import {
 	TrellisTreeView,
 	TRELLIS_TREE_VIEW,
-	HeaderButtonVisibility,
 } from "./tree-view";
-import { t, setLang, LangSetting } from "./i18n";
+import { t, setLang } from "./i18n";
 import {
 	inspectNoteState,
 	planNoteChange,
@@ -107,24 +102,28 @@ import { TrellisSettingTab } from "./settings-tab";
 import { TagInventory } from "./tag-inventory";
 import {
 	TrellisOperationTracker,
-	interruptedReport,
 	type TrellisOperationKind,
 	type TrellisOperationReport,
 	type TrellisOperationStatus,
 } from "./operation-state";
-
-const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
-
-type SortKey = "tagkey" | "mtime" | "ctime";
+import {
+	DEFAULT_SETTINGS,
+	cloneSchema,
+	isPlainObject,
+	normalizeLoadedSettings,
+	type BootstrapRecord,
+	type CascadeRecord,
+	type DedupRecord,
+	type PropertyTagDisplayMode,
+	type SeparatorChangeRecord,
+	type SeparatorRename,
+	type TrellisSettings,
+} from "./settings-model";
 
 type PlainObject = Record<string, unknown>;
 
 interface TrellisFrontmatter extends PlainObject {
 	tags?: unknown;
-}
-
-function isPlainObject(value: unknown): value is PlainObject {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function sameStrings(a: string[], b: string[]): boolean {
@@ -133,26 +132,6 @@ function sameStrings(a: string[], b: string[]): boolean {
 
 function hashedTagList(raw: unknown): string[] {
 	return normalizeTagList(raw).map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
-}
-
-function isOperationReport(value: unknown): value is TrellisOperationReport {
-	if (!isPlainObject(value)) return false;
-	return (
-		typeof value.id === "string" &&
-		(value.kind === "live-sync" || value.kind === "automation" || value.kind === "bulk") &&
-		typeof value.label === "string" &&
-		(value.status === "running" ||
-			value.status === "completed" ||
-			value.status === "partial-failed" ||
-			value.status === "failed" ||
-			value.status === "cancelled" ||
-			value.status === "rolled-back" ||
-			value.status === "interrupted") &&
-		typeof value.startedAt === "number" &&
-		typeof value.total === "number" &&
-		typeof value.processed === "number" &&
-		Array.isArray(value.issues)
-	);
 }
 
 /**
@@ -166,72 +145,10 @@ function isOperationReport(value: unknown): value is TrellisOperationReport {
  * one-way projections from frontmatter; filenames never rewrite tags.
  */
 
-/** What one bootstrap pass wrote, kept so it can be undone. */
-interface BootstrapRecord {
-	path: string;
-	tag: string;
-}
-
-/** One file renamed by a separator change: its post-change path + the basename
- *  it had before, so the change can be undone. */
-interface SeparatorRename {
-	path: string;
-	oldBasename: string;
-}
-
 interface SeparatorUndoPlanRow {
 	currentPath: string;
 	targetPath: string;
 }
-
-/** The last separator-change pass: the renames plus the separators it moved
- *  between, so undo restores both the filenames and the setting. */
-interface SeparatorChangeRecord {
-	/** Full schemas are required for a verifiable undo. Scalar fields are kept
-	 * only so legacy data can be loaded and safely reported as stale. */
-	oldSchema?: TrellisSchema;
-	newSchema?: TrellisSchema;
-	oldSep?: string;
-	newSep?: string;
-	renames: SeparatorRename[];
-}
-
-/** One file's location tags removed by a dedup pass, so it can be undone. */
-interface DedupRecord {
-	path: string;
-	removed: string[];
-}
-
-/** One note changed by a cascade pass. Both paths are retained because the
- * tag edit can drive a filename rename; undo restores the exact original path. */
-interface CascadeRecord {
-	originalPath: string;
-	currentPath: string;
-	beforeTags: string[];
-	afterTags: string[];
-}
-
-/** The last root-namespace change (for undo — the migration is symmetric). */
-interface RootChangeRecord {
-	oldRoot: string;
-	newRoot: string;
-}
-
-/** Exact state needed to reverse a primary namespace migration safely. */
-interface NamespaceChangeRecord {
-	oldSchema: TrellisSchema;
-	newSchema: TrellisSchema;
-	changes: CascadeRecord[];
-}
-
-/** How the sidebar renders (0.3.0, experimental): "notes" = real notes only,
- *  segment layers transparent (classic); "tags" = the full nested tag
- *  hierarchy, folder-style, like the core tag pane. */
-type TreeViewMode = "notes" | "tags";
-
-/** What a note row shows in nested mode: its filename or its tag segment. */
-type TreeLabelMode = "filename" | "tag";
-type PropertyTagDisplayMode = "full" | "name" | "name-terminal" | "terminal";
 
 interface LiveSyncResult {
 	status: "noop" | "renamed" | "blocked" | "failed";
@@ -268,147 +185,6 @@ function operationNeedsAttention(report: TrellisOperationReport): boolean {
 		report.status === "partial-failed" ||
 		report.status === "interrupted"
 	);
-}
-
-interface TrellisSettings {
-	/** Serialized settings model version. */
-	settingsVersion: number;
-	/** Filename key schema (B09 path B). Single-key = a 2-slot [tag, name]. */
-	schema: TrellisSchema;
-	/** Live one-way frontmatter-tag → filename synchronization. */
-	filenameSyncEnabled: boolean;
-	treeViewEnabled: boolean;
-	/** Custom tab title for the tree view; "" = the localized default. */
-	treeViewName: string;
-	/** Which action buttons show in the tree-view header (all on by default). */
-	headerButtons: HeaderButtonVisibility;
-	sortKey: SortKey;
-	sortAsc: boolean;
-	/** Sidebar mode (0.3.0): classic notes tree or nested tag tree. */
-	treeViewMode: TreeViewMode;
-	/** Nested mode: show the root/namespace scaffolding layers as rows. */
-	treeShowRoot: boolean;
-	/** Nested mode: list notes with no managed tag in a bottom section. */
-	treeShowUntagged: boolean;
-	/** Nested mode: note rows show the filename or only the tag segment. */
-	treeLabelMode: TreeLabelMode;
-	/** Stable definition selected as the single axis in the classic notes-only tree. */
-	treeTagDefinitionId: string;
-	/** Pre-0.5 migration source. Removed from saved settings after load. */
-	treeTagKeyNamespace?: string;
-	/** Definition-stable sidebar exclusions. `relativePath` excludes descendants too. */
-	hiddenTagBranches: HiddenTagBranch[];
-	/** Visual-only label for managed tags in Obsidian's core Properties editor. */
-	propertyTagDisplay: PropertyTagDisplayMode;
-	/** UI language: "auto" follows Obsidian, "en"/"ko" force it. */
-	language: LangSetting;
-	/** Files+tags written by the last bootstrap apply (for undo). */
-	lastBootstrap?: BootstrapRecord[];
-	/** The last separator change (for undo). */
-	lastSeparatorChange?: SeparatorChangeRecord;
-	/** Location tags removed by the last duplicate-tag cleanup (for undo). */
-	lastDedup?: DedupRecord[];
-	/** The last completed (or incompletely rolled-back) cascade pass. */
-	lastCascade?: CascadeRecord[];
-	/** The last root-namespace change (for undo). */
-	lastRootChange?: RootChangeRecord;
-	/** The last primary-namespace migration (for undo). */
-	lastNamespaceChange?: NamespaceChangeRecord;
-	/** Last recorded bulk/automation write. A running record on load means the
-	 * previous Obsidian session stopped before Trellis reported completion. */
-	lastOperation?: TrellisOperationReport;
-	/** Failure/interruption retained until a user or caller explicitly reviews it. */
-	operationAttention?: TrellisOperationReport;
-}
-
-interface HiddenTagBranch {
-	tagDefinitionId: string;
-	relativePath: string;
-}
-
-const DEFAULT_SETTINGS: TrellisSettings = {
-	settingsVersion: CURRENT_SETTINGS_VERSION,
-	schema: defaultSchema(),
-	filenameSyncEnabled: true,
-	treeViewEnabled: true,
-	treeViewName: "",
-	headerButtons: {
-		newNote: true,
-		viewMode: true,
-		sort: true,
-		collapseAll: true,
-		showCurrent: true,
-		bootstrap: true,
-		cascade: true,
-		undo: true,
-	},
-	sortKey: "tagkey",
-	sortAsc: true,
-	treeViewMode: "notes",
-	treeShowRoot: true,
-	treeShowUntagged: true,
-	treeLabelMode: "filename",
-	treeTagDefinitionId: "",
-	hiddenTagBranches: [],
-	propertyTagDisplay: "full",
-	language: "auto",
-};
-
-/** Legacy (pre-multi-key) scalar config, as older saved data may hold it. */
-interface LegacyConfig {
-	namespace?: string;
-	separator?: string;
-	keyPosition?: "prefix" | "suffix";
-}
-
-function cloneSchema(schema: TrellisSchema): TrellisSchema {
-	return {
-		rootNamespace: schema.rootNamespace,
-		tagDefinitions: schema.tagDefinitions?.map((definition) => ({
-			...definition,
-			valueRule: definition.valueRule ? { ...definition.valueRule } : undefined,
-		})),
-		slots: schema.slots.map((slot) => ({
-			...slot,
-			wrapper: slot.wrapper ? { ...slot.wrapper } : undefined,
-		})),
-		separators: [...schema.separators],
-		separatorSpacing: schema.separatorSpacing
-			? [...schema.separatorSpacing]
-			: undefined,
-	};
-}
-
-/** Normalize old/manual data without changing its rendered filenames. */
-function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
-	const normalized = cloneSchema(schema);
-	normalized.slots = normalized.slots.map((slot) => {
-		if (
-			slot.role === "tag" &&
-			slot.segmentSeparator !== undefined &&
-			!isValidHierarchySeparator(slot.segmentSeparator)
-		) return { ...slot, segmentSeparator: "" };
-		if (!isValidSlotWrapper(slot.wrapper)) return { ...slot, wrapper: undefined };
-		return slot;
-	});
-	normalized.separatorSpacing = normalized.separators.map((raw, i) => {
-		const saved = normalized.separatorSpacing?.[i];
-		const before = /^\s/.test(raw);
-		const after = /\s$/.test(raw);
-		normalized.separators[i] = raw.trim();
-		if (normalized.separators[i] === "") {
-			// Canonical empty-boundary storage: `after` means exactly one plain
-			// space; `none` means concatenation. Old/manual whitespace-only values
-			// become one space instead of the invalid two-space `both` state.
-			return saved === "after" || before || after ? "after" : "none";
-		}
-		if (saved && SEPARATOR_SPACING.includes(saved)) return saved;
-		if (before && after) return "both";
-		if (before) return "before";
-		if (after) return "after";
-		return "none";
-	});
-	return normalized;
 }
 
 export default class TrellisPlugin extends Plugin {
@@ -718,106 +494,10 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const rawData: unknown = await this.loadData();
-		const data = isPlainObject(rawData) ? rawData : {};
-		const loaded = data as Partial<TrellisSettings> & Partial<LegacyConfig>;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-		let operationRecovered = false;
-		if (!isOperationReport(loaded.lastOperation)) {
-			this.settings.lastOperation = undefined;
-		} else if (loaded.lastOperation.status === "running") {
-			this.settings.lastOperation = interruptedReport(loaded.lastOperation);
-			this.settings.operationAttention = this.settings.lastOperation;
-			this.interruptedOperationOnLoad = this.settings.lastOperation;
-			operationRecovered = true;
-		}
-		if (!isOperationReport(loaded.operationAttention)) {
-			if (!operationRecovered) this.settings.operationAttention = undefined;
-		}
-		// Give settings its OWN schema so edits never mutate the shared default.
-		// Three cases: (a) saved schema → use it (loadData yields fresh objects);
-		// (b) legacy scalar config → migrate; (c) fresh install → own default.
-		if (!loaded.schema) {
-			const legacy = loaded as LegacyConfig;
-			const hasLegacy =
-				legacy.namespace !== undefined ||
-				legacy.separator !== undefined ||
-				legacy.keyPosition !== undefined;
-			this.settings.schema = hasLegacy
-				? schemaFromLegacy(
-						legacy.namespace ?? "trel",
-						legacy.separator ?? "-",
-						legacy.keyPosition ?? "prefix"
-					)
-				: defaultSchema();
-			// Drop migrated legacy scalar keys so they don't linger in data.json.
-			const s = this.settings as Partial<LegacyConfig>;
-			delete s.namespace;
-			delete s.separator;
-			delete s.keyPosition;
-		}
-		this.settings.schema = normalizeSchemaModel(
-			normalizeSchemaFormatting(this.settings.schema)
-		);
-		const definitions = schemaTagDefinitions(this.settings.schema);
-		const legacyTreeNamespace = loaded.treeTagKeyNamespace ?? "";
-		const selectedTreeDefinition =
-			definitions.find(
-				(definition) =>
-					definition.id === loaded.treeTagDefinitionId &&
-					definition.sidebarVisible &&
-					!definition.archived
-			) ??
-			definitions.find(
-				(definition) =>
-					sameTagPath(definition.namespace, legacyTreeNamespace) &&
-					definition.sidebarVisible &&
-					!definition.archived
-			) ??
-			definitions.find(
-				(definition) => definition.sidebarVisible && !definition.archived
-			);
-		this.settings.treeTagDefinitionId = selectedTreeDefinition?.id ?? "";
-		delete this.settings.treeTagKeyNamespace;
-		this.settings.settingsVersion = CURRENT_SETTINGS_VERSION;
-		delete (this.settings as unknown as Record<string, unknown>).advancedMode;
-		delete (this.settings as unknown as Record<string, unknown>).suppressSchemaConfirm;
-		// Own copy of headerButtons so a toggle never mutates the shared default;
-		// missing keys (older saved data) fall back to visible.
-		this.settings.headerButtons = {
-			...DEFAULT_SETTINGS.headerButtons,
-			...(isPlainObject(data.headerButtons)
-				? (data.headerButtons as Partial<HeaderButtonVisibility>)
-				: {}),
-		};
-		this.settings.hiddenTagBranches = Array.isArray(loaded.hiddenTagBranches)
-			? loaded.hiddenTagBranches.filter(
-					(value): value is HiddenTagBranch =>
-						isPlainObject(value) &&
-						typeof value.tagDefinitionId === "string" &&
-						typeof value.relativePath === "string" &&
-						isValidTagPath(value.relativePath)
-				)
-			: [];
-		if (
-			this.settings.propertyTagDisplay !== "full" &&
-			this.settings.propertyTagDisplay !== "name" &&
-			this.settings.propertyTagDisplay !== "name-terminal" &&
-			this.settings.propertyTagDisplay !== "terminal"
-		) this.settings.propertyTagDisplay = "full";
-		const schemaChanged =
-			JSON.stringify(loaded.schema ?? null) !== JSON.stringify(this.settings.schema);
-		if (
-			loaded.settingsVersion !== CURRENT_SETTINGS_VERSION ||
-			schemaChanged ||
-			loaded.treeTagDefinitionId !== this.settings.treeTagDefinitionId ||
-			"treeTagKeyNamespace" in data ||
-			"advancedMode" in data ||
-			"suppressSchemaConfirm" in data ||
-			operationRecovered
-		) {
-			await this.saveSettings();
-		}
+		const normalized = normalizeLoadedSettings(await this.loadData());
+		this.settings = normalized.settings;
+		this.interruptedOperationOnLoad = normalized.interruptedOperation;
+		if (normalized.shouldSave) await this.saveSettings();
 	}
 
 	// --- Single-key view of the schema (settings-tab read/write helpers) ----
