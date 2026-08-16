@@ -279,11 +279,7 @@ export default class TrellisPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-		this.register(() => {
-			if (this.liveSyncTimer !== null) window.clearTimeout(this.liveSyncTimer);
-			this.liveSyncTimer = null;
-			this.pendingLiveSyncPaths.clear();
-		});
+		this.registerLiveSyncCleanup();
 		setLang(this.settings.language);
 		if (this.interruptedOperationOnLoad) {
 			new Notice(
@@ -295,7 +291,23 @@ export default class TrellisPlugin extends Plugin {
 		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
 		this.app.workspace.onLayoutReady(() => this.installPropertyTagDecorator());
+		this.registerTreeViewType();
+		await this.rehydrateStaleTreeViews();
+		this.registerTreeEntryPoints();
+		this.registerVaultObservers();
+		this.registerBulkCommands();
+		this.registerFileMenuEntry();
+	}
 
+	private registerLiveSyncCleanup() {
+		this.register(() => {
+			if (this.liveSyncTimer !== null) window.clearTimeout(this.liveSyncTimer);
+			this.liveSyncTimer = null;
+			this.pendingLiveSyncPaths.clear();
+		});
+	}
+
+	private registerTreeViewType() {
 		// Sidebar tree view: reads the location-tag hierarchy and renders it as a
 		// collapsible tree (the read-side counterpart to the rename engine).
 		// Registering a view type that is already registered throws. A prior
@@ -356,7 +368,9 @@ export default class TrellisPlugin extends Plugin {
 		} catch (e) {
 			console.warn("TRELLIS: tree view type already registered (stale instance?)", e);
 		}
-		await this.rehydrateStaleTreeViews();
+	}
+
+	private registerTreeEntryPoints() {
 		this.ribbonEl = this.addRibbonIcon("list-tree", this.treeDisplayName(), () =>
 			void this.activateTreeView()
 		);
@@ -376,7 +390,9 @@ export default class TrellisPlugin extends Plugin {
 			callback: () => this.newNoteFromActive(),
 		});
 		this.applyTreeViewState();
+	}
 
+	private registerVaultObservers() {
 		// metadataCache 'changed' fires after a file's tags/frontmatter are
 		// parsed — the right moment to read the location tag.
 		this.registerEvent(
@@ -426,7 +442,9 @@ export default class TrellisPlugin extends Plugin {
 				this.scheduleTreeRefresh();
 			})
 		);
+	}
 
+	private registerBulkCommands() {
 		// Cascade: rename a location tag (and everything under it) across the
 		// vault. The tag edits then drive each file's rename through syncFile.
 		this.addCommand({
@@ -478,7 +496,9 @@ export default class TrellisPlugin extends Plugin {
 			callback: () => void this.undoPrimaryNamespaceChange(),
 		});
 		this.registerRootCommands();
+	}
 
+	private registerFileMenuEntry() {
 		// Right-click a note → cascade-rename one of its managed tag-keys. A note
 		// with exactly one managed value is prefilled; with several, the filtered
 		// picker stays empty so no key is silently preferred.
