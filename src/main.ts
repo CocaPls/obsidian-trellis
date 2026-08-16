@@ -680,14 +680,11 @@ export default class TrellisPlugin extends Plugin {
 		onChanged?: () => void
 	) {
 		const operation = t("bulk.title.filenameSync");
-		const operationId = await this.beginBulkOperation(operation, rows.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const renamed: { originalPath: string; currentPath: string }[] = [];
-		const failed: string[] = [];
-		const progress = new BulkProgressModal(this.app, operation);
-		progress.open();
-		try {
+		await this.runBulkOperation(operation, rows.length, async (operationId, outcome) => {
+			const renamed: { originalPath: string; currentPath: string }[] = [];
+			const failed: string[] = [];
+			const progress = new BulkProgressModal(this.app, operation);
+			progress.open();
 			for (let index = 0; index < rows.length; index++) {
 				if (!(await progress.gate())) break;
 				const row = rows[index];
@@ -745,12 +742,7 @@ export default class TrellisPlugin extends Plugin {
 			progress.finish({ processed: renamed.length, skipped: [] });
 			outcome.processed = renamed.length;
 			onChanged?.();
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	/** Managed tag branches are independent from filename slots in 0.5. */
@@ -1010,6 +1002,25 @@ export default class TrellisPlugin extends Plugin {
 			outcome.processed,
 			outcome.issues
 		);
+	}
+
+	/** Own the durable start/failure/finish lifecycle for one bulk mutation. */
+	private async runBulkOperation(
+		label: string,
+		total: number,
+		run: (operationId: string, outcome: MutableOperationOutcome) => Promise<void>
+	): Promise<void> {
+		const operationId = await this.beginBulkOperation(label, total);
+		if (!operationId) return;
+		const outcome = newOperationOutcome();
+		try {
+			await run(operationId, outcome);
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
+		} finally {
+			await this.endBulkOperation(operationId, outcome);
+		}
 	}
 
 	private get bulkActive(): boolean {
@@ -2199,15 +2210,12 @@ export default class TrellisPlugin extends Plugin {
 		rows: CascadePreviewRow[]
 	) {
 		const operation = t("bulk.title.cascade");
-		const operationId = await this.beginBulkOperation(operation, rows.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const previousUndo = this.settings.lastCascade;
-		const records: CascadeRecord[] = [];
-		const failed: string[] = [];
-		const progress = new BulkProgressModal(this.app, operation);
-		progress.open();
-		try {
+		await this.runBulkOperation(operation, rows.length, async (operationId, outcome) => {
+			const previousUndo = this.settings.lastCascade;
+			const records: CascadeRecord[] = [];
+			const failed: string[] = [];
+			const progress = new BulkProgressModal(this.app, operation);
+			progress.open();
 			for (let i = 0; i < rows.length; i++) {
 				if (!(await progress.gate())) break;
 				const row = rows[i];
@@ -2302,12 +2310,7 @@ export default class TrellisPlugin extends Plugin {
 			progress.finish({ processed: records.length, skipped: [] });
 			outcome.processed = records.length;
 			new Notice(t("notice.retagged", { n: records.length, from, to }));
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	private async undoCascade() {
@@ -2317,10 +2320,7 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("bulk.title.cascadeUndo");
-		const operationId = await this.beginBulkOperation(operation, records.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		try {
+		await this.runBulkOperation(operation, records.length, async (_operationId, outcome) => {
 			const { restored, remaining } = await this.revertCascadeRecords(records);
 			this.settings.lastCascade = remaining.length > 0 ? remaining : undefined;
 			await this.saveSettings();
@@ -2334,12 +2334,7 @@ export default class TrellisPlugin extends Plugin {
 					message: "Tag move undo is incomplete.",
 				}));
 			}
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	/** Rename the simple-mode namespace together with every managed frontmatter
@@ -2420,16 +2415,13 @@ export default class TrellisPlugin extends Plugin {
 		const operation = t(
 			undoing ? "bulk.title.namespaceUndo" : "bulk.title.namespace"
 		);
-		const operationId = await this.beginBulkOperation(operation, rows.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const previousUndo = this.settings.lastNamespaceChange;
-		const records: CascadeRecord[] = [];
-		const failed: string[] = [];
-		const progress =
-			rows.length > 0 ? new BulkProgressModal(this.app, operation) : null;
-		progress?.open();
-		try {
+		await this.runBulkOperation(operation, rows.length, async (operationId, outcome) => {
+			const previousUndo = this.settings.lastNamespaceChange;
+			const records: CascadeRecord[] = [];
+			const failed: string[] = [];
+			const progress =
+				rows.length > 0 ? new BulkProgressModal(this.app, operation) : null;
+			progress?.open();
 			this.settings.schema = normalizeSchemaModel(cloneSchema(targetSchema));
 			await this.saveSettings();
 			for (let i = 0; i < rows.length; i++) {
@@ -2531,12 +2523,7 @@ export default class TrellisPlugin extends Plugin {
 					ns: primaryNamespace(targetSchema),
 				})
 			);
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	private async undoPrimaryNamespaceChange() {
@@ -2606,68 +2593,68 @@ export default class TrellisPlugin extends Plugin {
 	 *  had to skip. */
 	private async applyBootstrap(assign: { path: string; tag: string }[]) {
 		const operation = t("bulk.title.bootstrap");
-		const operationId = await this.beginBulkOperation(operation, assign.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const record: BootstrapRecord[] = [];
-		const failed: string[] = [];
-		const total = assign.length;
-		const progress = new BulkProgressModal(this.app, operation);
-		progress.open();
-		try {
-			for (let i = 0; i < assign.length; i++) {
-				if (!(await progress.gate())) break; // cancelled — keep what's written
-				const r = assign[i];
-				const file = this.app.vault.getAbstractFileByPath(r.path);
-				if (file instanceof TFile) {
-					try {
-						await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-							const before =
-								typeof fm.tags === "string"
-									? fm.tags.split(/[,\s]+/).filter(Boolean)
-									: Array.isArray(fm.tags)
-										? fm.tags.filter((t): t is string => typeof t === "string")
-										: [];
-							const tags = normalizeTagList(fm.tags);
-							const added = !tags.includes(r.tag);
-							if (added) tags.push(r.tag);
-							const changed =
-								tags.length !== before.length ||
-								tags.some((tag, index) => tag !== before[index]);
-							if (changed) fm.tags = tags;
-							if (added) record.push({ path: r.path, tag: r.tag });
-						});
-					} catch (e) {
-						failed.push(r.path);
-						console.error("TRELLIS bootstrap skipped (frontmatter error)", r.path, e);
-					}
-				}
-				progress.report(i + 1, total, failed.length);
-				this.operations.progress(operationId, {
-					processed: i + 1,
-					currentPath: r.path,
-				});
-			}
-		} catch (error) {
-			outcome.status = "partial-failed";
-			outcome.issues.push({ message: String(error) });
-			throw error;
-		} finally {
+		await this.runBulkOperation(operation, assign.length, async (operationId, outcome) => {
+			const record: BootstrapRecord[] = [];
+			const failed: string[] = [];
+			const total = assign.length;
+			const progress = new BulkProgressModal(this.app, operation);
+			progress.open();
 			try {
+				for (let i = 0; i < assign.length; i++) {
+					if (!(await progress.gate())) break; // cancelled — keep what's written
+					const r = assign[i];
+					const file = this.app.vault.getAbstractFileByPath(r.path);
+					if (file instanceof TFile) {
+						try {
+							await this.app.fileManager.processFrontMatter(
+								file,
+								(fm: TrellisFrontmatter) => {
+									const before =
+										typeof fm.tags === "string"
+											? fm.tags.split(/[,\s]+/).filter(Boolean)
+											: Array.isArray(fm.tags)
+												? fm.tags.filter(
+														(t): t is string => typeof t === "string"
+													)
+												: [];
+									const tags = normalizeTagList(fm.tags);
+									const added = !tags.includes(r.tag);
+									if (added) tags.push(r.tag);
+									const changed =
+										tags.length !== before.length ||
+										tags.some((tag, index) => tag !== before[index]);
+									if (changed) fm.tags = tags;
+									if (added) record.push({ path: r.path, tag: r.tag });
+								}
+							);
+						} catch (e) {
+							failed.push(r.path);
+							console.error(
+								"TRELLIS bootstrap skipped (frontmatter error)",
+								r.path,
+								e
+							);
+						}
+					}
+					progress.report(i + 1, total, failed.length);
+					this.operations.progress(operationId, {
+						processed: i + 1,
+						currentPath: r.path,
+					});
+				}
+			} finally {
 				// Save what we managed to write even if the loop threw — keeps undo intact.
 				this.settings.lastBootstrap = record;
-				await this.saveSettings();
-				progress.finish({ processed: record.length, skipped: failed });
 				outcome.processed = record.length;
 				if (progress.wasCancelled) outcome.status = "cancelled";
 				else if (failed.length > 0) outcome.status = "partial-failed";
 				outcome.issues.push(
 					...failed.map((path) => ({ path, message: "Bootstrap skipped this note." }))
 				);
-			} finally {
-				await this.endBulkOperation(operationId, outcome);
+				await this.saveSettings();
+				progress.finish({ processed: record.length, skipped: failed });
 			}
-		}
+		});
 	}
 
 	// --- Separator batch change (v0.0.7) -----------------------------------
@@ -2838,100 +2825,101 @@ export default class TrellisPlugin extends Plugin {
 		rows: { path: string; oldName: string; newName: string }[]
 	) {
 		const operation = t("bulk.title.separator");
-		const operationId = await this.beginBulkOperation(operation, rows.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const oldSchema = cloneSchema(this.settings.schema);
-		const renames: SeparatorRename[] = [];
-		const failedNames: string[] = [];
-		const total = rows.length;
-		// No files to rename → just flip the setting, no modal needed.
-		const progress = total > 0 ? new BulkProgressModal(this.app, operation) : null;
-		progress?.open();
-		this.separatorMigrationRunning = true;
-		let fatal = false;
-		try {
-			for (let i = 0; i < rows.length; i++) {
-				if (progress && !(await progress.gate())) break; // cancelled — keep renames so far
-				const r = rows[i];
-				const file = this.app.vault.getAbstractFileByPath(r.path);
-				if (file instanceof TFile) {
-					const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-					const newPath = normalizePath(`${dir}${r.newName}.${file.extension}`);
-					if (await this.renameGuarded(file, newPath)) {
-						renames.push({ path: newPath, oldBasename: r.oldName });
-					} else {
-						failedNames.push(r.oldName);
-					}
-				}
-				progress?.report(i + 1, total, failedNames.length);
-				this.operations.progress(operationId, {
-					processed: i + 1,
-					currentPath: r.path,
-				});
-			}
-		} catch (error) {
-			fatal = true;
-			console.error("TRELLIS schema migration failed", error);
-			failedNames.push(t("bulk.unexpectedFailure"));
-		} finally {
+		await this.runBulkOperation(operation, rows.length, async (operationId, outcome) => {
+			const oldSchema = cloneSchema(this.settings.schema);
+			const renames: SeparatorRename[] = [];
+			const failedNames: string[] = [];
+			const total = rows.length;
+			// No files to rename → just flip the setting, no modal needed.
+			const progress = total > 0 ? new BulkProgressModal(this.app, operation) : null;
+			progress?.open();
+			this.separatorMigrationRunning = true;
+			let fatal = false;
 			try {
-				if (fatal || progress?.wasCancelled || failedNames.length > 0) {
-					const { undone, remaining } = await this.revertSeparatorRenames(renames);
-					this.settings.lastSeparatorChange =
-						remaining.length > 0
-							? {
-									oldSchema,
-									newSchema: cloneSchema(newSchema),
-									renames: remaining,
-								}
-							: undefined;
-					await this.saveSettings();
-					this.refreshNoNameManagedPaths();
-					this.rebuildTrees();
-					progress?.finish({
-						processed: undone,
-						skipped: failedNames,
-						outcome: "rolled-back",
+				for (let i = 0; i < rows.length; i++) {
+					if (progress && !(await progress.gate())) break; // cancelled — keep renames so far
+					const r = rows[i];
+					const file = this.app.vault.getAbstractFileByPath(r.path);
+					if (file instanceof TFile) {
+						const dir =
+							file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+						const newPath = normalizePath(`${dir}${r.newName}.${file.extension}`);
+						if (await this.renameGuarded(file, newPath)) {
+							renames.push({ path: newPath, oldBasename: r.oldName });
+						} else {
+							failedNames.push(r.oldName);
+						}
+					}
+					progress?.report(i + 1, total, failedNames.length);
+					this.operations.progress(operationId, {
+						processed: i + 1,
+						currentPath: r.path,
 					});
-					outcome.status = remaining.length > 0 ? "partial-failed" : "rolled-back";
-					outcome.processed = undone;
-					outcome.issues = [
-						...failedNames.map((message) => ({ message })),
-						...remaining.map((record) => ({
-							path: record.path,
-							message: "Filename rollback is incomplete.",
-						})),
-					];
-				} else {
-					this.settings.schema = normalizeSchemaModel(cloneSchema(newSchema));
-					this.settings.lastSeparatorChange =
-						renames.length > 0
-							? {
-									oldSchema,
-									newSchema: cloneSchema(newSchema),
-									renames,
-								}
-							: undefined;
-					await this.saveSettings();
-					this.rebuildTrees();
-					if (progress)
-						progress.finish({ processed: renames.length, skipped: failedNames });
-					else
-						new Notice(
-							t("notice.sepChanged", {
-								n: renames.length,
-								from: primarySeparator(oldSchema),
-								to: primarySeparator(newSchema),
-							})
-						);
-					outcome.processed = renames.length;
 				}
+			} catch (error) {
+				fatal = true;
+				console.error("TRELLIS schema migration failed", error);
+				failedNames.push(t("bulk.unexpectedFailure"));
 			} finally {
-				this.separatorMigrationRunning = false;
-				await this.endBulkOperation(operationId, outcome);
+				try {
+					if (fatal || progress?.wasCancelled || failedNames.length > 0) {
+						const { undone, remaining } = await this.revertSeparatorRenames(renames);
+						this.settings.lastSeparatorChange =
+							remaining.length > 0
+								? {
+										oldSchema,
+										newSchema: cloneSchema(newSchema),
+										renames: remaining,
+									}
+								: undefined;
+						await this.saveSettings();
+						this.refreshNoNameManagedPaths();
+						this.rebuildTrees();
+						progress?.finish({
+							processed: undone,
+							skipped: failedNames,
+							outcome: "rolled-back",
+						});
+						outcome.status =
+							remaining.length > 0 ? "partial-failed" : "rolled-back";
+						outcome.processed = undone;
+						outcome.issues = [
+							...failedNames.map((message) => ({ message })),
+							...remaining.map((record) => ({
+								path: record.path,
+								message: "Filename rollback is incomplete.",
+							})),
+						];
+					} else {
+						this.settings.schema = normalizeSchemaModel(cloneSchema(newSchema));
+						this.settings.lastSeparatorChange =
+							renames.length > 0
+								? {
+										oldSchema,
+										newSchema: cloneSchema(newSchema),
+										renames,
+									}
+								: undefined;
+						await this.saveSettings();
+						this.rebuildTrees();
+						if (progress) {
+							progress.finish({ processed: renames.length, skipped: failedNames });
+						} else {
+							new Notice(
+								t("notice.sepChanged", {
+									n: renames.length,
+									from: primarySeparator(oldSchema),
+									to: primarySeparator(newSchema),
+								})
+							);
+						}
+						outcome.processed = renames.length;
+					}
+				} finally {
+					this.separatorMigrationRunning = false;
+				}
 			}
-		}
+		});
 	}
 
 	/** Rename each recorded file back to its pre-change basename (link-safe).
@@ -3009,71 +2997,73 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.sepUndo");
-		const operationId = await this.beginBulkOperation(operation, plan.rows.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const progress = new BulkProgressModal(this.app, operation);
-		progress.open();
-		const completed: SeparatorUndoPlanRow[] = [];
-		const failed: string[] = [];
-		try {
-			this.separatorMigrationRunning = true;
-			for (let i = 0; i < plan.rows.length; i++) {
-				if (!(await progress.gate())) break;
-				const row = plan.rows[i];
-				const file = this.app.vault.getAbstractFileByPath(row.currentPath);
-				if (!(file instanceof TFile) || !(await this.renameGuarded(file, row.targetPath))) {
-					failed.push(row.currentPath);
-					break;
-				}
-				completed.push(row);
-				this.operations.progress(operationId, {
-					processed: i + 1,
-					currentPath: row.currentPath,
-				});
-				progress.report(i + 1, plan.rows.length, failed.length);
-			}
-
-			if (progress.wasCancelled || failed.length > 0) {
-				const rollbackFailed: string[] = [];
-				for (const row of [...completed].reverse()) {
-					const file = this.app.vault.getAbstractFileByPath(row.targetPath);
-					if (!(file instanceof TFile) || !(await this.renameGuarded(file, row.currentPath))) {
-						rollbackFailed.push(row.targetPath);
+		await this.runBulkOperation(operation, plan.rows.length, async (operationId, outcome) => {
+			const progress = new BulkProgressModal(this.app, operation);
+			progress.open();
+			const completed: SeparatorUndoPlanRow[] = [];
+			const failed: string[] = [];
+			try {
+				this.separatorMigrationRunning = true;
+				for (let i = 0; i < plan.rows.length; i++) {
+					if (!(await progress.gate())) break;
+					const row = plan.rows[i];
+					const file = this.app.vault.getAbstractFileByPath(row.currentPath);
+					if (
+						!(file instanceof TFile) ||
+						!(await this.renameGuarded(file, row.targetPath))
+					) {
+						failed.push(row.currentPath);
+						break;
 					}
+					completed.push(row);
+					this.operations.progress(operationId, {
+						processed: i + 1,
+						currentPath: row.currentPath,
+					});
+					progress.report(i + 1, plan.rows.length, failed.length);
 				}
-				progress.finish({
-					processed: completed.length - rollbackFailed.length,
-					skipped: [...failed, ...rollbackFailed],
-					outcome: "rolled-back",
-				});
-				outcome.status = rollbackFailed.length > 0 ? "partial-failed" : "rolled-back";
-				outcome.processed = completed.length - rollbackFailed.length;
-				outcome.issues = [
-					...failed.map((path) => ({ path, message: "Separator undo stopped." })),
-					...rollbackFailed.map((path) => ({
-						path,
-						message: "Separator undo rollback is incomplete.",
-					})),
-				];
-				return;
-			}
 
-			this.settings.schema = plan.oldSchema;
-			this.settings.lastSeparatorChange = undefined;
-			await this.saveSettings();
-			this.refreshNoNameManagedPaths();
-			this.rebuildTrees();
-			progress.finish({ processed: completed.length, skipped: [] });
-			outcome.processed = completed.length;
-			new Notice(t("notice.sepReverted", { n: completed.length }));
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			this.separatorMigrationRunning = false;
-			await this.endBulkOperation(operationId, outcome);
-		}
+				if (progress.wasCancelled || failed.length > 0) {
+					const rollbackFailed: string[] = [];
+					for (const row of [...completed].reverse()) {
+						const file = this.app.vault.getAbstractFileByPath(row.targetPath);
+						if (
+							!(file instanceof TFile) ||
+							!(await this.renameGuarded(file, row.currentPath))
+						) {
+							rollbackFailed.push(row.targetPath);
+						}
+					}
+					progress.finish({
+						processed: completed.length - rollbackFailed.length,
+						skipped: [...failed, ...rollbackFailed],
+						outcome: "rolled-back",
+					});
+					outcome.status =
+						rollbackFailed.length > 0 ? "partial-failed" : "rolled-back";
+					outcome.processed = completed.length - rollbackFailed.length;
+					outcome.issues = [
+						...failed.map((path) => ({ path, message: "Separator undo stopped." })),
+						...rollbackFailed.map((path) => ({
+							path,
+							message: "Separator undo rollback is incomplete.",
+						})),
+					];
+					return;
+				}
+
+				this.settings.schema = plan.oldSchema;
+				this.settings.lastSeparatorChange = undefined;
+				await this.saveSettings();
+				this.refreshNoNameManagedPaths();
+				this.rebuildTrees();
+				progress.finish({ processed: completed.length, skipped: [] });
+				outcome.processed = completed.length;
+				new Notice(t("notice.sepReverted", { n: completed.length }));
+			} finally {
+				this.separatorMigrationRunning = false;
+			}
+		});
 	}
 
 	/** Scan every note for namespaces carrying 2+ location tags and open the
@@ -3103,79 +3093,74 @@ export default class TrellisPlugin extends Plugin {
 	 *  the rest from each file's frontmatter, recording removals for undo. */
 	private async applyDedup(decisions: DedupDecision[]) {
 		const operation = t("dedup.title");
-		const operationId = await this.beginBulkOperation(operation, decisions.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const record: DedupRecord[] = [];
-		const failed: string[] = [];
-		// Save the record in `finally` so an interrupted pass (e.g. a broken YAML
-		// file mid-loop) still leaves everything removed so far undoable, and
-		// isolate per-file errors so one bad file can't abort the whole cleanup.
-		try {
-			for (let index = 0; index < decisions.length; index++) {
-				const d = decisions[index];
-				const file = this.app.vault.getAbstractFileByPath(d.path);
-				if (!(file instanceof TFile)) {
-					failed.push(d.path);
-					continue;
-				}
-				const removed: string[] = [];
-				try {
-					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-						const tags = normalizeTagList(fm.tags);
-						const next = tags.filter((tg) => {
-							const hashed = "#" + tg;
-							let inAnyGroup = false;
-							for (const [ns, keep] of Object.entries(d.keep)) {
-								if (hashed === `#${ns}` || hashed.startsWith(`#${ns}/`)) {
-									inAnyGroup = true;
-									if (hashed === keep) return true; // the chosen tag stays
-								}
-							}
-							if (inAnyGroup) {
-								removed.push(tg);
-								return false;
-							}
-							return true; // unrelated tag — leave it
-						});
-						if (removed.length) fm.tags = next;
-					});
-				} catch (e) {
-					console.error("TRELLIS dedup skipped (frontmatter error)", d.path, e);
-					failed.push(d.path);
-					continue;
-				}
-				if (removed.length) {
-					record.push({ path: d.path, removed });
-					this.multiWarned.delete(d.path);
-				}
-				this.operations.progress(operationId, {
-					processed: index + 1,
-					currentPath: d.path,
-				});
-			}
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
+		await this.runBulkOperation(operation, decisions.length, async (operationId, outcome) => {
+			const record: DedupRecord[] = [];
+			const failed: string[] = [];
+			// Save the record in `finally` so an interrupted pass (e.g. a broken YAML
+			// file mid-loop) still leaves everything removed so far undoable, and
+			// isolate per-file errors so one bad file can't abort the whole cleanup.
 			try {
+				for (let index = 0; index < decisions.length; index++) {
+					const d = decisions[index];
+					const file = this.app.vault.getAbstractFileByPath(d.path);
+					if (!(file instanceof TFile)) {
+						failed.push(d.path);
+						continue;
+					}
+					const removed: string[] = [];
+					try {
+						await this.app.fileManager.processFrontMatter(
+							file,
+							(fm: TrellisFrontmatter) => {
+								const tags = normalizeTagList(fm.tags);
+								const next = tags.filter((tg) => {
+									const hashed = "#" + tg;
+									let inAnyGroup = false;
+									for (const [ns, keep] of Object.entries(d.keep)) {
+										if (hashed === `#${ns}` || hashed.startsWith(`#${ns}/`)) {
+											inAnyGroup = true;
+											if (hashed === keep) return true; // the chosen tag stays
+										}
+									}
+									if (inAnyGroup) {
+										removed.push(tg);
+										return false;
+									}
+									return true; // unrelated tag — leave it
+								});
+								if (removed.length) fm.tags = next;
+							}
+						);
+					} catch (e) {
+						console.error("TRELLIS dedup skipped (frontmatter error)", d.path, e);
+						failed.push(d.path);
+						continue;
+					}
+					if (removed.length) {
+						record.push({ path: d.path, removed });
+						this.multiWarned.delete(d.path);
+					}
+					this.operations.progress(operationId, {
+						processed: index + 1,
+						currentPath: d.path,
+					});
+				}
+			} finally {
 				this.settings.lastDedup = record;
-				await this.saveSettings();
 				outcome.processed = decisions.length - failed.length;
 				if (failed.length > 0) outcome.status = "partial-failed";
 				outcome.issues = failed.map((path) => ({
 					path,
 					message: "Duplicate-tag cleanup skipped this note.",
 				}));
-			} finally {
-				await this.endBulkOperation(operationId, outcome);
+				await this.saveSettings();
 			}
-		}
-		new Notice(
-			record.length > 0
-				? t("notice.deduped", { n: record.length })
-				: t("notice.noDuplicates")
-		);
+			new Notice(
+				record.length > 0
+					? t("notice.deduped", { n: record.length })
+					: t("notice.noDuplicates")
+			);
+		});
 	}
 
 	/** Undo the last dedup: add the removed location tags back to each file. */
@@ -3186,12 +3171,9 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.dedupUndo");
-		const operationId = await this.beginBulkOperation(operation, record.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		let restored = 0;
-		const failed: DedupRecord[] = [];
-		try {
+		await this.runBulkOperation(operation, record.length, async (_operationId, outcome) => {
+			let restored = 0;
+			const failed: DedupRecord[] = [];
 			for (const r of record) {
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (!(file instanceof TFile)) {
@@ -3221,12 +3203,7 @@ export default class TrellisPlugin extends Plugin {
 				path: record.path,
 				message: "Duplicate-tag undo skipped this note.",
 			}));
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	/** Apply every filename safety rule through Obsidian's link-safe rename API. */
@@ -3305,12 +3282,9 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.bootstrapUndo");
-		const operationId = await this.beginBulkOperation(operation, record.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		let undone = 0;
-		const failed: BootstrapRecord[] = [];
-		try {
+		await this.runBulkOperation(operation, record.length, async (_operationId, outcome) => {
+			let undone = 0;
+			const failed: BootstrapRecord[] = [];
 			for (const r of record) {
 				const file = this.app.vault.getAbstractFileByPath(r.path);
 				if (!(file instanceof TFile)) {
@@ -3341,12 +3315,7 @@ export default class TrellisPlugin extends Plugin {
 				path: record.path,
 				message: "Bootstrap undo skipped this note.",
 			}));
-		} catch (error) {
-			recordUnexpectedFailure(outcome, error);
-			throw error;
-		} finally {
-			await this.endBulkOperation(operationId, outcome);
-		}
+		});
 	}
 
 	// --- Root namespace change (0.3.0 experimental, B25) --------------------
@@ -3420,47 +3389,48 @@ export default class TrellisPlugin extends Plugin {
 	private async applyRootChange(newRoot: string) {
 		const operation = t("bulk.title.root");
 		const files = this.app.vault.getMarkdownFiles();
-		const operationId = await this.beginBulkOperation(operation, files.length);
-		if (!operationId) return;
-		const outcome = newOperationOutcome();
-		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
-		// Whatever undo record exists NOW is valid for the pre-apply state — a
-		// cancelled pass rolls the vault back to exactly that state, so the record
-		// must be restored (not cleared): dropping it on a cancelled UNDO would
-		// lose the only way to retry the undo.
-		const prevRec = this.settings.lastRootChange;
-		const slotNs = tagNamespaces(this.settings.schema);
-		let changed = 0;
-		const touchedPaths: string[] = [];
-		const failed: string[] = [];
-		const progress = new BulkProgressModal(this.app, operation);
-		progress.open();
-		try {
-			this.settings.schema.rootNamespace = newRoot;
-			await this.saveSettings();
-			for (let i = 0; i < files.length; i++) {
-				if (!(await progress.gate())) break; // cancelled — rolled back below
-				const file = files[i];
-				try {
-					if (await this.migrateFileRoot(file, oldRoot, newRoot, slotNs)) {
-						changed++;
-						touchedPaths.push(file.path);
-					}
-				} catch (e) {
-					failed.push(file.basename);
-					console.error("TRELLIS root change skipped (frontmatter error)", file.path, e);
-				}
-				progress.report(i + 1, files.length, failed.length);
-				this.operations.progress(operationId, {
-					processed: i + 1,
-					currentPath: file.path,
-				});
-			}
-		} catch (error) {
-			failed.push(t("bulk.unexpectedFailure"));
-			console.error("TRELLIS root migration failed", error);
-		} finally {
+		await this.runBulkOperation(operation, files.length, async (operationId, outcome) => {
+			const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
+			// Whatever undo record exists NOW is valid for the pre-apply state — a
+			// cancelled pass rolls the vault back to exactly that state, so the record
+			// must be restored (not cleared): dropping it on a cancelled UNDO would
+			// lose the only way to retry the undo.
+			const prevRec = this.settings.lastRootChange;
+			const slotNs = tagNamespaces(this.settings.schema);
+			let changed = 0;
+			const touchedPaths: string[] = [];
+			const failed: string[] = [];
+			const progress = new BulkProgressModal(this.app, operation);
+			progress.open();
 			try {
+				this.settings.schema.rootNamespace = newRoot;
+				await this.saveSettings();
+				for (let i = 0; i < files.length; i++) {
+					if (!(await progress.gate())) break; // cancelled — rolled back below
+					const file = files[i];
+					try {
+						if (await this.migrateFileRoot(file, oldRoot, newRoot, slotNs)) {
+							changed++;
+							touchedPaths.push(file.path);
+						}
+					} catch (e) {
+						failed.push(file.basename);
+						console.error(
+							"TRELLIS root change skipped (frontmatter error)",
+							file.path,
+							e
+						);
+					}
+					progress.report(i + 1, files.length, failed.length);
+					this.operations.progress(operationId, {
+						processed: i + 1,
+						currentPath: file.path,
+					});
+				}
+			} catch (error) {
+				failed.push(t("bulk.unexpectedFailure"));
+				console.error("TRELLIS root migration failed", error);
+			} finally {
 				if (progress.wasCancelled || failed.length > 0) {
 					// Roll back what was rewritten (schema still = newRoot while the
 					// reverted tags land, so nothing is mis-parsed mid-rollback), then
@@ -3505,10 +3475,8 @@ export default class TrellisPlugin extends Plugin {
 						t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
 					);
 				}
-			} finally {
-				await this.endBulkOperation(operationId, outcome);
 			}
-		}
+		});
 	}
 
 	/** Undo the last root change: run the symmetric migration back. The apply
