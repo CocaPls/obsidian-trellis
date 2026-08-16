@@ -5,9 +5,8 @@
 [![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
 · [커뮤니티 플러그인 페이지](https://community.obsidian.md/plugins/trellis)
 
-Trellis는 계층형 **관리 태그**를 등록하고 필요한 태그를 노트의 **파일명 슬롯**에
-반영합니다. 파일명 동기화가 켜져 있으면 태그 트리에서 노트를 옮길 때 Obsidian의
-링크 안전 이름변경을 통해 파일명이 따라옵니다.
+Trellis는 계층형 **관리 태그**로 여러 노트의 파일명을 관리합니다. 일괄 변경을
+미리 본 뒤 Obsidian의 이름 변경을 사용하므로 내부 링크도 함께 따라갑니다.
 
 ```text
 태그  #projects/PRJ/01/DOC/01  →  파일  PRJ01DOC01-회의록.md
@@ -18,10 +17,9 @@ Trellis는 계층형 **관리 태그**를 등록하고 필요한 태그를 노�
 
 ## 왜 Trellis인가
 
-제 볼트는 노트가 어디에 속하는지 짧은 파일명 코드로 표시합니다. 이 코드를 손으로
-관리하는 일은 번거롭고 틀리기 쉬웠기에 Trellis가 하나의 위치 태그에서 코드를
-만들게 했습니다. 사람은 파일명을 빠르게 훑을 수 있고 CLI·AI 도구는 정확한 노트를
-지정할 수 있습니다.
+태그에서 만든 파일명 부분을 손으로 관리하면 번거롭고 틀리기 쉽습니다. Trellis는
+여러 노트에서 그 부분을 일관되게 유지하면서, 관리하지 않는 노트와 자유 파일명
+부분은 그대로 둡니다.
 
 ## 작동 방식
 

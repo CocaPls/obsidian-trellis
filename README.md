@@ -5,10 +5,9 @@
 [![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
 · [Community plugin page](https://community.obsidian.md/plugins/trellis)
 
-Trellis registers hierarchical **managed tags** for a note and can mirror any
-of them into configurable **filename slots**. Move a note in the tag tree and,
-when filename sync is enabled, its filename follows through Obsidian's link-safe
-rename.
+Trellis uses hierarchical **managed tags** to manage filenames across notes.
+Preview bulk changes, then rename through Obsidian so internal links stay
+updated.
 
 ```text
 tag  #projects/PRJ/01/DOC/01  →  file  PRJ01DOC01-meeting-notes.md
@@ -19,10 +18,9 @@ tag  #projects/PRJ/01/DOC/02  →  file  PRJ01DOC02-meeting-notes.md  (automatic
 
 ## Why Trellis
 
-My vault uses short filename codes to show where each note belongs. Maintaining
-those codes by hand was tedious and error-prone, so Trellis derives them from one
-location tag. The result stays easy to scan for people and precise to address
-from CLI and AI tools.
+Renaming tag-derived filename parts by hand is tedious and error-prone. Trellis
+keeps those parts consistent across notes while leaving unrelated notes and free
+filename parts alone.
 
 ## How it works
 
