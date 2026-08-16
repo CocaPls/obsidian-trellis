@@ -211,6 +211,18 @@ type TreeViewMode = "notes" | "tags";
 type TreeLabelMode = "filename" | "tag";
 type PropertyTagDisplayMode = "full" | "name" | "name-terminal" | "terminal";
 
+interface LiveSyncResult {
+	status: "noop" | "renamed" | "blocked" | "failed";
+	message?: string;
+}
+
+interface TrellisOperationStatusView {
+	idle: boolean;
+	pendingSyncs: number;
+	current: TrellisOperationReport | null;
+	last: TrellisOperationReport | null;
+}
+
 interface TrellisSettings {
 	/** Serialized settings model version. */
 	settingsVersion: number;
@@ -358,9 +370,13 @@ export default class TrellisPlugin extends Plugin {
 		planChange: (request: TrellisChangeRequest) => this.planChange(request),
 		applyChange: (plan: TrellisChangePlan) => this.applyChange(plan),
 		operationStatus: () => this.operationStatus(),
-		awaitIdle: () => this.operations.awaitIdle(),
+		awaitIdle: () => this.awaitTrellisIdle(),
 	});
 	private readonly operations = new TrellisOperationTracker();
+	/** Coalesce metadata and rename events by path before calculating filenames. */
+	private pendingLiveSyncPaths = new Set<string>();
+	private liveSyncTimer: number | null = null;
+	private idleWaiters: ((status: TrellisOperationStatusView) => void)[] = [];
 
 	/** Ribbon button for the tree view, kept so we can show/hide it on toggle. */
 	private ribbonEl: HTMLElement | null = null;
@@ -427,6 +443,11 @@ export default class TrellisPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.register(() => {
+			if (this.liveSyncTimer !== null) window.clearTimeout(this.liveSyncTimer);
+			this.liveSyncTimer = null;
+			this.pendingLiveSyncPaths.clear();
+		});
 		setLang(this.settings.language);
 		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
@@ -518,7 +539,7 @@ export default class TrellisPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file) => {
 				if (file instanceof TFile && file.extension === "md") {
-					void this.syncFile(file);
+					this.queueLiveSync(file.path);
 				}
 				this.scheduleTreeRefresh();
 			})
@@ -545,7 +566,7 @@ export default class TrellisPlugin extends Plugin {
 							this.scheduleUndoPathSave();
 						}
 					}
-					void this.syncFile(file);
+					this.queueLiveSync(file.path);
 				}
 				this.scheduleTreeRefresh();
 			})
@@ -1166,22 +1187,99 @@ export default class TrellisPlugin extends Plugin {
 		issues: { path?: string; message: string }[] = []
 	) {
 		this.operations.finish(id, { status, processed, issues });
+		this.afterWriteOperation();
 	}
 
 	private get bulkActive(): boolean {
 		return this.operations.current()?.kind === "bulk";
 	}
 
-	private operationStatus(): {
-		idle: boolean;
-		current: TrellisOperationReport | null;
-		last: TrellisOperationReport | null;
-	} {
+	private operationStatus(): TrellisOperationStatusView {
+		const pendingSyncs = this.pendingLiveSyncPaths.size;
 		return {
-			idle: this.operations.isIdle(),
+			idle:
+				this.operations.isIdle() &&
+				pendingSyncs === 0 &&
+				this.liveSyncTimer === null,
+			pendingSyncs,
 			current: this.operations.current(),
 			last: this.operations.lastReport(),
 		};
+	}
+
+	private awaitTrellisIdle(): Promise<TrellisOperationStatusView> {
+		const status = this.operationStatus();
+		if (status.idle) return Promise.resolve(status);
+		return new Promise((resolve) => this.idleWaiters.push(resolve));
+	}
+
+	private resolveIdleWaiters() {
+		const status = this.operationStatus();
+		if (!status.idle) return;
+		const waiters = this.idleWaiters;
+		this.idleWaiters = [];
+		for (const resolve of waiters) resolve(status);
+	}
+
+	private afterWriteOperation() {
+		if (this.pendingLiveSyncPaths.size > 0) this.scheduleLiveSyncDrain(0);
+		else this.resolveIdleWaiters();
+	}
+
+	private queueLiveSync(path: string) {
+		if (!this.settings.filenameSyncEnabled) return;
+		this.pendingLiveSyncPaths.add(normalizePath(path));
+		this.scheduleLiveSyncDrain(120, true);
+	}
+
+	private scheduleLiveSyncDrain(delay: number, restart = false) {
+		if (restart && this.liveSyncTimer !== null) {
+			window.clearTimeout(this.liveSyncTimer);
+			this.liveSyncTimer = null;
+		}
+		if (this.liveSyncTimer !== null) return;
+		this.liveSyncTimer = window.setTimeout(() => {
+			this.liveSyncTimer = null;
+			void this.drainLiveSyncQueue();
+		}, delay);
+	}
+
+	private async drainLiveSyncQueue() {
+		if (!this.operations.isIdle()) return;
+		const paths = [...this.pendingLiveSyncPaths];
+		if (paths.length === 0) {
+			this.resolveIdleWaiters();
+			return;
+		}
+		this.pendingLiveSyncPaths.clear();
+		const operation = this.operations.begin("live-sync", "Filename sync", paths.length);
+		if (!operation) {
+			for (const path of paths) this.pendingLiveSyncPaths.add(path);
+			return;
+		}
+		const issues: { path?: string; message: string }[] = [];
+		let processed = 0;
+		for (const path of paths) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile && file.extension === "md") {
+				try {
+					const result = await this.syncFile(file);
+					if (result.status === "blocked" || result.status === "failed") {
+						issues.push({ path, message: result.message ?? result.status });
+					}
+				} catch (error) {
+					issues.push({ path, message: String(error) });
+				}
+			}
+			processed++;
+			this.operations.progress(operation.id, { processed, currentPath: path });
+		}
+		this.operations.finish(operation.id, {
+			status: issues.length > 0 ? "partial-failed" : "completed",
+			processed,
+			issues,
+		});
+		this.afterWriteOperation();
 	}
 
 	private noteState(path: string): AutomationResult<TrellisNoteState> {
@@ -1298,12 +1396,14 @@ export default class TrellisPlugin extends Plugin {
 					? []
 					: [{ path: plan.expected.path, message: result.error.message }],
 			});
+			this.afterWriteOperation();
 			return result;
 		} catch (error) {
 			this.operations.finish(operation.id, {
 				status: "failed",
 				issues: [{ path: plan.expected.path, message: String(error) }],
 			});
+			this.afterWriteOperation();
 			throw error;
 		}
 	}
@@ -1480,16 +1580,16 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
-	/** Sync one file's location tag into its filename tagkey (one direction). */
-	private async syncFile(file: TFile) {
-		if (!this.settings.filenameSyncEnabled) return;
-		if (this.separatorMigrationRunning) return;
-		if (this.automationApplying.has(file.path)) return;
-		if (this.bulkApplying.has(file.path)) return;
-		if (this.renaming.has(file.path)) return; // guard: our own rename echo
+	/** Sync one note's managed tags into its filename slots (one direction). */
+	private async syncFile(file: TFile): Promise<LiveSyncResult> {
+		if (!this.settings.filenameSyncEnabled) return { status: "noop" };
+		if (this.separatorMigrationRunning) return { status: "noop" };
+		if (this.automationApplying.has(file.path)) return { status: "noop" };
+		if (this.bulkApplying.has(file.path)) return { status: "noop" };
+		if (this.renaming.has(file.path)) return { status: "noop" }; // own rename echo
 
 		const cache = this.app.metadataCache.getFileCache(file);
-		if (!cache) return;
+		if (!cache) return { status: "noop" };
 		const fmTags = hashedTagList(cache.frontmatter?.tags);
 		this.trackNoNameManagement(file, fmTags);
 
@@ -1507,7 +1607,10 @@ export default class TrellisPlugin extends Plugin {
 				new Notice(t("notice.multiLocation", { name: file.basename, n }));
 					console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
 				}
-				return;
+				return {
+					status: "blocked",
+					message: "More than one managed tag resolves to the same filename slot.",
+				};
 		} else {
 			this.multiWarned.delete(file.path);
 		}
@@ -1519,14 +1622,14 @@ export default class TrellisPlugin extends Plugin {
 			newBasename = syncedBasenameMulti(file.basename, fmTags, this.settings.schema);
 		} else {
 			const tagkey = pickTagkey(fmTags, this.settings.schema);
-			if (tagkey === null) return; // no location tag → never touch the file
+			if (tagkey === null) return { status: "noop" }; // unmanaged → untouched
 			newBasename = syncedBasename(file.basename, tagkey, this.settings.schema);
 		}
 		if (newBasename === null) {
 			// Already in sync — a previously reported collision (if any) is over.
 			this.collisionWarned.delete(file.path);
 			this.portabilityWarned.delete(file.path);
-			return;
+			return { status: "noop" };
 		}
 		const portabilityIssue = portableBasenameIssue(newBasename);
 		if (portabilityIssue) {
@@ -1543,7 +1646,10 @@ export default class TrellisPlugin extends Plugin {
 					portabilityIssue
 				);
 			}
-			return;
+			return {
+				status: "blocked",
+				message: `The projected filename is not portable: ${portabilityIssue}`,
+			};
 		}
 		this.portabilityWarned.delete(file.path);
 
@@ -1564,7 +1670,10 @@ export default class TrellisPlugin extends Plugin {
 				}
 				console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
 			}
-			return;
+			return {
+				status: "blocked",
+				message: `The target path already exists: ${newPath}`,
+			};
 		}
 		this.collisionWarned.delete(file.path);
 
@@ -1579,9 +1688,11 @@ export default class TrellisPlugin extends Plugin {
 			if (!this.bulkActive) {
 				new Notice(t("notice.renamed", { from: file.basename, to: newBasename }));
 			}
+			return { status: "renamed" };
 		} catch (e) {
 			console.error("TRELLIS rename failed", e);
 			new Notice(t("notice.renameFailed", { name: file.basename }));
+			return { status: "failed", message: String(e) };
 		} finally {
 			this.renaming.delete(oldPath);
 			// Release the new path after the follow-up events settle.
