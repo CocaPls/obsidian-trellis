@@ -155,6 +155,12 @@ interface LiveSyncResult {
 	message?: string;
 }
 
+type GuardedRenameResult =
+	| { status: "renamed"; basename: string }
+	| { status: "not-portable"; basename: string; issue: string }
+	| { status: "collision"; basename: string }
+	| { status: "failed"; basename: string; error: unknown };
+
 interface TrellisOperationStatusView {
 	idle: boolean;
 	pendingSyncs: number;
@@ -1458,12 +1464,12 @@ export default class TrellisPlugin extends Plugin {
 				this.multiWarned.add(file.path);
 				const n = dupGroups.reduce((sum, g) => sum + g.tags.length, 0);
 				new Notice(t("notice.multiLocation", { name: file.basename, n }));
-					console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
-				}
-				return {
-					status: "blocked",
-					message: "More than one managed tag resolves to the same filename slot.",
-				};
+				console.warn("TRELLIS: duplicate location tags on", file.path, dupGroups);
+			}
+			return {
+				status: "blocked",
+				message: "More than one managed tag resolves to the same filename slot.",
+			};
 		} else {
 			this.multiWarned.delete(file.path);
 		}
@@ -1484,73 +1490,63 @@ export default class TrellisPlugin extends Plugin {
 			this.portabilityWarned.delete(file.path);
 			return { status: "noop" };
 		}
-		const portabilityIssue = portableBasenameIssue(newBasename);
-		if (portabilityIssue) {
-			if (!this.portabilityWarned.has(file.path)) {
-				this.portabilityWarned.add(file.path);
+		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
+		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
+		const oldPath = file.path;
+		const oldBasename = file.basename;
+		const renameResult = await this.performGuardedRename(file, newPath);
+
+		if (renameResult.status === "not-portable") {
+			if (!this.portabilityWarned.has(oldPath)) {
+				this.portabilityWarned.add(oldPath);
 				if (!this.bulkActive) {
 					new Notice(t("notice.filenameNotPortable", { name: newBasename }));
 				}
 				console.warn(
 					"TRELLIS: cross-platform filename guard, skipping",
-					file.path,
+					oldPath,
 					"→",
 					newBasename,
-					portabilityIssue
+					renameResult.issue
 				);
 			}
 			return {
 				status: "blocked",
-				message: `The projected filename is not portable: ${portabilityIssue}`,
+				message: `The projected filename is not portable: ${renameResult.issue}`,
 			};
 		}
-		this.portabilityWarned.delete(file.path);
-
-		const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
-		const newPath = normalizePath(`${dir}${newBasename}.${file.extension}`);
+		this.portabilityWarned.delete(oldPath);
 
 		// Collision guard: never rename onto an existing DIFFERENT file — that
 		// would clobber the target (or throw). Warn once and leave both files
 		// alone; the user resolves the name clash by hand. Its own warned-set:
 		// keyed per file until the clash resolves, and suppressed during bulk
 		// passes like every other per-file notice.
-		const existing = this.app.vault.getAbstractFileByPath(newPath);
-		if (existing && existing !== file) {
-			if (!this.collisionWarned.has(file.path)) {
-				this.collisionWarned.add(file.path);
+		if (renameResult.status === "collision") {
+			if (!this.collisionWarned.has(oldPath)) {
+				this.collisionWarned.add(oldPath);
 				if (!this.bulkActive) {
 					new Notice(t("notice.renameCollision", { name: file.basename, target: newBasename }));
 				}
-				console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
+				console.warn("TRELLIS: rename collision, skipping", oldPath, "→", newPath);
 			}
 			return {
 				status: "blocked",
 				message: `The target path already exists: ${newPath}`,
 			};
 		}
-		this.collisionWarned.delete(file.path);
+		this.collisionWarned.delete(oldPath);
 
-		// Capture the OLD path first — renameFile mutates file.path to newPath
-		// in place, so `file.path` in finally would otherwise be the new path.
-		const oldPath = file.path;
-		this.renaming.add(oldPath);
-		this.renaming.add(newPath);
-		try {
-			// renameFile = same path as a manual rename → wikilinks auto-update.
-			await this.app.fileManager.renameFile(file, newPath);
+		if (renameResult.status === "renamed") {
 			if (!this.bulkActive) {
-				new Notice(t("notice.renamed", { from: file.basename, to: newBasename }));
+				new Notice(t("notice.renamed", { from: oldBasename, to: newBasename }));
 			}
 			return { status: "renamed" };
-		} catch (e) {
-			console.error("TRELLIS rename failed", e);
-			new Notice(t("notice.renameFailed", { name: file.basename }));
-			return { status: "failed", message: String(e) };
-		} finally {
-			this.renaming.delete(oldPath);
-			// Release the new path after the follow-up events settle.
-			window.setTimeout(() => this.renaming.delete(newPath), 200);
 		}
+
+		console.error("TRELLIS rename failed", renameResult.error);
+		new Notice(t("notice.renameFailed", { name: file.basename }));
+		return { status: "failed", message: String(renameResult.error) };
 	}
 
 	/** Collect every note's location tag into the sidebar note-tree, sorted.
@@ -3233,9 +3229,11 @@ export default class TrellisPlugin extends Plugin {
 		}
 	}
 
-	/** Rename a file with the infinite-loop guard set, so our own rename's
-	 *  follow-up events don't re-trigger syncFile. Shared by sync + migration. */
-	private async renameGuarded(file: TFile, newPath: string): Promise<boolean> {
+	/** Apply every filename safety rule through Obsidian's link-safe rename API. */
+	private async performGuardedRename(
+		file: TFile,
+		newPath: string
+	): Promise<GuardedRenameResult> {
 		const filename = newPath.split("/").pop() ?? "";
 		const extension = `.${file.extension}`;
 		const basename = filename.endsWith(extension)
@@ -3243,43 +3241,60 @@ export default class TrellisPlugin extends Plugin {
 			: filename;
 		const portabilityIssue = portableBasenameIssue(basename);
 		if (portabilityIssue) {
-			console.warn(
-				"TRELLIS: cross-platform filename guard, skipping",
-				file.path,
-				"→",
-				newPath,
-				portabilityIssue
-			);
-			if (!this.bulkActive) {
-				new Notice(t("notice.filenameNotPortable", { name: basename }));
-			}
-			return false;
+			return { status: "not-portable", basename, issue: portabilityIssue };
 		}
 		// Collision guard: refuse to rename onto a different existing file so a
 		// separator migration / undo can never clobber an unrelated note.
 		const existing = this.app.vault.getAbstractFileByPath(newPath);
 		if (existing && existing !== file) {
-			console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
-			if (!this.bulkActive) {
-				new Notice(t("notice.renameCollision", { name: file.basename, target: newPath }));
-			}
-			return false;
+			return { status: "collision", basename };
 		}
 		// Capture the OLD path — renameFile mutates file.path to newPath in place.
 		const oldPath = file.path;
 		this.renaming.add(oldPath);
 		this.renaming.add(newPath);
 		try {
+			// Same path as a manual rename, so Obsidian updates internal links.
 			await this.app.fileManager.renameFile(file, newPath);
-			return true;
-		} catch (e) {
-			console.error("TRELLIS rename failed", e);
-			if (!this.bulkActive) new Notice(t("notice.renameFailed", { name: file.basename }));
-			return false;
+			return { status: "renamed", basename };
+		} catch (error) {
+			return { status: "failed", basename, error };
 		} finally {
 			this.renaming.delete(oldPath);
 			window.setTimeout(() => this.renaming.delete(newPath), 200);
 		}
+	}
+
+	/** Rename a file for bulk and automation flows, with user-facing feedback. */
+	private async renameGuarded(file: TFile, newPath: string): Promise<boolean> {
+		const result = await this.performGuardedRename(file, newPath);
+		if (result.status === "renamed") return true;
+
+		if (result.status === "not-portable") {
+			console.warn(
+				"TRELLIS: cross-platform filename guard, skipping",
+				file.path,
+				"→",
+				newPath,
+				result.issue
+			);
+			if (!this.bulkActive) {
+				new Notice(t("notice.filenameNotPortable", { name: result.basename }));
+			}
+			return false;
+		}
+
+		if (result.status === "collision") {
+			console.warn("TRELLIS: rename collision, skipping", file.path, "→", newPath);
+			if (!this.bulkActive) {
+				new Notice(t("notice.renameCollision", { name: file.basename, target: newPath }));
+			}
+			return false;
+		}
+
+		console.error("TRELLIS rename failed", result.error);
+		if (!this.bulkActive) new Notice(t("notice.renameFailed", { name: file.basename }));
+		return false;
 	}
 
 	/** Undo the last bootstrap: remove exactly the tags it added. */
