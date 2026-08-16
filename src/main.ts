@@ -1122,7 +1122,7 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		this.pendingLiveSyncPaths.clear();
-		const operation = this.operations.begin("live-sync", "Filename sync", paths.length);
+		const operation = this.operations.begin("live-sync", t("operation.liveSync"), paths.length);
 		if (!operation) {
 			for (const path of paths) this.pendingLiveSyncPaths.add(path);
 			return;
@@ -1267,7 +1267,7 @@ export default class TrellisPlugin extends Plugin {
 		}
 		const operation = await this.beginRecordedOperation(
 			"automation",
-			"Automation apply",
+			t("operation.automation"),
 			1
 		);
 		if (!operation) {

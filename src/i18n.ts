@@ -85,7 +85,15 @@ const EN: Record<string, string> = {
 		'Previous Trellis operation "{name}" stopped before completion. Review the affected notes before continuing.',
 	"notice.operationRecordFailed":
 		"Trellis could not record the operation safely, so no changes were applied.",
-	"operation.automation": "automation apply",
+	"operation.liveSync": "Filename synchronization",
+	"operation.automation": "Automation apply",
+	"operation.status.running": "running",
+	"operation.status.completed": "completed",
+	"operation.status.partial-failed": "partially failed",
+	"operation.status.failed": "failed",
+	"operation.status.cancelled": "cancelled",
+	"operation.status.rolled-back": "rolled back",
+	"operation.status.interrupted": "interrupted",
 	"notice.bootstrapped":
 		'bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
 	"notice.bootstrapProgress": "bootstrapping… {done}/{total}",
@@ -644,7 +652,15 @@ const KO: Record<string, string> = {
 		'이전 Trellis 작업 "{name}"이 완료되기 전에 중단됐습니다. 계속하기 전에 관련 노트를 확인하세요.',
 	"notice.operationRecordFailed":
 		"작업 기록을 안전하게 저장하지 못해 변경을 적용하지 않았습니다.",
+	"operation.liveSync": "파일명 동기화",
 	"operation.automation": "자동화 적용",
+	"operation.status.running": "진행 중",
+	"operation.status.completed": "완료",
+	"operation.status.partial-failed": "일부 실패",
+	"operation.status.failed": "실패",
+	"operation.status.cancelled": "취소됨",
+	"operation.status.rolled-back": "되돌림 완료",
+	"operation.status.interrupted": "중단됨",
 	"notice.bootstrapped":
 		'{n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
 	"notice.bootstrapProgress": "부트스트랩 중… {done}/{total}",

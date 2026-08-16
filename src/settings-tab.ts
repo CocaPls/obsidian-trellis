@@ -35,6 +35,10 @@ import { HEADER_BUTTON_IDS } from "./tree-view";
 import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
 import { cloneSchema } from "./settings-model";
+import type {
+	TrellisOperationKind,
+	TrellisOperationStatus,
+} from "./operation-state";
 import type TrellisPlugin from "./main";
 
 const ROOT_NAMESPACE_PLACEHOLDER = "work";
@@ -81,6 +85,16 @@ function defaultRule(kind: string): TagValueRule | undefined {
 
 function cleanNamespaceInput(value: string): string {
 	return value.trim().replace(/^#/, "").replace(/\/$/, "");
+}
+
+function operationLabel(kind: TrellisOperationKind, fallback: string): string {
+	if (kind === "live-sync") return t("operation.liveSync");
+	if (kind === "automation") return t("operation.automation");
+	return fallback;
+}
+
+function operationStatusLabel(status: TrellisOperationStatus): string {
+	return t(`operation.status.${status}`);
 }
 
 export class TrellisSettingTab extends PluginSettingTab {
@@ -784,8 +798,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 		if (!report) return;
 		const firstIssue = report.issues[0];
 		const description = t("setting.operationAttentionDesc", {
-			name: report.label,
-			status: report.status,
+			name: operationLabel(report.kind, report.label),
+			status: operationStatusLabel(report.status),
 			done: report.processed,
 			total: report.total,
 			detail: firstIssue
