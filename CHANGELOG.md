@@ -10,6 +10,19 @@ development milestones; `0.1.0` is the first public release.
 
 ## Unreleased
 
+## 0.5.1 — Filename projection and write reliability
+
+- Add empty or plain-space filename boundaries and an optional underscore-to-space
+  projection per managed-tag slot while keeping the stored Obsidian tag unchanged.
+- Serialize live sync, bulk changes, and automation through one write owner;
+  coalesce metadata events and expose durable completion, failure, interruption,
+  and idle status instead of leaving an uncertain partial operation.
+- Route every filename mutation through the same portability, collision, re-entry,
+  and link-safe rename guard, with regression tests that keep those paths unified.
+- Extract persisted-settings migration, startup registration, bulk lifecycle, and
+  settings-panel rendering into smaller responsibilities without changing the
+  established Trellis workflow.
+
 ## 0.5.0 — Managed tags and filename structures
 
 - Separate registered **Trellis tags** from their optional filename slots. Each
