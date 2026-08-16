@@ -105,6 +105,11 @@ import {
 
 import { TrellisSettingTab } from "./settings-tab";
 import { TagInventory } from "./tag-inventory";
+import {
+	TrellisOperationTracker,
+	type TrellisOperationReport,
+	type TrellisOperationStatus,
+} from "./operation-state";
 
 const SEPARATOR_SPACING: SeparatorSpacing[] = ["none", "before", "after", "both"];
 
@@ -352,7 +357,10 @@ export default class TrellisPlugin extends Plugin {
 		inspectNote: (path: string) => this.inspectNote(path),
 		planChange: (request: TrellisChangeRequest) => this.planChange(request),
 		applyChange: (plan: TrellisChangePlan) => this.applyChange(plan),
+		operationStatus: () => this.operationStatus(),
+		awaitIdle: () => this.operations.awaitIdle(),
 	});
+	private readonly operations = new TrellisOperationTracker();
 
 	/** Ribbon button for the tree view, kept so we can show/hide it on toggle. */
 	private ribbonEl: HTMLElement | null = null;
@@ -363,9 +371,6 @@ export default class TrellisPlugin extends Plugin {
 	/** Suppress metadata-triggered live sync while guarded automation owns a
 	 * note's frontmatter + filename transaction. */
 	private automationApplying = new Set<string>();
-	/** Global automation-write lock. The flag is set synchronously before the
-	 * first await so two applies, or apply + bulk, cannot both enter. */
-	private automationWriteActive = false;
 	/** Files already warned about carrying multiple location tags (one note =
 	 *  one location). Cleared when a file returns to a single location tag. */
 	private multiWarned = new Set<string>();
@@ -379,10 +384,6 @@ export default class TrellisPlugin extends Plugin {
 	private portabilityWarned = new Set<string>();
 	/** Suppress normal filename sync while separator migration owns renames. */
 	private separatorMigrationRunning = false;
-	/** A bulk pass (bootstrap / separator change / cascade) is running: suppress
-	 *  per-file success/failure notices so the top-right doesn't flood — the
-	 *  progress modal shows aggregate status instead. */
-	private activeBulkOperation: string | null = null;
 	/** Paths whose frontmatter + filename are currently owned by a bulk pass. */
 	private bulkApplying = new Set<string>();
 	/** Managed notes remembered while the active schema has no name-key. This
@@ -898,7 +899,8 @@ export default class TrellisPlugin extends Plugin {
 		onChanged?: () => void
 	) {
 		const operation = t("bulk.title.filenameSync");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, rows.length);
+		if (!operationId) return;
 		const renamed: { originalPath: string; currentPath: string }[] = [];
 		const failed: string[] = [];
 		const progress = new BulkProgressModal(this.app, operation);
@@ -949,7 +951,7 @@ export default class TrellisPlugin extends Plugin {
 			progress.finish({ processed: renamed.length, skipped: [] });
 			onChanged?.();
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -1141,30 +1143,45 @@ export default class TrellisPlugin extends Plugin {
 		);
 	}
 
-	/** Only one vault-wide mutation may run at a time. This prevents two command
-	 * palette actions from interleaving their writes and overwriting undo state. */
-	private beginBulkOperation(label: string): boolean {
-		const active =
-			this.activeBulkOperation ??
-			(this.automationWriteActive ? t("operation.automation") : null);
-		if (active !== null) {
+	/** Only one vault-wide mutation may run at a time. Live sync, automation and
+	 * bulk commands share the same owner instead of maintaining parallel locks. */
+	private beginBulkOperation(label: string, total = 0): string | null {
+		const operation = this.operations.begin("bulk", label, total);
+		if (!operation) {
+			const active = this.operations.current()?.label ?? t("operation.automation");
 			new Notice(
 				t("notice.bulkBusy", {
 					active,
 				})
 			);
-			return false;
+			return null;
 		}
-		this.activeBulkOperation = label;
-		return true;
+		return operation.id;
 	}
 
-	private endBulkOperation(label: string) {
-		if (this.activeBulkOperation === label) this.activeBulkOperation = null;
+	private endBulkOperation(
+		id: string,
+		status: Exclude<TrellisOperationStatus, "running"> = "completed",
+		processed?: number,
+		issues: { path?: string; message: string }[] = []
+	) {
+		this.operations.finish(id, { status, processed, issues });
 	}
 
 	private get bulkActive(): boolean {
-		return this.activeBulkOperation !== null;
+		return this.operations.current()?.kind === "bulk";
+	}
+
+	private operationStatus(): {
+		idle: boolean;
+		current: TrellisOperationReport | null;
+		last: TrellisOperationReport | null;
+	} {
+		return {
+			idle: this.operations.isIdle(),
+			current: this.operations.current(),
+			last: this.operations.lastReport(),
+		};
 	}
 
 	private noteState(path: string): AutomationResult<TrellisNoteState> {
@@ -1260,10 +1277,9 @@ export default class TrellisPlugin extends Plugin {
 	async applyChange(
 		plan: TrellisChangePlan
 	): Promise<AutomationResult<TrellisApplyResult>> {
-		const active =
-			this.activeBulkOperation ??
-			(this.automationWriteActive ? "automation apply" : null);
-		if (active !== null) {
+		const operation = this.operations.begin("automation", "Automation apply", 1);
+		if (!operation) {
+			const active = this.operations.current()?.label ?? "Trellis write";
 			return {
 				ok: false,
 				error: {
@@ -1273,11 +1289,22 @@ export default class TrellisPlugin extends Plugin {
 				},
 			};
 		}
-		this.automationWriteActive = true;
 		try {
-			return await this.applyChangeUnlocked(plan);
-		} finally {
-			this.automationWriteActive = false;
+			const result = await this.applyChangeUnlocked(plan);
+			this.operations.finish(operation.id, {
+				status: result.ok ? "completed" : "failed",
+				processed: result.ok && result.value.status === "applied" ? 1 : 0,
+				issues: result.ok
+					? []
+					: [{ path: plan.expected.path, message: result.error.message }],
+			});
+			return result;
+		} catch (error) {
+			this.operations.finish(operation.id, {
+				status: "failed",
+				issues: [{ path: plan.expected.path, message: String(error) }],
+			});
+			throw error;
 		}
 	}
 
@@ -2212,7 +2239,8 @@ export default class TrellisPlugin extends Plugin {
 		rows: CascadePreviewRow[]
 	) {
 		const operation = t("bulk.title.cascade");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, rows.length);
+		if (!operationId) return;
 		const previousUndo = this.settings.lastCascade;
 		const records: CascadeRecord[] = [];
 		const failed: string[] = [];
@@ -2300,7 +2328,7 @@ export default class TrellisPlugin extends Plugin {
 			progress.finish({ processed: records.length, skipped: [] });
 			new Notice(t("notice.retagged", { n: records.length, from, to }));
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -2311,7 +2339,8 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("bulk.title.cascadeUndo");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, records.length);
+		if (!operationId) return;
 		try {
 			const { restored, remaining } = await this.revertCascadeRecords(records);
 			this.settings.lastCascade = remaining.length > 0 ? remaining : undefined;
@@ -2319,7 +2348,7 @@ export default class TrellisPlugin extends Plugin {
 			this.rebuildTrees();
 			new Notice(t("notice.cascadeUndone", { n: restored }));
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -2401,7 +2430,8 @@ export default class TrellisPlugin extends Plugin {
 		const operation = t(
 			undoing ? "bulk.title.namespaceUndo" : "bulk.title.namespace"
 		);
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, rows.length);
+		if (!operationId) return;
 		const previousUndo = this.settings.lastNamespaceChange;
 		const records: CascadeRecord[] = [];
 		const failed: string[] = [];
@@ -2497,7 +2527,7 @@ export default class TrellisPlugin extends Plugin {
 				})
 			);
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -2568,7 +2598,8 @@ export default class TrellisPlugin extends Plugin {
 	 *  had to skip. */
 	private async applyBootstrap(assign: { path: string; tag: string }[]) {
 		const operation = t("bulk.title.bootstrap");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, assign.length);
+		if (!operationId) return;
 		const record: BootstrapRecord[] = [];
 		const failed: string[] = [];
 		const total = assign.length;
@@ -2611,7 +2642,7 @@ export default class TrellisPlugin extends Plugin {
 				await this.saveSettings();
 				progress.finish({ processed: record.length, skipped: failed });
 			} finally {
-				this.endBulkOperation(operation);
+				this.endBulkOperation(operationId);
 			}
 		}
 	}
@@ -2784,7 +2815,8 @@ export default class TrellisPlugin extends Plugin {
 		rows: { path: string; oldName: string; newName: string }[]
 	) {
 		const operation = t("bulk.title.separator");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, rows.length);
+		if (!operationId) return;
 		const oldSchema = cloneSchema(this.settings.schema);
 		const renames: SeparatorRename[] = [];
 		const failedNames: string[] = [];
@@ -2859,7 +2891,7 @@ export default class TrellisPlugin extends Plugin {
 				}
 			} finally {
 				this.separatorMigrationRunning = false;
-				this.endBulkOperation(operation);
+				this.endBulkOperation(operationId);
 			}
 		}
 	}
@@ -2939,7 +2971,8 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.sepUndo");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, plan.rows.length);
+		if (!operationId) return;
 		const progress = new BulkProgressModal(this.app, operation);
 		progress.open();
 		const completed: SeparatorUndoPlanRow[] = [];
@@ -2983,7 +3016,7 @@ export default class TrellisPlugin extends Plugin {
 			new Notice(t("notice.sepReverted", { n: completed.length }));
 		} finally {
 			this.separatorMigrationRunning = false;
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -3014,7 +3047,8 @@ export default class TrellisPlugin extends Plugin {
 	 *  the rest from each file's frontmatter, recording removals for undo. */
 	private async applyDedup(decisions: DedupDecision[]) {
 		const operation = t("dedup.title");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, decisions.length);
+		if (!operationId) return;
 		const record: DedupRecord[] = [];
 		// Save the record in `finally` so an interrupted pass (e.g. a broken YAML
 		// file mid-loop) still leaves everything removed so far undoable, and
@@ -3058,7 +3092,7 @@ export default class TrellisPlugin extends Plugin {
 				this.settings.lastDedup = record;
 				await this.saveSettings();
 			} finally {
-				this.endBulkOperation(operation);
+				this.endBulkOperation(operationId);
 			}
 		}
 		new Notice(
@@ -3076,7 +3110,8 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.dedupUndo");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, record.length);
+		if (!operationId) return;
 		let restored = 0;
 		const failed: DedupRecord[] = [];
 		try {
@@ -3104,7 +3139,7 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveSettings();
 		new Notice(t("notice.dedupUndone", { n: restored }));
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -3165,7 +3200,8 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.bootstrapUndo");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation, record.length);
+		if (!operationId) return;
 		let undone = 0;
 		const failed: BootstrapRecord[] = [];
 		try {
@@ -3194,7 +3230,7 @@ export default class TrellisPlugin extends Plugin {
 		await this.saveSettings();
 		new Notice(t("notice.undid", { n: undone }));
 		} finally {
-			this.endBulkOperation(operation);
+			this.endBulkOperation(operationId);
 		}
 	}
 
@@ -3268,7 +3304,8 @@ export default class TrellisPlugin extends Plugin {
 	 *  undoable via the symmetric migration back. */
 	private async applyRootChange(newRoot: string) {
 		const operation = t("bulk.title.root");
-		if (!this.beginBulkOperation(operation)) return;
+		const operationId = this.beginBulkOperation(operation);
+		if (!operationId) return;
 		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
 		// Whatever undo record exists NOW is valid for the pre-apply state — a
 		// cancelled pass rolls the vault back to exactly that state, so the record
@@ -3337,7 +3374,7 @@ export default class TrellisPlugin extends Plugin {
 				);
 			}
 			} finally {
-				this.endBulkOperation(operation);
+				this.endBulkOperation(operationId);
 			}
 		}
 	}
