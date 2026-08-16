@@ -41,7 +41,7 @@ code by hand and Trellis restores it from the tag on the next sync.
 - **Sidebar tree** built from tags rather than folders, with note and tag modes,
   new-note creation, current-note reveal, collapse controls, branch visibility,
   and per-managed-tag colors.
-- **Subtree moves** that preview and migrate a location and every descendant,
+- **Subtree moves** that preview and migrate a managed tag branch and every descendant,
   including filenames and wikilinks, with rollback and undo.
 - **Existing-vault import** that derives tags from filename codes for a selected
   vault, folder, or note scope, with dry run, progress controls, and undo.
@@ -64,18 +64,18 @@ put them in `your-vault/.obsidian/plugins/trellis/`, and enable the plugin.
 
 ## Quick start
 
-1. Add a location tag in frontmatter, for example
+1. Add a managed tag in frontmatter, for example
    `tags: [projects/PRJ/01/DOC/01]`.
 2. Trellis syncs the filename code to `PRJ01DOC01`.
 3. Open the tree from the ribbon and move through the hierarchy.
-4. Use **Move location and descendants** to relocate a whole subtree.
+4. Use **Move tag and descendants** to change a whole subtree.
 5. Use **Import existing filenames** to onboard notes that already have codes.
 6. Review every bulk preview before applying it; completed operations retain an
    undo record where supported.
 
 The configured namespace is active immediately. Use a namespace that is not
 already assigned to unrelated tags: every descendant tag under it is
-intentionally treated as a managed location.
+intentionally treated as a managed tag.
 
 ## Flexible filename structures
 
@@ -121,13 +121,13 @@ multi-slot filenames are not always reversibly parseable without their tags.
 
 ![Import target picker](screenshots/bootstrap.png)
 
-**Move a location and its descendants — preview the whole subtree.**
+**Move a managed tag and its descendants — preview the whole subtree.**
 
 ![Subtree move preview](screenshots/cascade-rename.png)
 
-**Duplicate cleanup — keep one location per namespace.**
+**Duplicate cleanup — keep one value per managed filename slot.**
 
-![Duplicate location-tag cleanup](screenshots/dedup.png)
+![Duplicate managed-tag cleanup](screenshots/dedup.png)
 
 ## Settings
 
@@ -161,6 +161,9 @@ Trellis works locally through Obsidian's public vault APIs. It makes no network
 requests, collects no telemetry, shows no ads, requires no account, and does not
 access files outside the current vault.
 
+Renames use Obsidian's file manager and follow Obsidian's **Automatically update
+internal links** setting instead of bypassing its link handling.
+
 Bulk filename and tag changes can affect many notes. Review the preview and keep
 a normal vault backup as you would for any bulk-editing tool.
 
@@ -170,13 +173,6 @@ The pure filename-structure logic lives in [`src/tagkey.ts`](src/tagkey.ts);
 [`src/main.ts`](src/main.ts) connects it to Obsidian. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the local build, tests, and contribution
 workflow.
-
-## Part of
-
-Trellis is the identification component of
-[everything-in-obsidian](https://github.com/CocaPls/everything-in-obsidian), a
-personal hub of pluggable systems for operating an Obsidian vault with a CLI AI.
-Trellis works fully on its own; the hub is optional context.
 
 ## License
 

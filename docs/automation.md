@@ -142,12 +142,43 @@ request and rejects modified output.
   previous frontmatter and reports any rollback failure.
 - Automation applies are globally serialized with one another and with Trellis
   bulk operations. A competing request returns `write-in-progress`.
+- Metadata events for the same note are coalesced before live sync, so changing
+  several tag slots produces one filename calculation from the final state.
+- Bulk and automation writes record a running operation before the first note is
+  changed. If Obsidian stops before completion, the next load reports that
+  operation as `interrupted` instead of silently treating it as complete.
 
 Common error codes include `note-not-found`, `metadata-unavailable`,
 `invalid-request`, `archived-namespace`, `stale-plan`, `write-in-progress`,
 `inline-tag-conflict`, `duplicate-location-tags`, `would-unmanage-note`,
-`target-exists`, `frontmatter-write-failed`, and `rename-failed`. Always branch
+`target-exists`, `frontmatter-write-failed`, `operation-record-failed`, and
+`rename-failed`. Always branch
 on `ok` and retain the structured error for logs.
+
+## Completion status
+
+Wait for Trellis, including queued live-sync work, before treating a change as
+settled:
+
+```js
+const settled = await automation.awaitIdle();
+if (settled.needsAttention) {
+  console.error(settled.attention);
+  throw new Error("Trellis needs review");
+}
+```
+
+`operationStatus()` returns the same shape without waiting: `idle`,
+`pendingSyncs`, `current`, `last`, `needsAttention`, and `attention`. Failure,
+partial failure, and interruption remain in `attention` across later successful
+operations. After reviewing the report, clear it explicitly:
+
+```js
+await automation.acknowledgeOperation(settled.attention.id);
+```
+
+Idle does not mean success. A safe caller requires both `idle === true` and
+`needsAttention === false`.
 
 ## Operational guidance
 

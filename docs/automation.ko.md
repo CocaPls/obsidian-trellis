@@ -138,12 +138,40 @@ if (!applied.ok) {
   롤백까지 실패하면 그 내용도 보고합니다.
 - 자동화 적용은 서로 간에, 그리고 Trellis 일괄 작업과 전역 직렬화합니다. 경쟁
   요청은 `write-in-progress`를 반환합니다.
+- 같은 노트에서 연속된 메타데이터 이벤트는 실시간 동기화 전에 합칩니다. 여러 태그
+  슬롯을 함께 바꾸면 최종 상태로 파일명을 한 번 계산합니다.
+- 일괄 작업과 자동화 쓰기는 첫 노트를 바꾸기 전에 실행 중인 작업을 기록합니다.
+  완료 전에 Obsidian이 멈추면 다음 실행에서 완료로 숨기지 않고 `interrupted`로
+  보고합니다.
 
 주요 오류 코드는 `note-not-found`, `metadata-unavailable`, `invalid-request`,
 `archived-namespace`, `stale-plan`, `write-in-progress`, `inline-tag-conflict`,
 `duplicate-location-tags`, `would-unmanage-note`, `target-exists`,
-`frontmatter-write-failed`, `rename-failed`입니다. 항상 `ok`로 분기하고 구조화된
+`frontmatter-write-failed`, `operation-record-failed`, `rename-failed`입니다. 항상 `ok`로 분기하고 구조화된
 오류를 로그에 보존하세요.
+
+## 완료 상태
+
+대기 중인 실시간 동기화까지 끝난 뒤에만 변경 완료로 취급합니다.
+
+```js
+const settled = await automation.awaitIdle();
+if (settled.needsAttention) {
+  console.error(settled.attention);
+  throw new Error("Trellis 작업 확인 필요");
+}
+```
+
+`operationStatus()`는 기다리지 않고 `idle`, `pendingSyncs`, `current`, `last`,
+`needsAttention`, `attention`을 반환합니다. 실패·부분 실패·중단 보고는 이후 작업이
+성공해도 `attention`에 남습니다. 내용을 확인한 뒤에만 명시적으로 해제합니다.
+
+```js
+await automation.acknowledgeOperation(settled.attention.id);
+```
+
+`idle`은 성공과 같은 뜻이 아닙니다. 안전한 호출자는 `idle === true`와
+`needsAttention === false`를 함께 확인해야 합니다.
 
 ## 운영 지침
 
