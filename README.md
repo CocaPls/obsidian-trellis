@@ -2,177 +2,226 @@
 
 **English** | [한국어](README.ko.md)
 
-[![CI](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml/badge.svg)](https://github.com/CocaPls/obsidian-trellis/actions/workflows/ci.yml)
-· [Community plugin page](https://community.obsidian.md/plugins/trellis)
-
-Trellis uses hierarchical **managed tags** to manage filenames across notes.
-Preview bulk changes, then rename through Obsidian so internal links stay
-updated.
+Trellis uses hierarchical managed tags to keep filename parts consistent across
+many notes. Tags remain the source of truth, and renames go through Obsidian so
+internal links can update with the file.
 
 ```text
-tag  #projects/PRJ/01/DOC/01  →  file  PRJ01DOC01-meeting-notes.md
-tag  #projects/PRJ/01/DOC/02  →  file  PRJ01DOC02-meeting-notes.md  (automatic)
+tag   #projects/PRJ/01/DOC/01
+file  PRJ01DOC01-meeting-notes.md
+
+tag   #projects/PRJ/01/DOC/02
+file  PRJ01DOC02-meeting-notes.md
 ```
 
-![Sidebar tree view](screenshots/tree-view.png)
+Trellis does not require every note to use managed tags. Notes outside the
+registered namespaces keep their existing tags and filenames.
 
-## Why Trellis
+## Why use Trellis?
 
-Renaming tag-derived filename parts by hand is tedious and error-prone. Trellis
-keeps those parts consistent across notes while leaving unrelated notes and free
-filename parts alone.
+A filename prefix can make a large vault easier to scan, but maintaining the
+same structure by hand across many notes is slow and error-prone. Trellis lets
+you describe that structure once and project it from frontmatter tags.
 
-## How it works
+```text
+frontmatter tags → filename structure → Obsidian rename → internal links updated
+```
 
-For `PRJ01DOC01-meeting-notes.md`:
+This keeps the structured part of a filename consistent while leaving an
+optional human-readable title under direct user control.
 
-- `PRJ01DOC01` is the managed **filename code**, built from
-  `#projects/PRJ/01/DOC/01`.
-- `-` is the configurable boundary between the code and title.
-- `meeting-notes` is your free **title**; Trellis does not rewrite it.
+## Core model
 
-The tag is authoritative. Change the tag and the code follows. Edit the managed
-code by hand and Trellis restores it from the tag on the next sync.
+- **Managed tag** — a registered hierarchical tag namespace, such as
+  `#projects/...` or `#areas/...`.
+- **Tag slot** — a filename part projected from one managed tag.
+- **General slot** — the optional free title kept in the filename. A structure
+  can contain at most one general slot.
+- **Boundary** — the symbol, one space, or direct join between populated slots.
+- **Filename structure** — the ordered list of slots and boundaries applied
+  across managed notes.
 
-## Highlights
+Managed tag registration and filename projection are separate. A managed tag
+can appear in the Trellis sidebar without appearing in a filename, and each
+definition can be shown, hidden, or archived independently.
 
-- **Pauseable filename sync** through Obsidian's link-safe rename, with an exact
-  drift preview before resuming and duplicate/collision guards.
-- **Sidebar tree** built from tags rather than folders, with note and tag modes,
-  new-note creation, current-note reveal, collapse controls, branch visibility,
-  and per-managed-tag colors.
-- **Subtree moves** that preview and migrate a managed tag branch and every descendant,
-  including filenames and wikilinks, with rollback and undo.
-- **Existing-vault import** that derives tags from filename codes for a selected
-  vault, folder, or note scope, with dry run, progress controls, and undo.
-- **Safe filename structures** with sparse tag/name slots, symbol/space/empty
-  gaps, custom portable separators, hierarchy display, optional slot wrappers,
-  and filename-only underscore-to-space formatting.
-- **Managed-tag registry and inventory** independent from filename projection,
-  including search, reversible archiving, sidebar-only tags, combinations,
-  drift, and collision reporting.
-- **Korean and English UI**, following Obsidian's language by default.
+## Filename structures
 
-## Install
+The default structure is one tag slot followed by one general slot:
 
-**From Obsidian:** Settings → Community plugins → Browse, search for *Trellis*,
-then install and enable it.
+```text
+[projects tag] - [general title]
+PRJ01DOC01-meeting-notes
+```
 
-**Manually:** download `main.js`, `manifest.json`, and `styles.css` from the
-[latest release](https://github.com/CocaPls/obsidian-trellis/releases/latest),
-put them in `your-vault/.obsidian/plugins/trellis/`, and enable the plugin.
+You can also combine several optional tag slots:
+
+```text
+#projects/PRJ/01 + #areas/ENG/02
+→ PRJ01-project-overview-ENG02
+```
+
+Each note only needs the managed tags that apply to it. Empty slots and their
+unused boundaries collapse automatically.
+
+Per tag slot, you can configure:
+
+- the managed tag definition used as its source;
+- how hierarchy is displayed: hidden, a preset, or safe custom punctuation;
+- no wrapper, round parentheses, or a safe custom wrapper;
+- whether underscores stay unchanged or appear as spaces in the filename.
+
+The underscore option changes only the projected filename text:
+
+```text
+stored tag      #topics/design_system
+filename text   design system
+```
+
+Per boundary, you can choose:
+
+- a symbol with optional spacing on either side;
+- one plain space;
+- no separator.
+
+Trellis rejects structures that cannot be parsed safely, would create duplicate
+filenames, or use characters that are unsafe across supported platforms.
+
+## Main features
+
+- **One-way filename sync** — frontmatter managed tags update filename slots;
+  editing a projected filename part does not rewrite the tag.
+- **Pause and review** — pause filename sync while editing tags, then review the
+  exact drift and collisions before applying the filenames.
+- **Tag tree sidebar** — browse managed hierarchies, open notes, create notes,
+  find the current note, sort, and expand or collapse branches.
+- **Independent sidebar visibility** — show several managed tag definitions,
+  hide individual definitions, or hide selected branches.
+- **Subtree changes** — preview and move a managed tag with all descendants,
+  including reviewed transfers between definitions.
+- **Import existing filenames** — derive managed tag candidates from compatible
+  filenames through a dry run before writing.
+- **Duplicate cleanup** — review notes carrying more than one value for a
+  filename-bearing managed definition and keep the intended value.
+- **Value suggestions** — optionally suggest sequences, dates, timestamps, or
+  alternating alphabet and number segments when creating notes.
+- **Properties labels** — shorten managed tag labels in Obsidian Properties
+  without changing the stored tags.
+- **Inventory** — inspect usage counts, combinations, inline-tag warnings,
+  filename drift, and exact collisions per managed definition.
+
+## Safe writes and completion
+
+Trellis treats filename and tag changes as managed write operations.
+
+- Live sync, automation, and bulk work share one write owner.
+- Repeated metadata events for the same note are coalesced before filename sync.
+- Bulk changes show the affected notes before apply and retain supported undo
+  records.
+- Renames share the same portability, collision, re-entry, and link-safe guard.
+- A failed or cancelled batch either rolls back the completed prefix or retains
+  an exact undo record, depending on the command, and reports anything that
+  still needs review.
+- A write that was running when Obsidian stopped is reported as interrupted on
+  the next load instead of being treated as complete.
+
+Renames use Obsidian's file manager and follow Obsidian's **Automatically update
+internal links** setting.
 
 ## Quick start
 
-1. Add a managed tag in frontmatter, for example
-   `tags: [projects/PRJ/01/DOC/01]`.
-2. Trellis syncs the filename code to `PRJ01DOC01`.
-3. Open the tree from the ribbon and move through the hierarchy.
-4. Use **Move tag and descendants** to change a whole subtree.
-5. Use **Import existing filenames** to onboard notes that already have codes.
-6. Review every bulk preview before applying it; completed operations retain an
-   undo record where supported.
+1. Install and enable Trellis.
+2. Open **Settings → Trellis → Filename & tags**.
+3. Register a managed tag namespace, for example `projects`.
+4. Add that managed tag to a tag slot in the filename structure.
+5. Add a frontmatter tag such as `projects/PRJ/01/DOC/01` to a note.
+6. Review any bulk preview before applying a vault-wide change.
 
-The configured namespace is active immediately. Use a namespace that is not
-already assigned to unrelated tags: every descendant tag under it is
-intentionally treated as a managed tag.
+Example frontmatter:
 
-## Flexible filename structures
+```yaml
+---
+tags:
+  - projects/PRJ/01/DOC/01
+---
+```
 
-The single-code path remains the default, but the same staged editor can model
-multiple optional projections without switching to a separate advanced mode.
+Frontmatter tags are the management source. Inline tags are not rewritten and
+are reported separately when they overlap a managed namespace.
 
-- **Multiple tag slots** combine more than one managed tag with one free title:
+## Automation for tools and AI
 
-  ```text
-  #projects/PRJ/01 + #areas/ENG/02  →  PRJ01-project-overview--ENG02
-  ```
+Trellis exposes a guarded in-process surface for tools that already run inside
+Obsidian:
 
-  Each tag slot has its own registered source, hierarchy display, optional
-  wrapper, and filename-only underscore formatting. The stored Obsidian tag is
-  never rewritten by that display option. Each gap can be a symbol, one space,
-  or nothing. Applying a structure change requires a preview; ambiguous or
-  colliding layouts are rejected. The name slot is optional. With a global
-  `[A]-[B]-[C]` structure, each note may carry only the tags it needs: `A`,
-  `A-B`, `A-C`, and `B-C` coexist while
-  omitted slots and their separators collapse automatically. Removing the
-  name slot shows an explicit free-name loss warning, and exact filename
-  collisions block the structure change.
-- **Root namespace** places every managed tag below a shared root such as
-  `#work/projects/...` without adding that root to filenames. Changes are migrated
-  behind confirmation and are undoable.
-- **Value suggestions** can follow a configurable sequence, date, local/UTC
-  timestamp, or alternating alphabet/number pattern when creating a note.
+```text
+describe / inspectNote → planChange → applyChange → awaitIdle
+```
 
-Filename sync, the nested tag tree, and subtree moves recognize every registered
-Trellis tag. A definition can be filename-bearing, sidebar-only, or hidden from
-the sidebar. The classic notes-only tree lets you choose one visible tag as its axis.
-Subtree moves may also transfer a reviewed branch between definitions, which
-supports deliberate hierarchy split/merge workflows.
-Definitions no longer in active use can be archived after they leave the filename
-structure. Their existing tags remain recognizable for cleanup, while the
-definition leaves active choices and the sidebar until restored.
-Import existing filenames still reads the primary outer code because arbitrary
-multi-slot filenames are not always reversibly parseable without their tags.
+Plans are rejected if the note, tags, filename structure, or target path changed
+after inspection. Callers can query operation status and must treat an
+attention report as unfinished review even when Trellis is otherwise idle.
 
-## Screenshots
+Trellis opens no network, REST, URI, or MCP endpoint. See
+[Guarded automation](docs/automation.md) for the request and result contracts.
 
-**Import existing filenames — choose exactly what to onboard.**
+## Current boundaries
 
-![Import target picker](screenshots/bootstrap.png)
+- Trellis manages frontmatter `tags`; other properties are not filename sources.
+- Each managed definition is single-valued per note for filename projection.
+- A filename structure supports multiple tag slots and at most one free general
+  slot.
+- Trellis renames note files, not matching folders or Folder Note pairs.
+- Multi-value classification, note semantics, folder organization, Git history,
+  and rules for assigning identifiers remain the user's responsibility.
 
-**Move a managed tag and its descendants — preview the whole subtree.**
+These boundaries keep Trellis useful in different vaults without imposing one
+knowledge-management system.
 
-![Subtree move preview](screenshots/cascade-rename.png)
+## Installation
 
-**Duplicate cleanup — keep one value per managed filename slot.**
+### Community plugins
 
-![Duplicate managed-tag cleanup](screenshots/dedup.png)
+In Obsidian, open **Settings → Community plugins → Browse**, search for
+**Trellis**, then install and enable it.
 
-## Settings
+### Manual installation
 
-![Settings tab](screenshots/settings.png)
+Download `main.js`, `manifest.json`, and `styles.css` from a matching
+[GitHub release](https://github.com/CocaPls/obsidian-trellis/releases), then place
+them in:
 
-The settings use two focused sections: general behavior, and filename/tags. The
-latter combines a searchable managed-tag browser with a compact horizontal slot
-order and one selected-item editor. It also covers filename synchronization,
-compact Properties labels, and a live per-definition inventory with combinations,
-drift, and filename collisions.
+```text
+your-vault/.obsidian/plugins/trellis/
+```
 
-Vault-wide setting changes are staged first. Trellis shows the exact affected
-files, checks collisions and parse ambiguity, then applies through Obsidian's
-rename API. A cancel or failure rolls the transaction back.
-
-## Automation for AI and scripts
-
-Trellis exposes an experimental, in-process `describe / inspectNote → planChange
-→ applyChange` surface for tools that already run inside Obsidian. It opens no
-network, REST, URI, or MCP endpoint. Plans are rejected if the note or filename structure
-changed after inspection.
-
-See [Guarded automation](docs/automation.md) for examples, result shapes, and
-safety boundaries.
+Enable Trellis from Obsidian's Community plugins settings.
 
 ## Compatibility, privacy, and safety
 
-Requires Obsidian **1.8.7** or newer. Desktop and mobile.
+- Requires Obsidian 1.8.7 or newer.
+- Supports desktop and mobile.
+- Runs locally through Obsidian's public APIs.
+- Makes no network requests and collects no telemetry.
+- Does not access files outside the current vault.
 
-Trellis works locally through Obsidian's public vault APIs. It makes no network
-requests, collects no telemetry, shows no ads, requires no account, and does not
-access files outside the current vault.
-
-Renames use Obsidian's file manager and follow Obsidian's **Automatically update
-internal links** setting instead of bypassing its link handling.
-
-Bulk filename and tag changes can affect many notes. Review the preview and keep
-a normal vault backup as you would for any bulk-editing tool.
+Filename and tag migrations can affect many notes. Review the preview and keep a
+normal vault backup before large changes.
 
 ## Development
 
-The pure filename-structure logic lives in [`src/tagkey.ts`](src/tagkey.ts);
-[`src/main.ts`](src/main.ts) connects it to Obsidian. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the local build, tests, and contribution
-workflow.
+```bash
+npm ci
+npm run lint
+npm run build
+npm test
+```
+
+Pure filename-structure logic lives in `src/tagkey.ts`. Persisted settings and
+operation tracking live in `src/settings-model.ts` and
+`src/operation-state.ts`. Obsidian integration lives in `src/main.ts`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development and release workflow.
 
 ## License
 
