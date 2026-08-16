@@ -122,8 +122,8 @@ Trellis treats filename and tag changes as managed write operations.
 - A failed or cancelled batch either rolls back the completed prefix or retains
   an exact undo record, depending on the command, and reports anything that
   still needs review.
-- A write that was running when Obsidian stopped is reported as interrupted on
-  the next load instead of being treated as complete.
+- A recorded bulk or automation write that was running when Obsidian stopped is
+  reported as interrupted on the next load instead of being treated as complete.
 
 Renames use Obsidian's file manager and follow Obsidian's **Automatically update
 internal links** setting.
