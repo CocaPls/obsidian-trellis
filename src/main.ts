@@ -107,6 +107,8 @@ import { TrellisSettingTab } from "./settings-tab";
 import { TagInventory } from "./tag-inventory";
 import {
 	TrellisOperationTracker,
+	interruptedReport,
+	type TrellisOperationKind,
 	type TrellisOperationReport,
 	type TrellisOperationStatus,
 } from "./operation-state";
@@ -131,6 +133,26 @@ function sameStrings(a: string[], b: string[]): boolean {
 
 function hashedTagList(raw: unknown): string[] {
 	return normalizeTagList(raw).map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+}
+
+function isOperationReport(value: unknown): value is TrellisOperationReport {
+	if (!isPlainObject(value)) return false;
+	return (
+		typeof value.id === "string" &&
+		(value.kind === "live-sync" || value.kind === "automation" || value.kind === "bulk") &&
+		typeof value.label === "string" &&
+		(value.status === "running" ||
+			value.status === "completed" ||
+			value.status === "partial-failed" ||
+			value.status === "failed" ||
+			value.status === "cancelled" ||
+			value.status === "rolled-back" ||
+			value.status === "interrupted") &&
+		typeof value.startedAt === "number" &&
+		typeof value.total === "number" &&
+		typeof value.processed === "number" &&
+		Array.isArray(value.issues)
+	);
 }
 
 /**
@@ -219,8 +241,33 @@ interface LiveSyncResult {
 interface TrellisOperationStatusView {
 	idle: boolean;
 	pendingSyncs: number;
+	needsAttention: boolean;
 	current: TrellisOperationReport | null;
 	last: TrellisOperationReport | null;
+	attention: TrellisOperationReport | null;
+}
+
+interface MutableOperationOutcome {
+	status: Exclude<TrellisOperationStatus, "running">;
+	processed: number;
+	issues: { path?: string; message: string }[];
+}
+
+function newOperationOutcome(): MutableOperationOutcome {
+	return { status: "completed", processed: 0, issues: [] };
+}
+
+function recordUnexpectedFailure(outcome: MutableOperationOutcome, error: unknown) {
+	outcome.status = outcome.processed > 0 ? "partial-failed" : "failed";
+	outcome.issues.push({ message: String(error) });
+}
+
+function operationNeedsAttention(report: TrellisOperationReport): boolean {
+	return (
+		report.status === "failed" ||
+		report.status === "partial-failed" ||
+		report.status === "interrupted"
+	);
 }
 
 interface TrellisSettings {
@@ -267,6 +314,11 @@ interface TrellisSettings {
 	lastRootChange?: RootChangeRecord;
 	/** The last primary-namespace migration (for undo). */
 	lastNamespaceChange?: NamespaceChangeRecord;
+	/** Last recorded bulk/automation write. A running record on load means the
+	 * previous Obsidian session stopped before Trellis reported completion. */
+	lastOperation?: TrellisOperationReport;
+	/** Failure/interruption retained until a user or caller explicitly reviews it. */
+	operationAttention?: TrellisOperationReport;
 }
 
 interface HiddenTagBranch {
@@ -371,8 +423,10 @@ export default class TrellisPlugin extends Plugin {
 		applyChange: (plan: TrellisChangePlan) => this.applyChange(plan),
 		operationStatus: () => this.operationStatus(),
 		awaitIdle: () => this.awaitTrellisIdle(),
+		acknowledgeOperation: (id: string) => this.acknowledgeOperation(id),
 	});
 	private readonly operations = new TrellisOperationTracker();
+	private interruptedOperationOnLoad: TrellisOperationReport | null = null;
 	/** Coalesce metadata and rename events by path before calculating filenames. */
 	private pendingLiveSyncPaths = new Set<string>();
 	private liveSyncTimer: number | null = null;
@@ -449,6 +503,13 @@ export default class TrellisPlugin extends Plugin {
 			this.pendingLiveSyncPaths.clear();
 		});
 		setLang(this.settings.language);
+		if (this.interruptedOperationOnLoad) {
+			new Notice(
+				t("notice.operationInterrupted", {
+					name: this.interruptedOperationOnLoad.label,
+				})
+			);
+		}
 		this.refreshNoNameManagedPaths();
 		this.addSettingTab(new TrellisSettingTab(this.app, this));
 		this.app.workspace.onLayoutReady(() => this.installPropertyTagDecorator());
@@ -661,6 +722,18 @@ export default class TrellisPlugin extends Plugin {
 		const data = isPlainObject(rawData) ? rawData : {};
 		const loaded = data as Partial<TrellisSettings> & Partial<LegacyConfig>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+		let operationRecovered = false;
+		if (!isOperationReport(loaded.lastOperation)) {
+			this.settings.lastOperation = undefined;
+		} else if (loaded.lastOperation.status === "running") {
+			this.settings.lastOperation = interruptedReport(loaded.lastOperation);
+			this.settings.operationAttention = this.settings.lastOperation;
+			this.interruptedOperationOnLoad = this.settings.lastOperation;
+			operationRecovered = true;
+		}
+		if (!isOperationReport(loaded.operationAttention)) {
+			if (!operationRecovered) this.settings.operationAttention = undefined;
+		}
 		// Give settings its OWN schema so edits never mutate the shared default.
 		// Three cases: (a) saved schema → use it (loadData yields fresh objects);
 		// (b) legacy scalar config → migrate; (c) fresh install → own default.
@@ -740,7 +813,8 @@ export default class TrellisPlugin extends Plugin {
 			loaded.treeTagDefinitionId !== this.settings.treeTagDefinitionId ||
 			"treeTagKeyNamespace" in data ||
 			"advancedMode" in data ||
-			"suppressSchemaConfirm" in data
+			"suppressSchemaConfirm" in data ||
+			operationRecovered
 		) {
 			await this.saveSettings();
 		}
@@ -920,8 +994,9 @@ export default class TrellisPlugin extends Plugin {
 		onChanged?: () => void
 	) {
 		const operation = t("bulk.title.filenameSync");
-		const operationId = this.beginBulkOperation(operation, rows.length);
+		const operationId = await this.beginBulkOperation(operation, rows.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const renamed: { originalPath: string; currentPath: string }[] = [];
 		const failed: string[] = [];
 		const progress = new BulkProgressModal(this.app, operation);
@@ -947,6 +1022,10 @@ export default class TrellisPlugin extends Plugin {
 					break;
 				}
 				renamed.push({ originalPath: row.path, currentPath: file.path });
+				this.operations.progress(operationId, {
+					processed: index + 1,
+					currentPath: row.path,
+				});
 				progress.report(index + 1, rows.length, failed.length);
 			}
 
@@ -963,6 +1042,14 @@ export default class TrellisPlugin extends Plugin {
 					skipped: [...failed, ...rollbackFailed],
 					outcome: "rolled-back",
 				});
+				outcome.status = rollbackFailed.length > 0 ? "partial-failed" : "rolled-back";
+				outcome.processed = renamed.length - rollbackFailed.length;
+				outcome.issues = [...failed, ...rollbackFailed].map((path) => ({
+					path,
+					message: rollbackFailed.includes(path)
+						? "Filename rollback failed."
+						: "Filename synchronization stopped.",
+				}));
 				return;
 			}
 
@@ -970,9 +1057,13 @@ export default class TrellisPlugin extends Plugin {
 			await this.saveSettings();
 			this.rebuildTrees();
 			progress.finish({ processed: renamed.length, skipped: [] });
+			outcome.processed = renamed.length;
 			onChanged?.();
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -1166,28 +1257,73 @@ export default class TrellisPlugin extends Plugin {
 
 	/** Only one vault-wide mutation may run at a time. Live sync, automation and
 	 * bulk commands share the same owner instead of maintaining parallel locks. */
-	private beginBulkOperation(label: string, total = 0): string | null {
-		const operation = this.operations.begin("bulk", label, total);
+	private async beginRecordedOperation(
+		kind: TrellisOperationKind,
+		label: string,
+		total: number
+	): Promise<TrellisOperationReport | null> {
+		const operation = this.operations.begin(kind, label, total);
+		if (!operation) return null;
+		this.settings.lastOperation = operation;
+		try {
+			await this.saveSettings();
+			return operation;
+		} catch (error) {
+			console.error("TRELLIS could not record operation start", error);
+			this.operations.finish(operation.id, {
+				status: "failed",
+				issues: [{ message: `Could not record operation start: ${String(error)}` }],
+			});
+			this.afterWriteOperation();
+			return null;
+		}
+	}
+
+	private async beginBulkOperation(label: string, total = 0): Promise<string | null> {
+		const activeBefore = this.operations.current();
+		if (activeBefore) {
+			new Notice(t("notice.bulkBusy", { active: activeBefore.label }));
+			return null;
+		}
+		const operation = await this.beginRecordedOperation("bulk", label, total);
 		if (!operation) {
-			const active = this.operations.current()?.label ?? t("operation.automation");
-			new Notice(
-				t("notice.bulkBusy", {
-					active,
-				})
-			);
+			new Notice(t("notice.operationRecordFailed"));
 			return null;
 		}
 		return operation.id;
 	}
 
-	private endBulkOperation(
+	private async finishRecordedOperation(
 		id: string,
 		status: Exclude<TrellisOperationStatus, "running"> = "completed",
 		processed?: number,
 		issues: { path?: string; message: string }[] = []
 	) {
-		this.operations.finish(id, { status, processed, issues });
+		const report = this.operations.finish(id, { status, processed, issues });
+		if (report) {
+			this.settings.lastOperation = report;
+			if (operationNeedsAttention(report)) this.settings.operationAttention = report;
+			try {
+				await this.saveSettings();
+			} catch (error) {
+				// Keep the in-memory result. The still-running durable marker is safer
+				// than falsely recording completion if settings persistence failed.
+				console.error("TRELLIS could not record operation completion", error);
+			}
+		}
 		this.afterWriteOperation();
+	}
+
+	private async endBulkOperation(
+		id: string,
+		outcome: MutableOperationOutcome
+	) {
+		await this.finishRecordedOperation(
+			id,
+			outcome.status,
+			outcome.processed,
+			outcome.issues
+		);
 	}
 
 	private get bulkActive(): boolean {
@@ -1196,15 +1332,32 @@ export default class TrellisPlugin extends Plugin {
 
 	private operationStatus(): TrellisOperationStatusView {
 		const pendingSyncs = this.pendingLiveSyncPaths.size;
+		const attention = this.settings.operationAttention ?? null;
 		return {
 			idle:
 				this.operations.isIdle() &&
 				pendingSyncs === 0 &&
 				this.liveSyncTimer === null,
 			pendingSyncs,
+			needsAttention: attention !== null,
 			current: this.operations.current(),
-			last: this.operations.lastReport(),
+			last: this.operations.lastReport() ?? this.settings.lastOperation ?? null,
+			attention,
 		};
+	}
+
+	private async acknowledgeOperation(id: string): Promise<boolean> {
+		const report = this.settings.operationAttention;
+		if (report?.id !== id) return false;
+		this.settings.operationAttention = undefined;
+		try {
+			await this.saveSettings();
+			return true;
+		} catch (error) {
+			this.settings.operationAttention = report;
+			console.error("TRELLIS could not acknowledge operation report", error);
+			return false;
+		}
 	}
 
 	private awaitTrellisIdle(): Promise<TrellisOperationStatusView> {
@@ -1274,11 +1427,20 @@ export default class TrellisPlugin extends Plugin {
 			processed++;
 			this.operations.progress(operation.id, { processed, currentPath: path });
 		}
-		this.operations.finish(operation.id, {
+		const report = this.operations.finish(operation.id, {
 			status: issues.length > 0 ? "partial-failed" : "completed",
 			processed,
 			issues,
 		});
+		if (issues.length > 0 && report) {
+			this.settings.lastOperation = report;
+			this.settings.operationAttention = report;
+			try {
+				await this.saveSettings();
+			} catch (error) {
+				console.error("TRELLIS could not record live-sync failure", error);
+			}
+		}
 		this.afterWriteOperation();
 	}
 
@@ -1375,35 +1537,46 @@ export default class TrellisPlugin extends Plugin {
 	async applyChange(
 		plan: TrellisChangePlan
 	): Promise<AutomationResult<TrellisApplyResult>> {
-		const operation = this.operations.begin("automation", "Automation apply", 1);
-		if (!operation) {
-			const active = this.operations.current()?.label ?? "Trellis write";
+		const activeBefore = this.operations.current();
+		if (activeBefore) {
 			return {
 				ok: false,
 				error: {
 					code: "write-in-progress",
 					message: "Another Trellis write is already in progress.",
-					details: { active },
+					details: { active: activeBefore.label },
+				},
+			};
+		}
+		const operation = await this.beginRecordedOperation(
+			"automation",
+			"Automation apply",
+			1
+		);
+		if (!operation) {
+			return {
+				ok: false,
+				error: {
+					code: "operation-record-failed",
+					message: "Trellis could not record the operation safely, so nothing was applied.",
 				},
 			};
 		}
 		try {
 			const result = await this.applyChangeUnlocked(plan);
-			this.operations.finish(operation.id, {
-				status: result.ok ? "completed" : "failed",
-				processed: result.ok && result.value.status === "applied" ? 1 : 0,
-				issues: result.ok
+			await this.finishRecordedOperation(
+				operation.id,
+				result.ok ? "completed" : "failed",
+				result.ok && result.value.status === "applied" ? 1 : 0,
+				result.ok
 					? []
-					: [{ path: plan.expected.path, message: result.error.message }],
-			});
-			this.afterWriteOperation();
+					: [{ path: plan.expected.path, message: result.error.message }]
+			);
 			return result;
 		} catch (error) {
-			this.operations.finish(operation.id, {
-				status: "failed",
-				issues: [{ path: plan.expected.path, message: String(error) }],
-			});
-			this.afterWriteOperation();
+			await this.finishRecordedOperation(operation.id, "failed", 0, [
+				{ path: plan.expected.path, message: String(error) },
+			]);
 			throw error;
 		}
 	}
@@ -2350,8 +2523,9 @@ export default class TrellisPlugin extends Plugin {
 		rows: CascadePreviewRow[]
 	) {
 		const operation = t("bulk.title.cascade");
-		const operationId = this.beginBulkOperation(operation, rows.length);
+		const operationId = await this.beginBulkOperation(operation, rows.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const previousUndo = this.settings.lastCascade;
 		const records: CascadeRecord[] = [];
 		const failed: string[] = [];
@@ -2418,6 +2592,10 @@ export default class TrellisPlugin extends Plugin {
 					}, 200);
 				}
 				progress.report(i + 1, rows.length, failed.length);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: row.path,
+				});
 			}
 
 			if (progress.wasCancelled || failed.length > 0) {
@@ -2430,6 +2608,15 @@ export default class TrellisPlugin extends Plugin {
 					skipped: failed,
 					outcome: "rolled-back",
 				});
+				outcome.status = remaining.length > 0 ? "partial-failed" : "rolled-back";
+				outcome.processed = restored;
+				outcome.issues = [
+					...failed.map((path) => ({ path, message: "Tag move stopped." })),
+					...remaining.map((record) => ({
+						path: record.currentPath,
+						message: "Tag move rollback is incomplete.",
+					})),
+				];
 				return;
 			}
 
@@ -2437,9 +2624,13 @@ export default class TrellisPlugin extends Plugin {
 			await this.saveSettings();
 			this.rebuildTrees();
 			progress.finish({ processed: records.length, skipped: [] });
+			outcome.processed = records.length;
 			new Notice(t("notice.retagged", { n: records.length, from, to }));
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -2450,16 +2641,28 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("bulk.title.cascadeUndo");
-		const operationId = this.beginBulkOperation(operation, records.length);
+		const operationId = await this.beginBulkOperation(operation, records.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		try {
 			const { restored, remaining } = await this.revertCascadeRecords(records);
 			this.settings.lastCascade = remaining.length > 0 ? remaining : undefined;
 			await this.saveSettings();
 			this.rebuildTrees();
 			new Notice(t("notice.cascadeUndone", { n: restored }));
+			outcome.processed = restored;
+			if (remaining.length > 0) {
+				outcome.status = "partial-failed";
+				outcome.issues = remaining.map((record) => ({
+					path: record.currentPath,
+					message: "Tag move undo is incomplete.",
+				}));
+			}
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -2541,8 +2744,9 @@ export default class TrellisPlugin extends Plugin {
 		const operation = t(
 			undoing ? "bulk.title.namespaceUndo" : "bulk.title.namespace"
 		);
-		const operationId = this.beginBulkOperation(operation, rows.length);
+		const operationId = await this.beginBulkOperation(operation, rows.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const previousUndo = this.settings.lastNamespaceChange;
 		const records: CascadeRecord[] = [];
 		const failed: string[] = [];
@@ -2605,6 +2809,10 @@ export default class TrellisPlugin extends Plugin {
 					}, 200);
 				}
 				progress?.report(i + 1, rows.length, failed.length);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: row.path,
+				});
 			}
 
 			if (progress?.wasCancelled || failed.length > 0) {
@@ -2618,6 +2826,15 @@ export default class TrellisPlugin extends Plugin {
 					skipped: [...failed, ...remaining.map((record) => record.currentPath)],
 					outcome: "rolled-back",
 				});
+				outcome.status = remaining.length > 0 ? "partial-failed" : "rolled-back";
+				outcome.processed = restored;
+				outcome.issues = [
+					...failed.map((path) => ({ path, message: "Namespace change stopped." })),
+					...remaining.map((record) => ({
+						path: record.currentPath,
+						message: "Namespace rollback is incomplete.",
+					})),
+				];
 				return;
 			}
 
@@ -2631,14 +2848,18 @@ export default class TrellisPlugin extends Plugin {
 			await this.saveSettings();
 			this.rebuildTrees();
 			progress?.finish({ processed: records.length, skipped: [] });
+			outcome.processed = records.length;
 			new Notice(
 				t(undoing ? "notice.namespaceUndone" : "notice.nsApplied", {
 					n: records.length,
 					ns: primaryNamespace(targetSchema),
 				})
 			);
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -2709,8 +2930,9 @@ export default class TrellisPlugin extends Plugin {
 	 *  had to skip. */
 	private async applyBootstrap(assign: { path: string; tag: string }[]) {
 		const operation = t("bulk.title.bootstrap");
-		const operationId = this.beginBulkOperation(operation, assign.length);
+		const operationId = await this.beginBulkOperation(operation, assign.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const record: BootstrapRecord[] = [];
 		const failed: string[] = [];
 		const total = assign.length;
@@ -2745,15 +2967,29 @@ export default class TrellisPlugin extends Plugin {
 					}
 				}
 				progress.report(i + 1, total, failed.length);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: r.path,
+				});
 			}
+		} catch (error) {
+			outcome.status = "partial-failed";
+			outcome.issues.push({ message: String(error) });
+			throw error;
 		} finally {
 			try {
 				// Save what we managed to write even if the loop threw — keeps undo intact.
 				this.settings.lastBootstrap = record;
 				await this.saveSettings();
 				progress.finish({ processed: record.length, skipped: failed });
+				outcome.processed = record.length;
+				if (progress.wasCancelled) outcome.status = "cancelled";
+				else if (failed.length > 0) outcome.status = "partial-failed";
+				outcome.issues.push(
+					...failed.map((path) => ({ path, message: "Bootstrap skipped this note." }))
+				);
 			} finally {
-				this.endBulkOperation(operationId);
+				await this.endBulkOperation(operationId, outcome);
 			}
 		}
 	}
@@ -2926,8 +3162,9 @@ export default class TrellisPlugin extends Plugin {
 		rows: { path: string; oldName: string; newName: string }[]
 	) {
 		const operation = t("bulk.title.separator");
-		const operationId = this.beginBulkOperation(operation, rows.length);
+		const operationId = await this.beginBulkOperation(operation, rows.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const oldSchema = cloneSchema(this.settings.schema);
 		const renames: SeparatorRename[] = [];
 		const failedNames: string[] = [];
@@ -2952,6 +3189,10 @@ export default class TrellisPlugin extends Plugin {
 					}
 				}
 				progress?.report(i + 1, total, failedNames.length);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: r.path,
+				});
 			}
 		} catch (error) {
 			fatal = true;
@@ -2977,6 +3218,15 @@ export default class TrellisPlugin extends Plugin {
 						skipped: failedNames,
 						outcome: "rolled-back",
 					});
+					outcome.status = remaining.length > 0 ? "partial-failed" : "rolled-back";
+					outcome.processed = undone;
+					outcome.issues = [
+						...failedNames.map((message) => ({ message })),
+						...remaining.map((record) => ({
+							path: record.path,
+							message: "Filename rollback is incomplete.",
+						})),
+					];
 				} else {
 					this.settings.schema = normalizeSchemaModel(cloneSchema(newSchema));
 					this.settings.lastSeparatorChange =
@@ -2999,10 +3249,11 @@ export default class TrellisPlugin extends Plugin {
 								to: primarySeparator(newSchema),
 							})
 						);
+					outcome.processed = renames.length;
 				}
 			} finally {
 				this.separatorMigrationRunning = false;
-				this.endBulkOperation(operationId);
+				await this.endBulkOperation(operationId, outcome);
 			}
 		}
 	}
@@ -3082,8 +3333,9 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.sepUndo");
-		const operationId = this.beginBulkOperation(operation, plan.rows.length);
+		const operationId = await this.beginBulkOperation(operation, plan.rows.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const progress = new BulkProgressModal(this.app, operation);
 		progress.open();
 		const completed: SeparatorUndoPlanRow[] = [];
@@ -3099,6 +3351,10 @@ export default class TrellisPlugin extends Plugin {
 					break;
 				}
 				completed.push(row);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: row.currentPath,
+				});
 				progress.report(i + 1, plan.rows.length, failed.length);
 			}
 
@@ -3115,6 +3371,15 @@ export default class TrellisPlugin extends Plugin {
 					skipped: [...failed, ...rollbackFailed],
 					outcome: "rolled-back",
 				});
+				outcome.status = rollbackFailed.length > 0 ? "partial-failed" : "rolled-back";
+				outcome.processed = completed.length - rollbackFailed.length;
+				outcome.issues = [
+					...failed.map((path) => ({ path, message: "Separator undo stopped." })),
+					...rollbackFailed.map((path) => ({
+						path,
+						message: "Separator undo rollback is incomplete.",
+					})),
+				];
 				return;
 			}
 
@@ -3124,10 +3389,14 @@ export default class TrellisPlugin extends Plugin {
 			this.refreshNoNameManagedPaths();
 			this.rebuildTrees();
 			progress.finish({ processed: completed.length, skipped: [] });
+			outcome.processed = completed.length;
 			new Notice(t("notice.sepReverted", { n: completed.length }));
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
 			this.separatorMigrationRunning = false;
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -3158,16 +3427,22 @@ export default class TrellisPlugin extends Plugin {
 	 *  the rest from each file's frontmatter, recording removals for undo. */
 	private async applyDedup(decisions: DedupDecision[]) {
 		const operation = t("dedup.title");
-		const operationId = this.beginBulkOperation(operation, decisions.length);
+		const operationId = await this.beginBulkOperation(operation, decisions.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const record: DedupRecord[] = [];
+		const failed: string[] = [];
 		// Save the record in `finally` so an interrupted pass (e.g. a broken YAML
 		// file mid-loop) still leaves everything removed so far undoable, and
 		// isolate per-file errors so one bad file can't abort the whole cleanup.
 		try {
-			for (const d of decisions) {
+			for (let index = 0; index < decisions.length; index++) {
+				const d = decisions[index];
 				const file = this.app.vault.getAbstractFileByPath(d.path);
-				if (!(file instanceof TFile)) continue;
+				if (!(file instanceof TFile)) {
+					failed.push(d.path);
+					continue;
+				}
 				const removed: string[] = [];
 				try {
 					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
@@ -3191,19 +3466,33 @@ export default class TrellisPlugin extends Plugin {
 					});
 				} catch (e) {
 					console.error("TRELLIS dedup skipped (frontmatter error)", d.path, e);
+					failed.push(d.path);
 					continue;
 				}
 				if (removed.length) {
 					record.push({ path: d.path, removed });
 					this.multiWarned.delete(d.path);
 				}
+				this.operations.progress(operationId, {
+					processed: index + 1,
+					currentPath: d.path,
+				});
 			}
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
 			try {
 				this.settings.lastDedup = record;
 				await this.saveSettings();
+				outcome.processed = decisions.length - failed.length;
+				if (failed.length > 0) outcome.status = "partial-failed";
+				outcome.issues = failed.map((path) => ({
+					path,
+					message: "Duplicate-tag cleanup skipped this note.",
+				}));
 			} finally {
-				this.endBulkOperation(operationId);
+				await this.endBulkOperation(operationId, outcome);
 			}
 		}
 		new Notice(
@@ -3221,36 +3510,46 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.dedupUndo");
-		const operationId = this.beginBulkOperation(operation, record.length);
+		const operationId = await this.beginBulkOperation(operation, record.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		let restored = 0;
 		const failed: DedupRecord[] = [];
 		try {
-		for (const r of record) {
-			const file = this.app.vault.getAbstractFileByPath(r.path);
-			if (!(file instanceof TFile)) {
-				failed.push(r);
-				continue;
+			for (const r of record) {
+				const file = this.app.vault.getAbstractFileByPath(r.path);
+				if (!(file instanceof TFile)) {
+					failed.push(r);
+					continue;
+				}
+				// Per-file isolation: a malformed YAML file must not abort the whole
+				// undo — collect it and keep the record so it can be retried.
+				try {
+					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+						const tags = normalizeTagList(fm.tags);
+						for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
+						fm.tags = tags;
+					});
+					restored++;
+				} catch (e) {
+					console.error("TRELLIS dedup undo skipped (frontmatter error)", r.path, e);
+					failed.push(r);
+				}
 			}
-			// Per-file isolation: a malformed YAML file must not abort the whole
-			// undo — collect it and keep the record so it can be retried.
-			try {
-				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-					const tags = normalizeTagList(fm.tags);
-					for (const tg of r.removed) if (!tags.includes(tg)) tags.push(tg);
-					fm.tags = tags;
-				});
-				restored++;
-			} catch (e) {
-				console.error("TRELLIS dedup undo skipped (frontmatter error)", r.path, e);
-				failed.push(r);
-			}
-		}
-		this.settings.lastDedup = failed.length > 0 ? failed : undefined;
-		await this.saveSettings();
-		new Notice(t("notice.dedupUndone", { n: restored }));
+			this.settings.lastDedup = failed.length > 0 ? failed : undefined;
+			await this.saveSettings();
+			new Notice(t("notice.dedupUndone", { n: restored }));
+			outcome.processed = restored;
+			if (failed.length > 0) outcome.status = "partial-failed";
+			outcome.issues = failed.map((record) => ({
+				path: record.path,
+				message: "Duplicate-tag undo skipped this note.",
+			}));
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -3311,37 +3610,47 @@ export default class TrellisPlugin extends Plugin {
 			return;
 		}
 		const operation = t("cmd.bootstrapUndo");
-		const operationId = this.beginBulkOperation(operation, record.length);
+		const operationId = await this.beginBulkOperation(operation, record.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		let undone = 0;
 		const failed: BootstrapRecord[] = [];
 		try {
-		for (const r of record) {
-			const file = this.app.vault.getAbstractFileByPath(r.path);
-			if (!(file instanceof TFile)) {
-				failed.push(r);
-				continue;
+			for (const r of record) {
+				const file = this.app.vault.getAbstractFileByPath(r.path);
+				if (!(file instanceof TFile)) {
+					failed.push(r);
+					continue;
+				}
+				// Per-file isolation: a malformed YAML file must not abort the whole
+				// undo — collect it and keep the record so it can be retried.
+				try {
+					await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
+						const tags = normalizeTagList(fm.tags);
+						const next = tags.filter((t) => t !== r.tag);
+						if (next.length) fm.tags = next;
+						else delete fm.tags;
+					});
+					undone++;
+				} catch (e) {
+					console.error("TRELLIS bootstrap undo skipped (frontmatter error)", r.path, e);
+					failed.push(r);
+				}
 			}
-			// Per-file isolation: a malformed YAML file must not abort the whole
-			// undo — collect it and keep the record so it can be retried.
-			try {
-				await this.app.fileManager.processFrontMatter(file, (fm: TrellisFrontmatter) => {
-					const tags = normalizeTagList(fm.tags);
-					const next = tags.filter((t) => t !== r.tag);
-					if (next.length) fm.tags = next;
-					else delete fm.tags;
-				});
-				undone++;
-			} catch (e) {
-				console.error("TRELLIS bootstrap undo skipped (frontmatter error)", r.path, e);
-				failed.push(r);
-			}
-		}
-		this.settings.lastBootstrap = failed.length > 0 ? failed : [];
-		await this.saveSettings();
-		new Notice(t("notice.undid", { n: undone }));
+			this.settings.lastBootstrap = failed.length > 0 ? failed : [];
+			await this.saveSettings();
+			new Notice(t("notice.undid", { n: undone }));
+			outcome.processed = undone;
+			if (failed.length > 0) outcome.status = "partial-failed";
+			outcome.issues = failed.map((record) => ({
+				path: record.path,
+				message: "Bootstrap undo skipped this note.",
+			}));
+		} catch (error) {
+			recordUnexpectedFailure(outcome, error);
+			throw error;
 		} finally {
-			this.endBulkOperation(operationId);
+			await this.endBulkOperation(operationId, outcome);
 		}
 	}
 
@@ -3415,8 +3724,10 @@ export default class TrellisPlugin extends Plugin {
 	 *  undoable via the symmetric migration back. */
 	private async applyRootChange(newRoot: string) {
 		const operation = t("bulk.title.root");
-		const operationId = this.beginBulkOperation(operation);
+		const files = this.app.vault.getMarkdownFiles();
+		const operationId = await this.beginBulkOperation(operation, files.length);
 		if (!operationId) return;
+		const outcome = newOperationOutcome();
 		const oldRoot = (this.settings.schema.rootNamespace ?? "").trim();
 		// Whatever undo record exists NOW is valid for the pre-apply state — a
 		// cancelled pass rolls the vault back to exactly that state, so the record
@@ -3427,7 +3738,6 @@ export default class TrellisPlugin extends Plugin {
 		let changed = 0;
 		const touchedPaths: string[] = [];
 		const failed: string[] = [];
-		const files = this.app.vault.getMarkdownFiles();
 		const progress = new BulkProgressModal(this.app, operation);
 		progress.open();
 		try {
@@ -3446,46 +3756,62 @@ export default class TrellisPlugin extends Plugin {
 					console.error("TRELLIS root change skipped (frontmatter error)", file.path, e);
 				}
 				progress.report(i + 1, files.length, failed.length);
+				this.operations.progress(operationId, {
+					processed: i + 1,
+					currentPath: file.path,
+				});
 			}
 		} catch (error) {
 			failed.push(t("bulk.unexpectedFailure"));
 			console.error("TRELLIS root migration failed", error);
 		} finally {
 			try {
-			if (progress.wasCancelled || failed.length > 0) {
-				// Roll back what was rewritten (schema still = newRoot while the
-				// reverted tags land, so nothing is mis-parsed mid-rollback), then
-				// restore the old root. Nothing to undo afterwards.
-				let reverted = 0;
-				for (const path of touchedPaths) {
-					const file = this.app.vault.getAbstractFileByPath(path);
-					if (!(file instanceof TFile)) continue;
-					try {
-						if (await this.migrateFileRoot(file, newRoot, oldRoot, slotNs)) reverted++;
-					} catch (e) {
-						console.error("TRELLIS root rollback skipped (frontmatter error)", path, e);
+				if (progress.wasCancelled || failed.length > 0) {
+					// Roll back what was rewritten (schema still = newRoot while the
+					// reverted tags land, so nothing is mis-parsed mid-rollback), then
+					// restore the old root. Nothing to undo afterwards.
+					let reverted = 0;
+					const rollbackFailed: string[] = [];
+					for (const path of touchedPaths) {
+						const file = this.app.vault.getAbstractFileByPath(path);
+						if (!(file instanceof TFile)) continue;
+						try {
+							if (await this.migrateFileRoot(file, newRoot, oldRoot, slotNs)) reverted++;
+						} catch (e) {
+							console.error("TRELLIS root rollback skipped (frontmatter error)", path, e);
+							rollbackFailed.push(path);
+						}
 					}
+					this.settings.schema.rootNamespace = oldRoot;
+					this.settings.lastRootChange = prevRec;
+					await this.saveSettings();
+					this.rebuildTrees();
+					progress.finish({
+						processed: reverted,
+						skipped: [...failed, ...rollbackFailed],
+						outcome: "rolled-back",
+					});
+					outcome.status = rollbackFailed.length > 0 ? "partial-failed" : "rolled-back";
+					outcome.processed = reverted;
+					outcome.issues = [
+						...failed.map((path) => ({ path, message: "Root change stopped." })),
+						...rollbackFailed.map((path) => ({
+							path,
+							message: "Root change rollback is incomplete.",
+						})),
+					];
+				} else {
+					this.settings.lastRootChange = { oldRoot, newRoot };
+					await this.saveSettings();
+					this.rebuildTrees();
+					progress.finish({ processed: changed, skipped: failed });
+					outcome.processed = changed;
+					new Notice(
+						t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
+					);
 				}
-				this.settings.schema.rootNamespace = oldRoot;
-				this.settings.lastRootChange = prevRec;
-				await this.saveSettings();
-				this.rebuildTrees();
-				progress.finish({
-					processed: reverted,
-					skipped: failed,
-					outcome: "rolled-back",
-				});
-			} else {
-				this.settings.lastRootChange = { oldRoot, newRoot };
-				await this.saveSettings();
-				this.rebuildTrees();
-				progress.finish({ processed: changed, skipped: failed });
-				new Notice(
-					t("notice.rootChanged", { from: oldRoot || "—", to: newRoot || "—", n: changed })
-				);
-			}
 			} finally {
-				this.endBulkOperation(operationId);
+				await this.endBulkOperation(operationId, outcome);
 			}
 		}
 	}

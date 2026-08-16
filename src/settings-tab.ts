@@ -718,6 +718,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private renderGeneralSettings(containerEl: HTMLElement) {
 		new Setting(containerEl).setName(t("setting.section.general")).setHeading();
 		this.renderFilenameSyncSetting(containerEl);
+		this.renderOperationAttention(containerEl);
 		const exampleName = "Projects";
 		const examplePath = "projects/website/design";
 		const exampleTerminal = "design";
@@ -768,6 +769,34 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		this.renderSidebar(containerEl);
+	}
+
+	private renderOperationAttention(containerEl: HTMLElement) {
+		const status = this.plugin.automation.operationStatus();
+		const report = status.attention;
+		if (!report) return;
+		const firstIssue = report.issues[0];
+		const description = t("setting.operationAttentionDesc", {
+			name: report.label,
+			status: report.status,
+			done: report.processed,
+			total: report.total,
+			detail: firstIssue
+				? `${firstIssue.path ? `${firstIssue.path}: ` : ""}${firstIssue.message}`
+				: "—",
+		});
+		new Setting(containerEl)
+			.setName(t("setting.operationAttentionName"))
+			.setDesc(description)
+			.addButton((button) =>
+				button
+					.setButtonText(t("setting.operationAttentionAcknowledge"))
+					.onClick(async () => {
+						if (await this.plugin.automation.acknowledgeOperation(report.id)) {
+							this.render();
+						}
+					})
+			);
 	}
 
 	private renderValueRuleOptions(containerEl: HTMLElement, definition: TrellisTagDefinition) {

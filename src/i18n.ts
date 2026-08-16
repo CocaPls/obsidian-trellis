@@ -81,6 +81,10 @@ const EN: Record<string, string> = {
 	"notice.namespaceUndoStale":
 		"the filename structure changed after this namespace migration; restore that filename structure before undoing",
 	"notice.bulkBusy": "finish the current Trellis change first: {active}",
+	"notice.operationInterrupted":
+		'Previous Trellis operation "{name}" stopped before completion. Review the affected notes before continuing.',
+	"notice.operationRecordFailed":
+		"Trellis could not record the operation safely, so no changes were applied.",
 	"operation.automation": "automation apply",
 	"notice.bootstrapped":
 		'bootstrapped {n} file(s). Undo via "Undo last bootstrap".',
@@ -156,6 +160,10 @@ const EN: Record<string, string> = {
 	"setting.statusDisclosureDesc":
 		"See aggregate counts and per-tag diagnostics.",
 	"setting.propertyTagDisplayName": "Tag labels in Properties",
+	"setting.operationAttentionName": "Trellis operation needs review",
+	"setting.operationAttentionDesc":
+		'"{name}" ended as {status} ({done}/{total}). {detail}',
+	"setting.operationAttentionAcknowledge": "Mark reviewed",
 	"setting.propertyTagDisplayDesc":
 		"Changes only how labels look. Stored tags stay unchanged.",
 	"propertyTagDisplay.full": "Full path (example: {path})",
@@ -632,6 +640,10 @@ const KO: Record<string, string> = {
 	"notice.namespaceUndoStale":
 		"네임스페이스 변경 뒤 파일명 구조가 달라졌습니다. 해당 파일명 구조를 먼저 복원하세요",
 	"notice.bulkBusy": "현재 Trellis 변경을 먼저 끝내세요: {active}",
+	"notice.operationInterrupted":
+		'이전 Trellis 작업 "{name}"이 완료되기 전에 중단됐습니다. 계속하기 전에 관련 노트를 확인하세요.',
+	"notice.operationRecordFailed":
+		"작업 기록을 안전하게 저장하지 못해 변경을 적용하지 않았습니다.",
 	"operation.automation": "자동화 적용",
 	"notice.bootstrapped":
 		'{n}개 파일 부트스트랩 완료. "마지막 부트스트랩 되돌리기"로 취소.',
@@ -707,6 +719,10 @@ const KO: Record<string, string> = {
 	"setting.statusDisclosureDesc":
 		"전체 집계와 태그별 진단을 확인합니다.",
 	"setting.propertyTagDisplayName": "속성의 태그 표시",
+	"setting.operationAttentionName": "Trellis 작업 확인 필요",
+	"setting.operationAttentionDesc":
+		'"{name}" 작업 상태: {status} ({done}/{total}). {detail}',
+	"setting.operationAttentionAcknowledge": "확인 완료",
 	"setting.propertyTagDisplayDesc":
 		"보이는 모양만 바꿉니다. 저장된 태그는 그대로 유지됩니다.",
 	"propertyTagDisplay.full": "전체 경로 (예: {path})",

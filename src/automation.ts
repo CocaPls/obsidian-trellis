@@ -27,6 +27,7 @@ export type AutomationErrorCode =
 	| "metadata-unavailable"
 	| "stale-plan"
 	| "write-in-progress"
+	| "operation-record-failed"
 	| "invalid-request"
 	| "unknown-namespace"
 	| "archived-namespace"

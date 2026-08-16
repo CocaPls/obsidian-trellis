@@ -74,7 +74,6 @@ export class TrellisOperationTracker {
 	private active: TrellisOperationReport | null = null;
 	private last: TrellisOperationReport | null = null;
 	private sequence = 0;
-	private idleWaiters: ((report: TrellisOperationReport | null) => void)[] = [];
 
 	begin(
 		kind: TrellisOperationKind,
@@ -133,9 +132,6 @@ export class TrellisOperationTracker {
 		const report = cloneReport(this.active);
 		this.last = report;
 		this.active = null;
-		const waiters = this.idleWaiters;
-		this.idleWaiters = [];
-		for (const resolve of waiters) resolve(cloneReport(report));
 		return cloneReport(report);
 	}
 
@@ -151,9 +147,4 @@ export class TrellisOperationTracker {
 		return this.active === null;
 	}
 
-	awaitIdle(): Promise<TrellisOperationReport | null> {
-		if (!this.active) return Promise.resolve(this.lastReport());
-		return new Promise((resolve) => this.idleWaiters.push(resolve));
-	}
 }
-

@@ -44,21 +44,6 @@ test("progress and completion produce a stable report", () => {
 	assert.equal(tracker.isIdle(), true);
 });
 
-test("awaitIdle resolves only after the active operation settles", async () => {
-	const tracker = new TrellisOperationTracker();
-	const operation = tracker.begin("live-sync", "Filename sync", 2, 100);
-	assert.ok(operation);
-	let settled = false;
-	const waiting = tracker.awaitIdle().then((report) => {
-		settled = true;
-		return report;
-	});
-	await Promise.resolve();
-	assert.equal(settled, false);
-	tracker.finish(operation.id, { status: "completed", processed: 2 }, 200);
-	assert.equal((await waiting)?.status, "completed");
-});
-
 test("a persisted running operation becomes an explicit interruption", () => {
 	const running: TrellisOperationReport = {
 		id: "op-1",
@@ -77,4 +62,3 @@ test("a persisted running operation becomes an explicit interruption", () => {
 	assert.equal(interrupted.issues[0]?.path, "E.md");
 	assert.match(interrupted.issues[0]?.message ?? "", /before.*completion/i);
 });
-
