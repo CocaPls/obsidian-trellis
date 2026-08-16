@@ -209,6 +209,114 @@ export class TrellisSettingTab extends PluginSettingTab {
 			cls: "setting-item-description trellis-section-description",
 			text: t("setting.tagsDesc"),
 		});
+		this.renderOwnerNamespaceSetting(containerEl);
+
+		const definitions = this.plugin.tagDefinitions();
+		const activeDefinitions = definitions.filter((definition) => !definition.archived);
+		const archivedDefinitions = definitions.filter((definition) => definition.archived);
+		if (activeDefinitions.length === 0 && archivedDefinitions.length > 0) {
+			this.tagDefinitionFilter = "archived";
+		}
+		if (definitions.length === 0) this.addingTagDefinition = true;
+		const scopedDefinitions =
+			this.tagDefinitionFilter === "active"
+				? activeDefinitions
+				: this.tagDefinitionFilter === "archived"
+					? archivedDefinitions
+					: [...activeDefinitions, ...archivedDefinitions];
+		if (
+			!this.addingTagDefinition &&
+			!scopedDefinitions.some(
+				(definition) => definition.id === this.selectedTagDefinitionId
+			)
+		) {
+			this.selectedTagDefinitionId = scopedDefinitions[0]?.id ?? null;
+		}
+
+		const workspace = containerEl.createDiv({ cls: "trellis-tag-workspace" });
+		const browser = workspace.createDiv({ cls: "trellis-tag-browser" });
+		const toolbar = browser.createDiv({ cls: "trellis-tag-toolbar" });
+		const searchInput = this.renderTagDefinitionToolbar(
+			toolbar,
+			activeDefinitions.length,
+			archivedDefinitions.length,
+			definitions.length
+		);
+
+		const count = browser.createDiv({ cls: "trellis-tag-list-count" });
+		const list = browser.createDiv({ cls: "trellis-tag-list" });
+		const detail = workspace.createDiv({
+			cls: "trellis-tag-detail",
+			attr: { "aria-live": "polite" },
+		});
+		searchInput.addEventListener("input", () => {
+			this.tagSearchQuery = searchInput.value;
+			this.renderTagDefinitionList(list, count, scopedDefinitions);
+			if (!this.addingTagDefinition) {
+				this.renderTagDefinitionDetail(detail, definitions);
+			}
+		});
+		this.renderTagDefinitionList(list, count, scopedDefinitions);
+		this.renderTagDefinitionDetail(detail, definitions);
+	}
+
+	private renderTagDefinitionToolbar(
+		toolbar: HTMLElement,
+		activeCount: number,
+		archivedCount: number,
+		totalCount: number
+	): HTMLInputElement {
+		const search = toolbar.createDiv({ cls: "trellis-tag-search" });
+		const searchIcon = search.createSpan({ cls: "trellis-tag-search-icon" });
+		setIcon(searchIcon, "search");
+		const searchInput = search.createEl("input", {
+			type: "search",
+			placeholder: t("setting.tagSearchPlaceholder"),
+			value: this.tagSearchQuery,
+			attr: { "aria-label": t("setting.tagSearch") },
+		});
+		const controls = toolbar.createDiv({ cls: "trellis-tag-toolbar-controls" });
+		const filter = controls.createEl("select", {
+			attr: { "aria-label": t("setting.tagFilter") },
+		});
+		filter.createEl("option", {
+			value: "active",
+			text: t("setting.tagFilterActive", { n: activeCount }),
+		});
+		filter.createEl("option", {
+			value: "archived",
+			text: t("setting.tagFilterArchived", { n: archivedCount }),
+		});
+		filter.createEl("option", {
+			value: "all",
+			text: t("setting.tagFilterAll", { n: totalCount }),
+		});
+		filter.value = this.tagDefinitionFilter;
+		filter.addEventListener("change", () => {
+			this.tagDefinitionFilter =
+				filter.value === "archived" || filter.value === "all"
+					? filter.value
+					: "active";
+			this.addingTagDefinition = false;
+			this.addNewTagToFilename = false;
+			this.render();
+		});
+		if (!this.addingTagDefinition) {
+			const add = controls.createEl("button", { attr: { type: "button" } });
+			const addIcon = add.createSpan({ cls: "trellis-button-icon" });
+			setIcon(addIcon, "plus");
+			add.createSpan({ text: t("setting.tagAdd") });
+			add.addEventListener("click", () => {
+				this.addNewTagToFilename = false;
+				this.addingTagDefinition = true;
+				this.render();
+				this.revealTagDetail(true);
+			});
+		}
+		return searchInput;
+	}
+
+	private renderOwnerNamespaceSetting(containerEl: HTMLElement) {
 		const currentRoot = (this.plugin.settings.schema.rootNamespace ?? "").trim();
 		let pendingRoot = currentRoot;
 		let rootApply: ButtonComponent | null = null;
@@ -241,206 +349,122 @@ export class TrellisSettingTab extends PluginSettingTab {
 						}
 						this.plugin.requestRootChange(next, () => this.render());
 					});
-				});
+			});
+	}
 
-		const definitions = this.plugin.tagDefinitions();
-		const activeDefinitions = definitions.filter((definition) => !definition.archived);
-		const archivedDefinitions = definitions.filter((definition) => definition.archived);
-		if (activeDefinitions.length === 0 && archivedDefinitions.length > 0) {
-			this.tagDefinitionFilter = "archived";
-		}
-		if (definitions.length === 0) this.addingTagDefinition = true;
-		const scopedDefinitions =
-			this.tagDefinitionFilter === "active"
-				? activeDefinitions
-				: this.tagDefinitionFilter === "archived"
-					? archivedDefinitions
-					: [...activeDefinitions, ...archivedDefinitions];
+	private renderTagDefinitionList(
+		list: HTMLElement,
+		count: HTMLElement,
+		scopedDefinitions: TrellisTagDefinition[]
+	) {
+		const query = this.tagSearchQuery.trim().toLocaleLowerCase();
+		const shown = scopedDefinitions.filter((definition) => {
+			if (!query) return true;
+			const path = nsPath(this.plugin.settings.schema, definition.namespace);
+			return `${definition.name} ${definition.namespace} ${path}`
+				.toLocaleLowerCase()
+				.includes(query);
+		});
+		list.empty();
 		if (
 			!this.addingTagDefinition &&
-			!scopedDefinitions.some(
-				(definition) => definition.id === this.selectedTagDefinitionId
-			)
+			!shown.some((definition) => definition.id === this.selectedTagDefinitionId)
 		) {
-			this.selectedTagDefinitionId = scopedDefinitions[0]?.id ?? null;
+			this.selectedTagDefinitionId = shown[0]?.id ?? null;
 		}
-
-		const workspace = containerEl.createDiv({ cls: "trellis-tag-workspace" });
-		const browser = workspace.createDiv({ cls: "trellis-tag-browser" });
-		const toolbar = browser.createDiv({ cls: "trellis-tag-toolbar" });
-		const search = toolbar.createDiv({ cls: "trellis-tag-search" });
-		const searchIcon = search.createSpan({ cls: "trellis-tag-search-icon" });
-		setIcon(searchIcon, "search");
-		const searchInput = search.createEl("input", {
-			type: "search",
-			placeholder: t("setting.tagSearchPlaceholder"),
-			value: this.tagSearchQuery,
-			attr: { "aria-label": t("setting.tagSearch") },
-		});
-		const controls = toolbar.createDiv({ cls: "trellis-tag-toolbar-controls" });
-		const filter = controls.createEl("select", {
-			attr: { "aria-label": t("setting.tagFilter") },
-		});
-		filter.createEl("option", {
-			value: "active",
-			text: t("setting.tagFilterActive", { n: activeDefinitions.length }),
-		});
-		filter.createEl("option", {
-			value: "archived",
-			text: t("setting.tagFilterArchived", { n: archivedDefinitions.length }),
-		});
-		filter.createEl("option", {
-			value: "all",
-			text: t("setting.tagFilterAll", { n: definitions.length }),
-		});
-		filter.value = this.tagDefinitionFilter;
-		filter.addEventListener("change", () => {
-			this.tagDefinitionFilter =
-				filter.value === "archived" || filter.value === "all"
-					? filter.value
-					: "active";
-			this.addingTagDefinition = false;
-			this.addNewTagToFilename = false;
-			this.render();
-		});
-		if (!this.addingTagDefinition) {
-			const add = controls.createEl("button", {
+		count.setText(
+			t("setting.tagListCount", {
+				shown: shown.length,
+				total: scopedDefinitions.length,
+			})
+		);
+		if (shown.length === 0) {
+			list.createDiv({
+				cls: "trellis-tag-list-empty",
+				text: t("setting.tagListEmpty"),
+			});
+			return;
+		}
+		for (const definition of shown) {
+			const row = list.createEl("button", {
+				cls: "trellis-tag-list-row",
 				attr: { type: "button" },
 			});
-			const addIcon = add.createSpan({ cls: "trellis-button-icon" });
-			setIcon(addIcon, "plus");
-			add.createSpan({ text: t("setting.tagAdd") });
-			add.addEventListener("click", () => {
-				this.addNewTagToFilename = false;
-				this.addingTagDefinition = true;
-				this.render();
-				this.revealTagDetail(true);
-			});
-		}
-
-		const count = browser.createDiv({ cls: "trellis-tag-list-count" });
-		const list = browser.createDiv({ cls: "trellis-tag-list" });
-		const detail = workspace.createDiv({
-			cls: "trellis-tag-detail",
-			attr: { "aria-live": "polite" },
-		});
-		const matchingDefinitions = () => {
-			const query = this.tagSearchQuery.trim().toLocaleLowerCase();
-			return scopedDefinitions.filter((definition) => {
-				if (!query) return true;
-				const path = nsPath(this.plugin.settings.schema, definition.namespace);
-				return `${definition.name} ${definition.namespace} ${path}`
-					.toLocaleLowerCase()
-					.includes(query);
-			});
-		};
-		const renderList = () => {
-			list.empty();
-			const shown = matchingDefinitions();
-			if (
-				!this.addingTagDefinition &&
-				!shown.some((definition) => definition.id === this.selectedTagDefinitionId)
-			) {
-				this.selectedTagDefinitionId = shown[0]?.id ?? null;
-			}
-			count.setText(
-				t("setting.tagListCount", {
-					shown: shown.length,
-					total: scopedDefinitions.length,
-				})
+			row.classList.toggle(
+				"is-selected",
+				!this.addingTagDefinition && definition.id === this.selectedTagDefinitionId
 			);
-			if (shown.length === 0) {
-				list.createDiv({
-					cls: "trellis-tag-list-empty",
-					text: t("setting.tagListEmpty"),
-				});
-				return;
-			}
-			for (const definition of shown) {
-				const row = list.createEl("button", {
-					cls: "trellis-tag-list-row",
-					attr: { type: "button" },
-				});
-				row.classList.toggle(
-					"is-selected",
+			row.setAttribute(
+				"aria-pressed",
+				String(
 					!this.addingTagDefinition &&
 						definition.id === this.selectedTagDefinitionId
-				);
-				row.setAttribute(
-					"aria-pressed",
-					String(
-						!this.addingTagDefinition &&
-							definition.id === this.selectedTagDefinitionId
-					)
-				);
-				const dot = row.createSpan({ cls: "trellis-tag-list-dot" });
-				dot.style.setProperty(
-					"--trellis-tag-list-color",
-					definition.color || "var(--interactive-accent)"
-				);
-				const copy = row.createSpan({ cls: "trellis-tag-list-copy" });
-				copy.createSpan({
-					cls: "trellis-tag-list-name",
-					text: definition.name || definition.namespace,
-				});
-				copy.createSpan({
-					cls: "trellis-tag-list-path",
-					text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
-				});
-				const badges = row.createSpan({ cls: "trellis-tag-list-badges" });
-				if (this.filenameUsesTagDefinition(definition.id)) {
-					badges.createSpan({
-						cls: "trellis-tag-list-badge",
-						text: t("setting.tagBadgeFilename"),
-					});
-				}
-				if (definition.archived) {
-					badges.createSpan({
-						cls: "trellis-tag-list-badge is-archived",
-						text: t("setting.tagArchivedSuffix"),
-					});
-				} else if (definition.sidebarVisible) {
-					badges.createSpan({
-						cls: "trellis-tag-list-badge",
-						text: t("setting.tagBadgeSidebar"),
-					});
-				}
-				row.addEventListener("click", () => {
-					this.selectedTagDefinitionId = definition.id;
-					this.addingTagDefinition = false;
-					this.addNewTagToFilename = false;
-					this.render();
-					this.revealTagDetail();
-				});
-			}
-		};
-		const renderDetail = () => {
-			detail.empty();
-			if (this.addingTagDefinition) {
-				this.renderTagDefinitionAdd(
-					detail,
-					definitions.length > 0 || this.addNewTagToFilename
-				);
-				return;
-			}
-			const selected = definitions.find(
-				(definition) => definition.id === this.selectedTagDefinitionId
+				)
 			);
-			if (selected) this.renderTagDefinition(detail, selected);
-			else {
-				detail.createDiv({
-					cls: "trellis-tag-detail-empty",
-					text: t("setting.tagDetailEmpty"),
+			const dot = row.createSpan({ cls: "trellis-tag-list-dot" });
+			dot.style.setProperty(
+				"--trellis-tag-list-color",
+				definition.color || "var(--interactive-accent)"
+			);
+			const copy = row.createSpan({ cls: "trellis-tag-list-copy" });
+			copy.createSpan({
+				cls: "trellis-tag-list-name",
+				text: definition.name || definition.namespace,
+			});
+			copy.createSpan({
+				cls: "trellis-tag-list-path",
+				text: `#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`,
+			});
+			const badges = row.createSpan({ cls: "trellis-tag-list-badges" });
+			if (this.filenameUsesTagDefinition(definition.id)) {
+				badges.createSpan({
+					cls: "trellis-tag-list-badge",
+					text: t("setting.tagBadgeFilename"),
 				});
 			}
-		};
-		searchInput.addEventListener("input", () => {
-			this.tagSearchQuery = searchInput.value;
-			renderList();
-			if (!this.addingTagDefinition) renderDetail();
-		});
-		renderList();
-		renderDetail();
+			if (definition.archived) {
+				badges.createSpan({
+					cls: "trellis-tag-list-badge is-archived",
+					text: t("setting.tagArchivedSuffix"),
+				});
+			} else if (definition.sidebarVisible) {
+				badges.createSpan({
+					cls: "trellis-tag-list-badge",
+					text: t("setting.tagBadgeSidebar"),
+				});
+			}
+			row.addEventListener("click", () => {
+				this.selectedTagDefinitionId = definition.id;
+				this.addingTagDefinition = false;
+				this.addNewTagToFilename = false;
+				this.render();
+				this.revealTagDetail();
+			});
+		}
+	}
+
+	private renderTagDefinitionDetail(
+		detail: HTMLElement,
+		definitions: TrellisTagDefinition[]
+	) {
+		detail.empty();
+		if (this.addingTagDefinition) {
+			this.renderTagDefinitionAdd(
+				detail,
+				definitions.length > 0 || this.addNewTagToFilename
+			);
+			return;
+		}
+		const selected = definitions.find(
+			(definition) => definition.id === this.selectedTagDefinitionId
+		);
+		if (selected) this.renderTagDefinition(detail, selected);
+		else {
+			detail.createDiv({
+				cls: "trellis-tag-detail-empty",
+				text: t("setting.tagDetailEmpty"),
+			});
+		}
 	}
 
 	private revealTagDetail(focusInput = false) {
@@ -1554,35 +1578,52 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const definitions = this.plugin
 			.tagDefinitions()
 			.filter((definition) => !definition.archived);
+		this.renderSidebarTagVisibility(options, definitions);
+		const visible = definitions.filter((definition) => definition.sidebarVisible);
+		this.renderSidebarGeneralOptions(options, visible);
+		if (this.plugin.settings.treeViewMode === "tags") {
+			this.renderSidebarTagTreeOptions(options);
+		}
+		this.renderSidebarHeaderButtons(options);
+	}
+
+	private renderSidebarTagVisibility(
+		options: HTMLElement,
+		definitions: TrellisTagDefinition[]
+	) {
 		new Setting(options)
 			.setName(t("setting.sidebarTagsName"))
 			.setDesc(t("setting.sidebarTagsDesc"))
 			.setHeading();
-		if (definitions.length > 0) {
-			const visibility = options.createDiv({
-				cls: "trellis-settings-toggle-grid trellis-sidebar-tag-grid",
-			});
-			for (const definition of definitions) {
-				new Setting(visibility)
-					.setName(definition.name || definition.namespace)
-					.setDesc(`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`)
-					.addToggle((toggle) =>
-						toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
-							await this.plugin.updateTagDefinition(definition.id, {
-								sidebarVisible: value,
-							});
-							this.render();
-						})
-					);
-			}
-		} else {
+		if (definitions.length === 0) {
 			options.createDiv({
 				cls: "setting-item-description trellis-sidebar-tags-empty",
 				text: t("setting.sidebarTagsEmpty"),
 			});
+			return;
 		}
-		const visible = definitions.filter((definition) => definition.sidebarVisible);
+		const visibility = options.createDiv({
+			cls: "trellis-settings-toggle-grid trellis-sidebar-tag-grid",
+		});
+		for (const definition of definitions) {
+			new Setting(visibility)
+				.setName(definition.name || definition.namespace)
+				.setDesc(`#${nsPath(this.plugin.settings.schema, definition.namespace)}/…`)
+				.addToggle((toggle) =>
+					toggle.setValue(definition.sidebarVisible).onChange(async (value) => {
+						await this.plugin.updateTagDefinition(definition.id, {
+							sidebarVisible: value,
+						});
+						this.render();
+					})
+				);
+		}
+	}
 
+	private renderSidebarGeneralOptions(
+		options: HTMLElement,
+		visible: TrellisTagDefinition[]
+	) {
 		new Setting(options)
 			.setName(t("setting.treeLabelName"))
 			.setDesc(t("setting.treeLabelDesc"))
@@ -1648,70 +1689,73 @@ export class TrellisSettingTab extends PluginSettingTab {
 						this.plugin.rebuildTrees();
 					})
 			);
-		if (this.plugin.settings.treeViewMode === "tags") {
+	}
+
+	private renderSidebarTagTreeOptions(options: HTMLElement) {
+		new Setting(options)
+			.setName(t("setting.treeDisplayOptions"))
+			.setDesc(t("setting.treeDisplayOptionsDesc"))
+			.setHeading();
+		const hidden = this.plugin.hiddenSidebarBranches();
+		if (hidden.length > 0) {
 			new Setting(options)
-				.setName(t("setting.treeDisplayOptions"))
-				.setDesc(t("setting.treeDisplayOptionsDesc"))
+				.setName(t("setting.hiddenBranchesName"))
+				.setDesc(t("setting.hiddenBranchesDesc", { n: hidden.length }))
 				.setHeading();
-			const hidden = this.plugin.hiddenSidebarBranches();
-			if (hidden.length > 0) {
+			for (const branch of hidden) {
 				new Setting(options)
-					.setName(t("setting.hiddenBranchesName"))
-					.setDesc(t("setting.hiddenBranchesDesc", { n: hidden.length }))
-					.setHeading();
-				for (const branch of hidden) {
-					new Setting(options)
-						.setName(branch.label)
-						.addButton((button) =>
-							button.setButtonText(t("setting.restore")).onClick(async () => {
-								await this.plugin.restoreSidebarBranch(
-									branch.tagDefinitionId,
-									branch.relativePath
-								);
-								this.render();
-							})
-						);
-				}
+					.setName(branch.label)
+					.addButton((button) =>
+						button.setButtonText(t("setting.restore")).onClick(async () => {
+							await this.plugin.restoreSidebarBranch(
+								branch.tagDefinitionId,
+								branch.relativePath
+							);
+							this.render();
+						})
+					);
 			}
-			new Setting(options)
-				.setName(t("setting.showRootName"))
-				.setDesc(t("setting.showRootDesc"))
-				.addToggle((toggle) =>
-					toggle.setValue(this.plugin.settings.treeShowRoot).onChange(async (value) => {
-						this.plugin.settings.treeShowRoot = value;
+		}
+		new Setting(options)
+			.setName(t("setting.showRootName"))
+			.setDesc(t("setting.showRootDesc"))
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.treeShowRoot).onChange(async (value) => {
+					this.plugin.settings.treeShowRoot = value;
+					await this.plugin.saveSettings();
+					this.plugin.rebuildTrees();
+				})
+			);
+		new Setting(options)
+			.setName(t("setting.untaggedName"))
+			.setDesc(t("setting.untaggedDesc"))
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.treeShowUntagged)
+					.onChange(async (value) => {
+						this.plugin.settings.treeShowUntagged = value;
 						await this.plugin.saveSettings();
 						this.plugin.rebuildTrees();
 					})
-				);
-			new Setting(options)
-				.setName(t("setting.untaggedName"))
-				.setDesc(t("setting.untaggedDesc"))
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.treeShowUntagged)
-						.onChange(async (value) => {
-							this.plugin.settings.treeShowUntagged = value;
-							await this.plugin.saveSettings();
-							this.plugin.rebuildTrees();
-						})
-				);
-			new Setting(options)
-				.setName(t("setting.labelModeName"))
-				.setDesc(t("setting.labelModeDesc"))
-				.addDropdown((dropdown) =>
-					dropdown
-						.addOption("filename", t("setting.labelModeFilename"))
-						.addOption("tag", t("setting.labelModeTag"))
-						.setValue(this.plugin.settings.treeLabelMode)
-						.onChange(async (value) => {
-							this.plugin.settings.treeLabelMode =
-								value === "tag" ? "tag" : "filename";
-							await this.plugin.saveSettings();
-							this.plugin.rebuildTrees();
-						})
-				);
-		}
+			);
+		new Setting(options)
+			.setName(t("setting.labelModeName"))
+			.setDesc(t("setting.labelModeDesc"))
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("filename", t("setting.labelModeFilename"))
+					.addOption("tag", t("setting.labelModeTag"))
+					.setValue(this.plugin.settings.treeLabelMode)
+					.onChange(async (value) => {
+						this.plugin.settings.treeLabelMode =
+							value === "tag" ? "tag" : "filename";
+						await this.plugin.saveSettings();
+						this.plugin.rebuildTrees();
+					})
+			);
+	}
 
+	private renderSidebarHeaderButtons(options: HTMLElement) {
 		new Setting(options)
 			.setName(t("setting.headerButtonsName"))
 			.setDesc(t("setting.headerButtonsDesc"))
