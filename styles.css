@@ -53,6 +53,12 @@
 	border-radius: var(--radius-s);
 }
 
+.trellis-declarative-host.setting-item {
+	display: block;
+	padding: 0;
+	border: 0;
+}
+
 /* Bootstrap target picker — checkbox tree of folders/notes. */
 .trellis-bootstrap-tree {
 	max-height: 45vh;

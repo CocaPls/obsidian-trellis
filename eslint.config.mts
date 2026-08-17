@@ -30,11 +30,4 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
-	{
-		// Trellis supports Obsidian 1.8.7. The declarative settings API starts at
-		// 1.13, so adopting it would silently raise the plugin's compatibility floor.
-		rules: {
-			"obsidianmd/settings-tab/prefer-setting-definitions": "off",
-		},
-	},
 );
