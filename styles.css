@@ -620,6 +620,19 @@ button.trellis-destructive:disabled:hover {
 		flex-wrap: wrap;
 	}
 
+	.trellis-filename-editor .setting-item,
+	.trellis-filename-gap-setting,
+	.trellis-tag-detail .setting-item {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.trellis-filename-editor .setting-item-info,
+	.trellis-filename-gap-setting .setting-item-info,
+	.trellis-tag-detail .setting-item-info {
+		flex: 1 1 100%;
+	}
+
 	.trellis-filename-composer-setting .setting-item-control,
 	.trellis-filename-editor .setting-item-control,
 	.trellis-filename-gap-setting .setting-item-control,
@@ -654,6 +667,19 @@ button.trellis-destructive:disabled:hover {
 .is-mobile .trellis-filename-composer-setting {
 	align-items: flex-start;
 	flex-wrap: wrap;
+}
+
+.is-mobile .trellis-filename-editor .setting-item,
+.is-mobile .trellis-filename-gap-setting,
+.is-mobile .trellis-tag-detail .setting-item {
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.is-mobile .trellis-filename-editor .setting-item-info,
+.is-mobile .trellis-filename-gap-setting .setting-item-info,
+.is-mobile .trellis-tag-detail .setting-item-info {
+	flex: 1 1 100%;
 }
 
 .is-mobile .trellis-filename-composer-setting .setting-item-control,

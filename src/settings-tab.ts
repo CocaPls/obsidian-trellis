@@ -112,7 +112,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 	private tagDefinitionFilter: TagDefinitionFilter = "active";
 	private tagSearchQuery = "";
 	private declarativeHost: HTMLElement | null = null;
-	private declarativeSection: SettingsSection | null = null;
 	constructor(app: App, plugin: TrellisPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
@@ -120,31 +119,51 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		return [
-			this.declarativePage("general", [
-				t("setting.filenameSyncName"),
-				t("setting.propertyTagDisplayName"),
-				t("setting.langName"),
-				t("setting.treeName"),
-				t("setting.sidebarTagsName"),
-				t("setting.treeModeName"),
-				t("setting.sortName"),
-				t("setting.headerButtonsName"),
-			]),
-			this.declarativePage("structure", [
-				t("setting.filenameComposerTitle"),
-				t("setting.section.filenameStructure"),
-				t("setting.section.tags"),
-				t("setting.ownerAdvanced"),
-				t("setting.tagDisplayName"),
-				t("setting.tagNamespace"),
-				t("setting.valueRule"),
-			]),
+			{
+				name: this.plugin.manifest.name,
+				desc: t("setting.intro"),
+				aliases: [
+					t("setting.nav.general"),
+					t("setting.nav.structure"),
+					t("setting.filenameSyncName"),
+					t("setting.propertyTagDisplayName"),
+					t("setting.langName"),
+					t("setting.treeName"),
+					t("setting.sidebarTagsName"),
+					t("setting.treeModeName"),
+					t("setting.sortName"),
+					t("setting.headerButtonsName"),
+					t("setting.filenameComposerTitle"),
+					t("setting.section.filenameStructure"),
+					t("setting.section.tags"),
+					t("setting.ownerAdvanced"),
+					t("setting.tagDisplayName"),
+					t("setting.tagNamespace"),
+					t("setting.valueRule"),
+				],
+				render: (setting) => {
+					const host = setting.settingEl;
+					host.addClass("trellis-declarative-host");
+					this.declarativeHost = host;
+					this.activeSection = "general";
+					this.stopStatsWatch();
+					this.startStatsWatch();
+					this.addingTagDefinition = false;
+					this.addNewTagToFilename = false;
+					this.render();
+					return () => {
+						if (this.declarativeHost !== host) return;
+						this.declarativeHost = null;
+						this.stopStatsWatch();
+					};
+				},
+			},
 		];
 	}
 
 	display() {
 		this.declarativeHost = null;
-		this.declarativeSection = null;
+		this.activeSection = "general";
 		this.stopStatsWatch();
 		this.startStatsWatch();
 		this.addingTagDefinition = false;
@@ -155,45 +174,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 	hide() {
 		this.plugin.flushQueuedSettingsSave();
 		this.declarativeHost = null;
-		this.declarativeSection = null;
 		this.stopStatsWatch();
 		super.hide();
-	}
-
-	private declarativePage(
-		section: SettingsSection,
-		aliases: string[]
-	): SettingDefinitionItem {
-		return {
-			type: "page",
-			name: t(`setting.nav.${section}`),
-			desc: t(`setting.declarative.${section}`),
-			items: [
-				{
-					name: t(`setting.nav.${section}`),
-					desc: t(`setting.declarative.${section}`),
-					aliases,
-					render: (setting) => {
-						const host = setting.settingEl;
-						host.addClass("trellis-declarative-host");
-						this.declarativeHost = host;
-						this.declarativeSection = section;
-						this.activeSection = section;
-						this.stopStatsWatch();
-						this.startStatsWatch();
-						this.addingTagDefinition = false;
-						this.addNewTagToFilename = false;
-						this.render();
-						return () => {
-							if (this.declarativeHost !== host) return;
-							this.declarativeHost = null;
-							this.declarativeSection = null;
-							this.stopStatsWatch();
-						};
-					},
-				},
-			],
-		};
 	}
 
 	private render() {
@@ -201,14 +183,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 		containerEl.empty();
 		containerEl.addClass("trellis-settings");
 		this.ensureTagInventory();
-		if (this.declarativeHost && this.declarativeSection) {
-			if (this.declarativeSection === "structure") {
-				this.renderStructure(containerEl);
-			} else {
-				this.renderGeneralSettings(containerEl);
-			}
-			return;
-		}
 
 		containerEl.createEl("p", {
 			cls: "setting-item-description trellis-settings-intro",

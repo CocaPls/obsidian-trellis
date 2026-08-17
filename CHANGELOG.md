@@ -12,7 +12,7 @@ development milestones; `0.1.0` is the first public release.
 
 ## 0.5.2 — Review compatibility and compact settings
 
-- Add searchable settings pages for Obsidian 1.13 and later while retaining the
+- Add searchable settings for Obsidian 1.13 and later while retaining the
   established settings screen as a fallback for Obsidian 1.8.7 through 1.12.
 - Replace ambiguous inferred collection types in managed-tag discovery with
   explicit DOM, tag-match, and path collections for stricter automated review.
