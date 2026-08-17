@@ -57,6 +57,7 @@ import {
 	legacySchemeFromValueRule,
 	valueRuleFromLegacyScheme,
 	slotValueRule,
+	type TagKeyMatch,
 	type TrellisTagDefinition,
 	type TagValueRule,
 	sameTagPath,
@@ -604,13 +605,15 @@ export default class TrellisPlugin extends Plugin {
 	 * text and editing value; CSS overlays a shorter label, so clicking/removing
 	 * the pill still operates on the unmodified Obsidian tag. */
 	decoratePropertyTags() {
-		const pills = this.app.workspace.getLeavesOfType("markdown").flatMap((leaf) =>
-			Array.from(
-				leaf.view.containerEl.querySelectorAll<HTMLElement>(
+		const pills: HTMLElement[] = [];
+		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			const container: HTMLElement = leaf.view.containerEl;
+			const matches: NodeListOf<HTMLElement> =
+				container.querySelectorAll<HTMLElement>(
 					'.metadata-property[data-property-key="tags"] .multi-select-pill'
-				)
-			)
-		);
+				);
+			matches.forEach((pill: HTMLElement) => pills.push(pill));
+		}
 		for (const pill of pills) {
 			pill.classList.remove("trellis-property-tag-pill");
 			pill.style.removeProperty("--trellis-tag-color");
@@ -1628,20 +1631,18 @@ export default class TrellisPlugin extends Plugin {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const cache = this.app.metadataCache.getFileCache(file);
 			const tags = cache ? hashedTagList(cache.frontmatter?.tags) : [];
-			const allManaged = tags
-				.map((tag) => matchTagKey(tag, this.settings.schema))
-				.filter((match) => match !== null);
-			const managed = [
-				...new Set(
-					allManaged.flatMap((match) => {
-						return match.tagDefinitionId &&
-							visibleDefinitions.has(match.tagDefinitionId) &&
-							!this.isSidebarBranchHidden(match.tagDefinitionId, match.keyPath)
-							? [`#${match.tagPath}`]
-							: [];
-					})
-				),
-			];
+			const allManaged: TagKeyMatch[] = [];
+			for (const tag of tags) {
+				const match = matchTagKey(tag, this.settings.schema);
+				if (match) allManaged.push(match);
+			}
+			const managed = new Set<string>();
+			for (const match of allManaged) {
+				const id = match.tagDefinitionId;
+				if (!id || !visibleDefinitions.has(id)) continue;
+				if (this.isSidebarBranchHidden(id, match.keyPath)) continue;
+				managed.add(`#${match.tagPath}`);
+			}
 			if (allManaged.length === 0) {
 				untagged.push(file.path);
 			}
@@ -1691,15 +1692,17 @@ export default class TrellisPlugin extends Plugin {
 	}
 
 	hiddenSidebarBranches(): { tagDefinitionId: string; label: string; relativePath: string }[] {
-		return this.settings.hiddenTagBranches.flatMap((branch) => {
+		const visible: { tagDefinitionId: string; label: string; relativePath: string }[] = [];
+		for (const branch of this.settings.hiddenTagBranches) {
 			const definition = tagDefinitionById(this.settings.schema, branch.tagDefinitionId);
-			if (!definition) return [];
-			return [{
+			if (!definition) continue;
+			visible.push({
 				tagDefinitionId: branch.tagDefinitionId,
 				relativePath: branch.relativePath,
 				label: `#${nsPath(this.settings.schema, definition.namespace)}/${branch.relativePath}`,
-			}];
-		});
+			});
+		}
+		return visible;
 	}
 
 	tagColor(tagPath: string): string | undefined {
@@ -2021,14 +2024,12 @@ export default class TrellisPlugin extends Plugin {
 	private managedTagPathsOf(file: TFile): string[] {
 		const cache = this.app.metadataCache.getFileCache(file);
 		if (!cache) return [];
-		return [
-			...new Set(
-					hashedTagList(cache.frontmatter?.tags).flatMap((tag) => {
-					const match = matchTagKey(tag, this.settings.schema);
-					return match && match.keyPath !== "" ? [match.tagPath] : [];
-				})
-			),
-		];
+		const paths = new Set<string>();
+		for (const tag of hashedTagList(cache.frontmatter?.tags)) {
+			const match = matchTagKey(tag, this.settings.schema);
+			if (match && match.keyPath !== "") paths.add(match.tagPath);
+		}
+		return [...paths];
 	}
 
 	private isManagedTagValue(tagPath: string): boolean {
