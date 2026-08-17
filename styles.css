@@ -501,6 +501,7 @@ button.trellis-destructive:disabled:hover {
 .trellis-filename-sequence {
 	display: flex;
 	align-items: center;
+	justify-content: safe center;
 	gap: var(--size-4-1);
 	overflow-x: auto;
 	margin-bottom: var(--size-4-3);
@@ -527,13 +528,13 @@ button.trellis-destructive:disabled:hover {
 .trellis-filename-sequence-slot {
 	display: flex;
 	align-items: baseline;
-	gap: var(--size-4-2);
-	padding: var(--size-4-2) var(--size-4-3);
+	gap: var(--size-4-1);
+	padding: 6px var(--size-4-2);
 }
 
 .trellis-filename-sequence-gap {
-	min-width: 32px;
-	padding: var(--size-4-2);
+	min-width: 28px;
+	padding: 6px;
 	font-family: var(--font-monospace);
 }
 
