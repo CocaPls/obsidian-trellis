@@ -454,6 +454,7 @@ export class BootstrapSelectModal extends Modal {
 	private dragging = false;
 	private dragMode: "select" | "deselect" = "select";
 	private readonly cbByPath = new Map<string, HTMLInputElement>();
+	private mouseDocument: Document | null = null;
 	private readonly onMouseUp = () => {
 		if (!this.dragging) return;
 		this.dragging = false;
@@ -511,7 +512,8 @@ export class BootstrapSelectModal extends Modal {
 			);
 
 		this.treeEl = contentEl.createDiv({ cls: "trellis-bootstrap-tree" });
-		activeDocument.addEventListener("mouseup", this.onMouseUp);
+		this.mouseDocument = this.contentEl.ownerDocument;
+		this.mouseDocument.addEventListener("mouseup", this.onMouseUp);
 		this.renderTree();
 
 		new Setting(contentEl)
@@ -719,7 +721,8 @@ export class BootstrapSelectModal extends Modal {
 	}
 
 	onClose() {
-		activeDocument.removeEventListener("mouseup", this.onMouseUp);
+		this.mouseDocument?.removeEventListener("mouseup", this.onMouseUp);
+		this.mouseDocument = null;
 		this.contentEl.empty();
 	}
 }
@@ -829,7 +832,7 @@ export class BootstrapErrorsModal extends Modal {
 	}
 }
 
-/** Confirm dialog for a separator change. Small by default — shows the count
+/** Confirm dialog for a filename-structure change. Small by default — shows the count
  *  and a collapsible list of exactly which files would be renamed — with a
  *  warning-styled apply and a cancel. Closing it always calls onClose (the
  *  settings tab re-renders so the input matches the final state). */
@@ -927,7 +930,7 @@ export class BulkProgressModal extends Modal {
 	private metaEl!: HTMLElement;
 	private hintEl!: HTMLElement;
 
-	constructor(app: App, private readonly title: string) {
+	constructor(app: App, private readonly title: string, private readonly cancelPolicy: "rollback" | "keep" = "rollback") {
 		super(app);
 	}
 
@@ -936,6 +939,7 @@ export class BulkProgressModal extends Modal {
 		const { contentEl } = this;
 		contentEl.addClass("trellis-progress-modal");
 		contentEl.createEl("h3", { text: this.title });
+		contentEl.createEl("p", { text: t(this.cancelPolicy === "rollback" ? "bulk.cancelPolicyRollback" : "bulk.cancelPolicyKeep") });
 
 		this.barEl = contentEl.createDiv({
 			cls: "trellis-progress-bar",
@@ -1008,16 +1012,18 @@ export class BulkProgressModal extends Modal {
 		processed: number;
 		skipped: string[];
 		outcome?: "done" | "rolled-back";
+		recoveryRemaining?: string[];
+		changeFailures?: number;
 	}) {
 		this.finished = true;
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("trellis-progress-modal");
-		const outcomeLabel = this.cancelled
-			? t("bulk.cancelledLabel")
+		const outcomeLabel = opts.recoveryRemaining?.length
+			? t("bulk.partialRollback")
 			: opts.outcome === "rolled-back"
 				? t("bulk.rolledBack")
-				: t("bulk.done");
+				: this.cancelled ? t("bulk.cancelledLabel") : t("bulk.done");
 		contentEl.createEl("h3", {
 			text: `${this.title} — ${outcomeLabel}`,
 		});
@@ -1037,10 +1043,15 @@ export class BulkProgressModal extends Modal {
 
 		const summary = contentEl.createDiv({
 			cls: "trellis-progress-count",
-			text: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
+			text: opts.outcome === "rolled-back"
+				? t("bulk.recoverySummary", { done: opts.processed, remaining: opts.recoveryRemaining?.length ?? 0, failed: opts.changeFailures ?? opts.skipped.length })
+				: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
 		});
 		summary.setAttribute("aria-live", "polite");
 
+		if (opts.recoveryRemaining?.length) {
+			contentEl.createEl("p", { text: `${t("bulk.partialRollback")}: ${opts.recoveryRemaining.join(", ")}` });
+		}
 		if (opts.skipped.length) {
 			const details = contentEl.createEl("details", { cls: "trellis-progress-skipped" });
 			details.createEl("summary", {

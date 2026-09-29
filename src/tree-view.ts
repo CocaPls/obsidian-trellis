@@ -76,6 +76,8 @@ export interface TrellisTreeCallbacks {
 	/** List untagged notes in a bottom section? */
 	getShowUntagged: () => boolean;
 	getUntagged: () => string[];
+	/** Filename label resolved by Trellis. It may include display-only slots. */
+	getNoteDisplayName: (path: string) => string;
 }
 
 /**
@@ -420,7 +422,7 @@ export class TrellisTreeView extends ItemView {
 				? "tree-item-inner nav-folder-title-content"
 				: "tree-item-inner nav-file-title-content",
 		});
-		inner.setText(this.basename(node.notePath));
+		inner.setText(this.cb.getNoteDisplayName(node.notePath));
 		self.addEventListener("click", () => this.openNote(node.notePath));
 		this.makeRowKeyboardClickable(
 			self,
@@ -508,7 +510,7 @@ export class TrellisTreeView extends ItemView {
 			this.cb.getLabelMode() === "tag"
 				? node.segment
 				: ownNote
-					? this.basename(ownNote)
+					? this.cb.getNoteDisplayName(ownNote)
 					: node.segment;
 		inner.setText(label);
 		const accent = this.cb.getTagColor(node.path);
@@ -576,7 +578,7 @@ export class TrellisTreeView extends ItemView {
 		if (notePath === activePath) self.addClass("is-active");
 		self
 			.createDiv({ cls: "tree-item-inner nav-file-title-content" })
-			.setText(this.basename(notePath));
+			.setText(this.cb.getNoteDisplayName(notePath));
 		self.addEventListener("click", () => this.openNote(notePath));
 		this.makeRowKeyboardClickable(self, () => this.openNote(notePath));
 	}
@@ -706,8 +708,4 @@ export class TrellisTreeView extends ItemView {
 		}
 	}
 
-	private basename(path: string): string {
-		const name = path.split("/").pop() ?? path;
-		return name.replace(/\.md$/, "");
-	}
 }

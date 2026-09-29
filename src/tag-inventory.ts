@@ -1,16 +1,14 @@
 import type { TrellisSchema } from "./tagkey.ts";
 import {
-	assembleBasenameMulti,
-	extractNameMulti,
 	matchTagKey,
 	nsPath,
 	normalizeTagList,
 	sameTagPath,
 	schemaTagDefinitions,
-	slotTagkeys,
 	tagPathIdentity,
 	tagPathInNamespace,
 } from "./tagkey.ts";
+import { projectFilename } from "./filename-projection.ts";
 
 export interface TagInventoryFile {
 	path: string;
@@ -215,7 +213,6 @@ export class TagInventory {
 				valuesByDefinition.set(match.tagDefinitionId, values);
 			}
 
-			let ambiguous = false;
 			for (const [definitionId, values] of valuesByDefinition) {
 				const row = rowByDefinition.get(definitionId);
 				if (!row) continue;
@@ -225,7 +222,6 @@ export class TagInventory {
 				managedOccurrences += values.size;
 				if (values.size > 1) {
 					row.duplicateNotes++;
-					ambiguous = true;
 				}
 				for (const tagPath of values) {
 					managedPaths.add(tagPathIdentity(tagPath));
@@ -258,25 +254,17 @@ export class TagInventory {
 				combinationDefinitions.set(combinationKey, activeDefinitions);
 			}
 
-			if (!ambiguous) {
-				const keys = slotTagkeys(file.frontmatterTags, this.schema);
-				const hasFilenameValue = this.schema.slots.some(
-					(slot, index) => slot.role === "tag" && keys[index]
-				);
-				if (hasFilenameValue) {
-					const name = extractNameMulti(basenameOf(file.path), keys, this.schema);
-					const values = this.schema.slots.map((slot, index) =>
-						slot.role === "name" ? name : keys[index]
-					);
-					const targetBasename = assembleBasenameMulti(values, this.schema);
-					if (targetBasename) {
-						const targetPath = notePath(parentOf(file.path), targetBasename);
-						const sources = targetSources.get(targetPath) ?? new Set<string>();
-						sources.add(file.path);
-						targetSources.set(targetPath, sources);
-						if (targetPath !== file.path) filenameDrift.push({ path: file.path, targetPath });
-					}
-				}
+			const projection = projectFilename(
+				basenameOf(file.path),
+				file.frontmatterTags,
+				this.schema
+			);
+			if (projection.hasManagedMetadata && projection.physicalBasename) {
+				const targetPath = notePath(parentOf(file.path), projection.physicalBasename);
+				const sources = targetSources.get(targetPath) ?? new Set<string>();
+				sources.add(file.path);
+				targetSources.set(targetPath, sources);
+				if (targetPath !== file.path) filenameDrift.push({ path: file.path, targetPath });
 			}
 		}
 

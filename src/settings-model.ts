@@ -18,6 +18,8 @@ import {
 import type { LangSetting } from "./i18n.ts";
 import type { HeaderButtonVisibility } from "./tree-view.ts";
 
+import { normalizeDisplaySettings, type DisplaySettings } from "./display-settings.ts";
+
 export type SortKey = "tagkey" | "mtime" | "ctime";
 export type TreeViewMode = "notes" | "tags";
 export type TreeLabelMode = "filename" | "tag";
@@ -77,6 +79,7 @@ export interface TrellisSettings {
 	settingsVersion: number;
 	schema: TrellisSchema;
 	filenameSyncEnabled: boolean;
+	displayNames: DisplaySettings;
 	treeViewEnabled: boolean;
 	treeViewName: string;
 	headerButtons: HeaderButtonVisibility;
@@ -105,6 +108,7 @@ export const DEFAULT_SETTINGS: TrellisSettings = {
 	settingsVersion: CURRENT_SETTINGS_VERSION,
 	schema: defaultSchema(),
 	filenameSyncEnabled: true,
+	displayNames: normalizeDisplaySettings(undefined),
 	treeViewEnabled: true,
 	treeViewName: "",
 	headerButtons: {
@@ -181,16 +185,20 @@ function isOperationReport(value: unknown): value is TrellisOperationReport {
 
 function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
 	const normalized = cloneSchema(schema);
+	const spacing: SeparatorSpacing[] = ["none", "before", "after", "both"];
 	normalized.slots = normalized.slots.map((slot) => {
 		if (
 			slot.role === "tag" &&
 			slot.segmentSeparator !== undefined &&
 			!isValidHierarchySeparator(slot.segmentSeparator)
-		) return { ...slot, segmentSeparator: "" };
+		) return { ...slot, segmentSeparator: "", segmentSeparatorSpacing: undefined };
+		if (
+			slot.segmentSeparatorSpacing !== undefined &&
+			!spacing.includes(slot.segmentSeparatorSpacing)
+		) return { ...slot, segmentSeparatorSpacing: undefined };
 		if (!isValidSlotWrapper(slot.wrapper)) return { ...slot, wrapper: undefined };
 		return slot;
 	});
-	const spacing: SeparatorSpacing[] = ["none", "before", "after", "both"];
 	normalized.separatorSpacing = normalized.separators.map((raw, index) => {
 		const saved = normalized.separatorSpacing?.[index];
 		const before = /^\s/.test(raw);
@@ -208,6 +216,32 @@ function normalizeSchemaFormatting(schema: TrellisSchema): TrellisSchema {
 	return normalized;
 }
 
+/** The first local 0.6 model briefly appended an invisible free-title slot to
+ * every persisted tag-only structure. It was identifiable by its generated
+ * `slot-title[-n]` id and could make schema migrations absorb tag text into a
+ * title. Remove only that unreleased migration artifact; real title slots use
+ * their existing ids and remain untouched. */
+function removeSyntheticV3TitleSlot(
+	schema: TrellisSchema,
+	settingsVersion: number | undefined
+): TrellisSchema {
+	if (settingsVersion !== 3) return schema;
+	const index = schema.slots.findIndex(
+		(slot) =>
+			slot.role === "name" &&
+			/^slot-title(?:-\d+)?$/.test(slot.id ?? "")
+	);
+	if (index === -1) return schema;
+	const next = cloneSchema(schema);
+	next.slots.splice(index, 1);
+	if (next.separators.length > 0) {
+		const gap = Math.min(index, next.separators.length - 1);
+		next.separators.splice(gap, 1);
+		next.separatorSpacing?.splice(gap, 1);
+	}
+	return next;
+}
+
 export interface NormalizedSettings {
 	settings: TrellisSettings;
 	interruptedOperation: TrellisOperationReport | null;
@@ -222,6 +256,7 @@ export function normalizeLoadedSettings(
 	const data = isPlainObject(rawData) ? rawData : {};
 	const loaded = data as Partial<TrellisSettings> & Partial<LegacyConfig>;
 	const settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+	settings.displayNames = normalizeDisplaySettings(loaded.displayNames);
 	let interruptedOperation: TrellisOperationReport | null = null;
 	let operationRecovered = false;
 
@@ -255,7 +290,19 @@ export function normalizeLoadedSettings(
 		delete migrated.separator;
 		delete migrated.keyPosition;
 	}
-	settings.schema = normalizeSchemaModel(normalizeSchemaFormatting(settings.schema));
+	const formattedSchema = normalizeSchemaFormatting(settings.schema);
+	const migratedSchema = removeSyntheticV3TitleSlot(
+		formattedSchema,
+		loaded.settingsVersion
+	);
+	const removedSyntheticTitle = migratedSchema !== formattedSchema;
+	settings.schema = normalizeSchemaModel(migratedSchema);
+	if (removedSyntheticTitle) {
+		// Schema-shaped undo records from the short-lived forced-title model are
+		// no longer safe to replay after the migration.
+		settings.lastSeparatorChange = undefined;
+		settings.lastNamespaceChange = undefined;
+	}
 
 	const definitions = schemaTagDefinitions(settings.schema);
 	const legacyTreeNamespace = loaded.treeTagKeyNamespace ?? "";

@@ -37,3 +37,9 @@ test("settings remain searchable without dropping older Obsidian support", () =>
 		/obsidianmd\/settings-tab\/prefer-setting-definitions/
 	);
 });
+
+test("live sync retains the free title across direct final-tag removal", () => {
+	assert.match(main, /private readonly physicalTitles = new PhysicalTitleMemory/);
+	assert.match(main, /projectFilenameFromKnownTitle/);
+	assert.match(main, /removingFinalPhysicalTag/);
+});

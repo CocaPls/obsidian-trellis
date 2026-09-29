@@ -25,5 +25,6 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      - run: npm run verify:release -- --assets
       - run: npm test
       - run: npm audit --audit-level=high

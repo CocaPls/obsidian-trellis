@@ -1,8 +1,6 @@
 import type { TrellisSchema } from "./tagkey.ts";
 import {
-	assembleBasenameMulti,
 	duplicateLocationGroups,
-	extractNameMulti,
 	isValidTagPath,
 	isValidTagSegment,
 	isValidTagSegmentForSlot,
@@ -10,7 +8,6 @@ import {
 	normalizeTagList,
 	portableBasenameIssue,
 	slotTagkeys,
-	syncedBasenameMulti,
 	matchTagKey,
 	schemaTagDefinitions,
 	tagDefinitionById,
@@ -20,6 +17,10 @@ import {
 	tagPathInNamespace,
 	tagPathRelativeToNamespace,
 } from "./tagkey.ts";
+import {
+	projectFilename,
+	projectKnownTitle,
+} from "./filename-projection.ts";
 
 export type AutomationErrorCode =
 	| "note-not-found"
@@ -163,9 +164,9 @@ export function inspectNoteState(
 ): TrellisNoteInspection {
 	const frontmatterTags = state.frontmatterTags.map((tag) => `#${withoutHash(tag)}`);
 	const keys = slotTagkeys(frontmatterTags, schema);
-	const nameKey = extractNameMulti(state.basename, keys, schema);
-	const expectedBasename =
-		syncedBasenameMulti(state.basename, frontmatterTags, schema) ?? state.basename;
+	const projection = projectFilename(state.basename, frontmatterTags, schema);
+	const nameKey = projection.title;
+	const expectedBasename = projection.physicalBasename ?? state.basename;
 	const duplicates = duplicateLocationGroups(frontmatterTags, schema);
 	const frontmatter = new Set(state.frontmatterTags.map((tag) => tagPathIdentity(withoutHash(tag))));
 	const inlineManaged = state.allTags
@@ -379,7 +380,6 @@ export function planNoteChange(
 	}
 
 	const current = inspectNoteState(state, schema);
-	const keys = slotTagkeys(nextAllTags, schema);
 	const nextManaged = nextAllTags.some((tag) => {
 		const match = matchTagKey(tag, schema);
 		return match !== null && match.keyPath !== "";
@@ -400,13 +400,10 @@ export function planNoteChange(
 		};
 	}
 	const name = request.nameChange ?? current.nameKey;
-	const values = schema.slots.map((slot, index) =>
-		slot.role === "name" ? name : keys[index]
-	);
 	const nextBasename =
 		request.syncFilename === false
 			? state.basename
-			: assembleBasenameMulti(values, schema) || state.basename;
+			: projectKnownTitle(name, nextAllTags, schema, "physical") || state.basename;
 	const nextPath = notePath(parentPath(state.path), nextBasename, state.extension);
 	const frontmatterChanged = !sameStrings(state.frontmatterTags, nextFrontmatter);
 	const renameChanged = nextPath !== state.path;

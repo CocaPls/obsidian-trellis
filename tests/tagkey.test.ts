@@ -28,6 +28,7 @@ import {
 	tagToTagkeyNs,
 	pickTagkeyNs,
 	slotTagkeys,
+	physicalSlotTagkeys,
 	assembleBasenameMulti,
 	extractNameMulti,
 	syncedBasenameMulti,
@@ -1061,6 +1062,34 @@ test("extractNameMulti keeps a tagkey-only filename name-empty (no BT01→BT01-B
 	assert.equal(syncedBasenameMulti("S88B07", ["#tree/S88/B07"], nameThenTag), null);
 });
 
+test("normalized tag-only schemas keep an unspaced wrapped tail out of the title", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "namespace" },
+			{
+				role: "tag",
+				namespace: "title",
+				filenameTextTransform: "underscore-to-space",
+			},
+			{
+				role: "tag",
+				namespace: "disambiguator",
+				wrapper: { kind: "round" },
+			},
+			{ role: "name" },
+		],
+		separators: ["-", "", ""],
+	};
+	const tags = [
+		"namespace/QA",
+		"title/Link_target",
+		"disambiguator/test",
+	];
+	const keys = physicalSlotTagkeys(tags, schema);
+	assert.equal(assembleBasenameMulti(keys, schema), "QA-Link target(test)");
+	assert.equal(extractNameMulti("QA-Link target(test)", keys, schema), "");
+});
+
 test("extractNameMulti still consumes tagkeys that DO sit on a separator boundary", () => {
 	// The boundary rule must not over-preserve: a proper "-P02C03" boundary is
 	// still consumed so a normal rename works.
@@ -1477,6 +1506,30 @@ test("bootstrap reverses filename-only underscore-to-space projection", () => {
 		tagkeyToTagPath("나무위키 연구", oneSegment),
 		"title/나무위키_연구"
 	);
+});
+
+test("tag hierarchy symbols can render and reverse spacing independently", () => {
+	const schema: TrellisSchema = {
+		slots: [
+			{
+				role: "tag",
+				namespace: "title",
+				segmentSeparator: "·",
+				segmentSeparatorSpacing: "both",
+				filenameTextTransform: "underscore-to-space",
+			},
+		],
+		separators: [],
+	};
+	assert.equal(
+		tagPathToFilenameKey("HANA/문서명_규칙", schema.slots[0]),
+		"HANA · 문서명 규칙"
+	);
+	assert.equal(
+		tagkeyToTagPath("HANA · 문서명 규칙", schema),
+		"title/HANA/문서명_규칙"
+	);
+	assert.equal(tagPathToFilenameKey("HANA", schema.slots[0]), "HANA");
 });
 
 test("custom hierarchy and wrapper characters use the portable safe subset", () => {
