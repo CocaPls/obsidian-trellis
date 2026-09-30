@@ -29,12 +29,15 @@ import {
 	schemaTagDefinitions,
 	separatorConflicts,
 	separatorSpacingAt,
+	segmentSeparatorSpacingAt,
+	slotSyncMode,
 	tagDefinitionById,
 } from "./tagkey";
 import { TagInventory, type TagInventoryFile } from "./tag-inventory";
 import { HEADER_BUTTON_IDS } from "./tree-view";
 import { AlertModal } from "./modals";
 import { setLang, t } from "./i18n";
+import { DISPLAY_SURFACES } from "./display-settings";
 import { cloneSchema } from "./settings-model";
 import type {
 	TrellisOperationKind,
@@ -125,6 +128,8 @@ export class TrellisSettingTab extends PluginSettingTab {
 				aliases: [
 					t("setting.nav.general"),
 					t("setting.nav.structure"),
+					t("display.heading"),
+					...DISPLAY_SURFACES.map(surface => t(`display.${surface}`)),
 					t("setting.filenameSyncName"),
 					t("setting.propertyTagDisplayName"),
 					t("setting.langName"),
@@ -263,6 +268,7 @@ export class TrellisSettingTab extends PluginSettingTab {
 
 	private renderStructure(containerEl: HTMLElement) {
 		this.renderFilenameStructure(containerEl);
+		this.renderDisplaySettings(containerEl);
 		this.renderTagDefinitions(containerEl);
 	}
 
@@ -1033,6 +1039,35 @@ export class TrellisSettingTab extends PluginSettingTab {
 		);
 	}
 
+	private renderDisplaySettings(containerEl: HTMLElement) {
+		new Setting(containerEl).setName(t("display.heading")).setDesc(t("display.desc")).setHeading();
+		for (const surface of DISPLAY_SURFACES) {
+			new Setting(containerEl).setClass("trellis-display-setting").setName(t(`display.${surface}`)).addToggle(toggle => {
+				toggle.toggleEl.setAttribute("aria-label", t(`display.${surface}`));
+				toggle.setValue(this.plugin.settings.displayNames[surface]).onChange(async value => {
+					this.plugin.settings.displayNames[surface] = value;
+					await this.plugin.saveSettings();
+				});
+			});
+		}
+		containerEl.createEl("p", { cls: "setting-item-description", text: t("display.limits") });
+	}
+
+	private renderNamePreview(containerEl: HTMLElement, schema: TrellisSchema) {
+		const preview = containerEl.createDiv({ cls: "trellis-name-preview", attr: { "aria-live": "polite" } });
+		preview.createEl("strong", { text: t("display.preview") });
+		const sample = this.plugin.previewFilename(schema);
+		if (!sample) {
+			preview.createDiv({ text: t("display.openNote") });
+			return;
+		}
+		preview.createDiv({ text: `${t("display.current")}: ${sample.file.path}` });
+		preview.createDiv({ text: `${t("display.physical")}: ${sample.projection.physicalBasename != null ? sample.projection.physicalBasename + ".md" : t("projection.unavailable")}` });
+		preview.createDiv({ text: `${t("display.virtual")}: ${sample.projection.virtualBasename}` });
+		preview.createDiv({ text: this.plugin.settings.filenameSyncEnabled ? t("display.syncOn") : t("display.syncOff") });
+		if (this.draftDirty()) preview.createDiv({ text: t("display.unsaved") });
+	}
+
 	private renderFilenameStructure(containerEl: HTMLElement) {
 		new Setting(containerEl).setName(t("setting.section.filenameStructure")).setHeading();
 		containerEl.createEl("p", {
@@ -1101,7 +1136,6 @@ export class TrellisSettingTab extends PluginSettingTab {
 					})
 			);
 		}
-
 		const sequence = containerEl.createDiv({ cls: "trellis-filename-sequence" });
 		if (schema.slots.length === 0) {
 			sequence.createDiv({
@@ -1127,12 +1161,13 @@ export class TrellisSettingTab extends PluginSettingTab {
 		}
 
 		if (this.draftDirty()) {
+			this.renderNamePreview(containerEl, schema);
 			new Setting(containerEl)
 				.setName(t("setting.filenamePending"))
 				.setDesc(t("setting.pendingDesc"))
 				.addButton((button) =>
 					button
-						.setButtonText(t("adv.apply"))
+						.setButtonText(t("display.review"))
 						.setCta()
 						.onClick(() => {
 							const error = this.validateDraft(schema);
@@ -1374,6 +1409,25 @@ export class TrellisSettingTab extends PluginSettingTab {
 				});
 		}
 		if (slot.role === "tag") {
+			new Setting(partEl)
+				.setName(t("setting.slotPlacement"))
+				.setDesc(t("setting.slotPlacementDesc"))
+				.addDropdown((dropdown) =>
+					dropdown
+						.addOption(
+							"metadata-to-filename",
+							t("slotPlacement.filename")
+						)
+						.addOption("display-only", t("slotPlacement.trellis"))
+						.setValue(slotSyncMode(slot) ?? "metadata-to-filename")
+						.onChange((value) => {
+							slot.syncMode =
+								value === "display-only"
+									? "display-only"
+									: "metadata-to-filename";
+							this.render();
+						})
+				);
 			this.renderFilenameTextTransformSetting(partEl, slot);
 			this.renderHierarchySetting(partEl, slot);
 		}
@@ -1433,6 +1487,21 @@ export class TrellisSettingTab extends PluginSettingTab {
 				text.inputEl.addEventListener("change", () => this.render());
 				text.inputEl.classList.toggle("trellis-hidden", SEGMENT_PRESETS.includes(current));
 			});
+
+		if (current !== "") {
+			new Setting(containerEl)
+				.setName(t("setting.segmentSepSpacing"))
+				.addDropdown((dropdown) => {
+					for (const spacing of SPACING_OPTIONS) {
+						dropdown.addOption(spacing, t(`spacing.${spacing}`));
+					}
+					dropdown.setValue(segmentSeparatorSpacingAt(slot)).onChange((value) => {
+						if (value === "none") delete slot.segmentSeparatorSpacing;
+						else slot.segmentSeparatorSpacing = value as SeparatorSpacing;
+						this.render();
+					});
+				});
+		}
 	}
 
 	private renderWrapperSetting(containerEl: HTMLElement, slot: KeySlot) {
@@ -1584,6 +1653,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 		const seenDefinitions = new Set<string>();
 		for (const slot of schema.slots) {
 			if (slot.role === "tag") {
+				if (slotSyncMode(slot) === "filename-to-metadata") {
+					return t("adv.invalid.reverseMode");
+				}
 				if (!tagDefinitionById(schema, slot.tagDefinitionId)) {
 					return t("adv.invalid.missingDefinition");
 				}
@@ -1593,6 +1665,9 @@ export class TrellisSettingTab extends PluginSettingTab {
 				seenDefinitions.add(slot.tagDefinitionId ?? "");
 				if (!isValidHierarchySeparator(slot.segmentSeparator ?? "")) {
 					return t("adv.invalid.segment");
+				}
+				if (!SPACING_OPTIONS.includes(segmentSeparatorSpacingAt(slot))) {
+					return t("adv.invalid.segmentSpacing");
 				}
 			}
 			if (!isValidSlotWrapper(slot.wrapper)) return t("adv.invalid.wrapper");

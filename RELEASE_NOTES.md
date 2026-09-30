@@ -1,0 +1,59 @@
+# Trellis 0.7.0: filename rules and optional display names
+
+## What's new
+
+- Extend filename structures with an optional free title and per-slot placement.
+  Tag slots can affect the physical filename or contribute only to the displayed name.
+- Optionally show Trellis names in the file explorer, tabs, note titles, search
+  results, backlinks, and Quick Switcher. Quick Switcher can find display names.
+- Configure each display surface separately. All six display options start off.
+- Review filename changes before applying an edited naming structure. The
+  current-note preview appears while structure edits are pending.
+- Inspect naming projections and blocked metadata without changing notes.
+
+## Reliability improvements
+
+- Reject stale change previews when files, tags, or naming rules have changed.
+- Preserve newer tag edits when an automatic rename fails, and report incomplete
+  recovery instead of overwriting those edits.
+- Clarify cancellation and recovery results for bulk operations.
+- Select individual bootstrap notes using touch, pen, or keyboard, while
+  retaining mouse drag selection and Shift-range selection.
+- Block Windows reserved filenames, including superscript device names, and
+  destinations that collide by letter case or canonical Unicode spelling.
+  Check collisions both before bulk changes and immediately before renaming.
+- Restore normal labels when display options or the plugin are disabled, and
+  clean up queued callbacks and window-specific event handlers on unload.
+
+## Updating from 0.5.2
+
+Existing settings are migrated when loaded. Keep a backup of your vault and the
+Trellis plugin settings before applying bulk filename changes. Updating does not
+turn on the new native display options automatically.
+
+Changing a slot between physical filename and display-only mode can change
+existing filenames after you confirm the structure change. Turning a native
+display switch on or off changes labels only; it does not change stored filenames
+or link destinations. Custom link aliases, link text, bookmarks, Graph, and Canvas
+are outside the native display-name feature.
+
+## Compatibility
+
+Requires Obsidian 1.8.7 or newer. Core filename and display-only flows were tested
+on macOS with Obsidian 1.8.7 and 1.13.7. Windows Obsidian UI and physical Android
+and iOS execution have not been tested for this version.
+
+Native display names use Obsidian's internal view structure as well as its public
+APIs. Compatibility can vary with app versions, themes, and other display plugins.
+
+## Recovery and support
+
+Disabling Trellis restores the native labels it decorates; it does not undo
+physical file renames. Use the relevant undo operation when available. To restore
+a vault backup, stop Trellis first and restore the related notes and plugin
+settings together. Replacing only the plugin executable with an older version
+does not restore renamed notes or earlier settings.
+
+For a problem report, include the Obsidian version, operating system, steps, and a
+small non-sensitive example of the naming rules and tags involved:
+https://github.com/CocaPls/obsidian-trellis/issues

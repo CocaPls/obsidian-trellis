@@ -1,21 +1,10 @@
 import esbuild from "esbuild";
 import process from "process";
-import { builtinModules } from "node:module";
+import { buildOptions } from "./build-options.mjs";
 
 const prod = process.argv[2] === "production";
 
-const ctx = await esbuild.context({
-	entryPoints: ["src/main.ts"],
-	bundle: true,
-	external: ["obsidian", "electron", ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
-	format: "cjs",
-	target: "es2018",
-	logLevel: "info",
-	sourcemap: prod ? false : "inline",
-	minify: prod,
-	treeShaking: true,
-	outfile: "main.js",
-});
+const ctx = await esbuild.context(buildOptions(prod));
 
 if (prod) {
 	await ctx.rebuild();

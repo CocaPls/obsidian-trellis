@@ -316,6 +316,33 @@ test("automation can explicitly change a filename-bearing tag without renaming",
 	assert.deepEqual(result.value.changes, { frontmatter: true, rename: false });
 });
 
+test("display-only tag changes update metadata without renaming the note", () => {
+	const displaySchema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "state", syncMode: "display-only" },
+			{ role: "name" },
+		],
+		separators: ["-"],
+	};
+	const note: TrellisNoteState = {
+		path: "notes/Research notes.md",
+		basename: "Research notes",
+		extension: "md",
+		mtime: 1,
+		allTags: ["#state/wip"],
+		frontmatterTags: ["state/wip"],
+	};
+	const result = planNoteChange(note, displaySchema, {
+		path: note.path,
+		tagChanges: [{ namespace: "state", tagPath: "state/done" }],
+	});
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.equal(result.value.next.path, note.path);
+	assert.deepEqual(result.value.next.frontmatterTags, ["state/done"]);
+	assert.deepEqual(result.value.changes, { frontmatter: true, rename: false });
+});
+
 test("automation treats namespace and stored tag casing as the same Obsidian tag", () => {
 	const mixedCaseState: TrellisNoteState = {
 		...state,

@@ -8,7 +8,39 @@ development milestones; `0.1.0` is the first public release.
 > exist for `0.0.1`, `0.0.2`, `0.0.4` through `0.0.8`, and `0.1.0`
 > through `0.1.4`.
 
-## Unreleased
+## 0.7.0 — Filename structures and optional display names
+
+- Extend filename structures with an optional free title and per-slot placement.
+  Tag-only structures remain tag-only instead of receiving a hidden
+  title slot, and sparse notes collapse unused slots and boundaries safely.
+- Let each managed-tag slot either change the physical filename or contribute
+  only to a display name. Changing a structure shows an exact rename preview;
+  reverse and two-way synchronization remain deliberately blocked.
+- Add opt-in display names for the file explorer, tabs, note titles, search,
+  backlinks and Quick Switcher without changing stored filenames or links.
+  Quick Switcher also matches display names and prioritizes exact matches.
+- Add per-surface settings and a current-note physical/display name preview
+  while filename structure edits are pending. Keep controls readable on narrow
+  screens and preserve native font sizes and assistive labels.
+- Add a lazy, incremental projection index and a read-only filename-slot
+  inspector for managed notes, physical drift, virtual names, and blocking
+  metadata issues. Keep the index accurate when renames precede metadata.
+- Preserve the physical free title across reloads and direct final-tag removal,
+  and harden frontmatter tag writes and case-only path comparisons.
+- Configure spacing around each tag hierarchy symbol independently from the
+  symbol itself, alongside the existing boundary, wrapper, and underscore
+  display controls.
+- Revalidate change previews against current files, tags and naming rules before
+  and during writes. Preserve concurrent tag edits and older undo records when
+  a change aborts, and report incomplete recovery explicitly.
+- Support native touch, pen, and keyboard selection of bootstrap notes while
+  retaining mouse drag and Shift-range selection. Reject Windows superscript
+  device names and case or canonical Unicode collisions before changing notes.
+- Cancel queued callbacks and flush pending settings on unload; load sidebar
+  views and the startup tag scan only when needed. Extend compatibility and
+  regression tests for 0.5 settings, display-only changes, collisions and undo.
+- Update Obsidian lint checks, build verification and locked development
+  dependencies; the release build contains no Node/Electron runtime imports.
 
 ## 0.5.2 — Review compatibility and compact settings
 

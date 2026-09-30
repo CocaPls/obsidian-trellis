@@ -15,10 +15,41 @@
  * while the name slot remains user-controlled.
  */
 
+import {
+	legacySchemeFromValueRule,
+	looksLikeTagkey,
+	schemeSegments,
+	valueRuleFromLegacyScheme,
+	type SchemeId,
+	type TagValueRule,
+} from "./value-rules.ts";
+
+export {
+	SCHEME_IDS,
+	legacySchemeFromValueRule,
+	looksLikeTagkey,
+	schemeSegments,
+	suggestSegment,
+	suggestTagValue,
+	valueRuleFromLegacyScheme,
+	type SchemeId,
+	type TagValueRule,
+	type ValueRuleKind,
+} from "./value-rules.ts";
+
 /** The role of a filename slot. */
 export type SlotType = "tag" | "name";
 /** @deprecated Internal compatibility alias for pre-0.5 callers. */
 export type KeyRole = SlotType;
+/** Conceptual 0.6 slot kind. Serialized roles stay compatible with 0.5. */
+export type SlotKind = "metadata" | "title";
+/** One-way behavior of a metadata-backed slot. Properties other than `tags`
+ * are intentionally not implemented yet. */
+export type SlotSyncMode =
+	| "metadata-to-filename"
+	| "filename-to-metadata"
+	| "display-only";
+export const DEFAULT_SLOT_SYNC_MODE: SlotSyncMode = "metadata-to-filename";
 /**
  * Visible hierarchy joiner in a filename. The empty string hides hierarchy.
  * 0.5 accepts validated custom safe punctuation instead of a closed preset
@@ -38,20 +69,6 @@ export interface SlotWrapper {
 	left?: string;
 	/** Used only by custom wrappers. */
 	right?: string;
-}
-
-export type ValueRuleKind = "alternating" | "sequence" | "date" | "timestamp";
-
-/** User-facing tag-value suggestion rule. It never rewrites existing tags. */
-export interface TagValueRule {
-	kind: ValueRuleKind;
-	firstLevel?: "alphabet" | "number";
-	letterCase?: "upper" | "lower";
-	numberWidth?: "auto" | 1 | 2 | 3 | 4;
-	start?: 0 | 1;
-	dateFormat?: "YYYYMMDD" | "YYYY-MM-DD" | "YYMMDD";
-	timestampPrecision?: "minute" | "second" | "millisecond";
-	timezone?: "local" | "utc";
 }
 
 /** A managed Obsidian tag branch, independent from filename projection. */
@@ -78,11 +95,6 @@ export interface TrellisTagDefinition {
  *  - "date":   one YYYYMMDD date ID.
  *  - "seq":    one plain increasing integer (width-preserving).
  */
-export type SchemeId = "spark" | "zettel" | "date" | "seq";
-
-/** All scheme ids, in dropdown order. */
-export const SCHEME_IDS: SchemeId[] = ["spark", "zettel", "date", "seq"];
-
 /**
  * One slot in the filename schema. A tag-key carries the location-tag
  * namespace it mirrors; a name-key is free user text TRELLIS never rewrites.
@@ -93,6 +105,9 @@ export interface KeySlot {
 	role: SlotType;
 	/** Managed tag definition referenced by a tag slot. */
 	tagDefinitionId?: string;
+	/** Direction/effect of this metadata slot. Absent legacy values preserve the
+	 * existing tag -> physical filename behavior. Ignored on the title slot. */
+	syncMode?: SlotSyncMode;
 	/**
 	 * Pre-0.5 persisted namespace. Accepted only for migration/undo records; new
 	 * active schemas resolve a tagDefinitionId instead.
@@ -102,6 +117,8 @@ export interface KeySlot {
 	scheme?: SchemeId;
 	/** Visible joiner for hierarchy segments in this tagkey. Absent = hidden. */
 	segmentSeparator?: SegmentSeparator;
+	/** Optional whitespace rendered around the hierarchy joiner. */
+	segmentSeparatorSpacing?: SeparatorSpacing;
 	/** Optional one-way text projection used only when rendering this tag slot
 	 * into a filename. The stored Obsidian tag is never changed. */
 	filenameTextTransform?: FilenameTextTransform;
@@ -144,7 +161,23 @@ export interface TrellisSchema {
 export type FilenameSchema = TrellisSchema;
 
 /** Current persisted settings model. Versioning lives at the plugin-settings level. */
-export const CURRENT_SETTINGS_VERSION = 2;
+export const CURRENT_SETTINGS_VERSION = 3;
+
+export function slotKind(slot: KeySlot): SlotKind {
+	return slot.role === "tag" ? "metadata" : "title";
+}
+
+export function slotSyncMode(slot: KeySlot): SlotSyncMode | null {
+	return slot.role === "tag" ? slot.syncMode ?? DEFAULT_SLOT_SYNC_MODE : null;
+}
+
+export function isMetadataSlot(slot: KeySlot): boolean {
+	return slotKind(slot) === "metadata";
+}
+
+export function isTitleSlot(slot: KeySlot): boolean {
+	return slotKind(slot) === "title";
+}
 
 function idPart(value: string): string {
 	const ascii = value
@@ -193,31 +226,6 @@ export function tagPathRelativeToNamespace(
 
 export function tagPathInNamespace(path: string, namespace: string): boolean {
 	return tagPathRelativeToNamespace(path, namespace) !== null;
-}
-
-/** Convert a legacy scheme id into the 0.5 tag-definition value rule. */
-export function valueRuleFromLegacyScheme(scheme?: SchemeId): TagValueRule | undefined {
-	if (!scheme) return undefined;
-	if (scheme === "spark") {
-		return {
-			kind: "alternating",
-			firstLevel: "alphabet",
-			letterCase: "upper",
-			numberWidth: 2,
-		};
-	}
-	if (scheme === "seq") return { kind: "sequence", start: 1, numberWidth: "auto" };
-	if (scheme === "date") return { kind: "date", dateFormat: "YYYYMMDD" };
-	return { kind: "timestamp", timestampPrecision: "second", timezone: "local" };
-}
-
-/** Compatibility projection for old Bootstrap helpers that still accept SchemeId. */
-export function legacySchemeFromValueRule(rule?: TagValueRule): SchemeId | undefined {
-	if (!rule) return undefined;
-	if (rule.kind === "alternating") return "spark";
-	if (rule.kind === "sequence") return "seq";
-	if (rule.kind === "date") return "date";
-	return "zettel";
 }
 
 /** Effective definitions, including a read-only fallback for legacy schemas. */
@@ -349,6 +357,38 @@ export function normalizeSchemaModel(schema: TrellisSchema): TrellisSchema {
 			slotIds.add(slot.id);
 		}
 		if (!slot.wrapper || slot.wrapper.kind === "none") delete slot.wrapper;
+		if (slot.role === "tag") {
+			if (
+				slot.syncMode !== "metadata-to-filename" &&
+				slot.syncMode !== "filename-to-metadata" &&
+				slot.syncMode !== "display-only"
+			) slot.syncMode = DEFAULT_SLOT_SYNC_MODE;
+		} else {
+			delete slot.syncMode;
+		}
+	}
+
+	// A filename may contain at most one free title, but tag-only structures are
+	// first-class. Extra title slots were never valid in the UI; retain only the
+	// first if malformed data is loaded.
+	const firstTitleIndex = next.slots.findIndex((slot) => slot.role === "name");
+	for (let index = next.slots.length - 1; index >= 0; index--) {
+		if (next.slots[index].role !== "name" || index === firstTitleIndex) continue;
+		next.slots.splice(index, 1);
+		if (next.separators.length > 0) {
+			const gap = Math.min(index, next.separators.length - 1);
+			next.separators.splice(gap, 1);
+			next.separatorSpacing?.splice(gap, 1);
+		}
+	}
+	const neededGaps = Math.max(0, next.slots.length - 1);
+	while (next.separators.length < neededGaps) next.separators.push("-");
+	next.separators.length = neededGaps;
+	if (next.separatorSpacing) {
+		while (next.separatorSpacing.length < neededGaps) {
+			next.separatorSpacing.push("none");
+		}
+		next.separatorSpacing.length = neededGaps;
 	}
 
 	next.tagDefinitions = definitions;
@@ -376,6 +416,17 @@ export function separatorSpacingAt(
 /** The actual boundary text emitted into a filename for one schema gap. */
 export function boundarySeparator(schema: TrellisSchema, index: number): string {
 	return renderSeparator(schema.separators[index] ?? "", separatorSpacingAt(schema, index));
+}
+
+/** Spacing mode of one tag hierarchy joiner; legacy values mean no spaces. */
+export function segmentSeparatorSpacingAt(slot: KeySlot): SeparatorSpacing {
+	return slot.segmentSeparatorSpacing ?? "none";
+}
+
+/** The actual hierarchy joiner emitted into a filename for one tag slot. */
+export function hierarchySeparator(slot: KeySlot): string {
+	const symbol = slot.segmentSeparator ?? "";
+	return symbol === "" ? "" : renderSeparator(symbol, segmentSeparatorSpacingAt(slot));
 }
 
 /** User-facing kind of one slot boundary. Empty symbol + `after` is the
@@ -436,7 +487,7 @@ export function tagPathToFilenameKey(path: string, slot: KeySlot): string {
 	return path
 		.split("/")
 		.map((segment) => tagSegmentToFilename(segment, slot))
-		.join(slot.segmentSeparator ?? "");
+		.join(hierarchySeparator(slot));
 }
 
 /**
@@ -681,7 +732,7 @@ export function parentTagPath(tagPath: string): string {
 export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string | null {
 	const slot = schema.slots.find((s) => s.role === "tag");
 	if (!slot) return null;
-	const segmentSeparator = slot?.segmentSeparator ?? "";
+	const segmentSeparator = hierarchySeparator(slot);
 	if (segmentSeparator) {
 		const segs = tagkey
 			.split(segmentSeparator)
@@ -723,11 +774,6 @@ export function tagkeyToTagPath(tagkey: string, schema: TrellisSchema): string |
  * from a free title ("trellisupgradecheck") when a filename has no separator,
  * so sync prepends the tagkey instead of overwriting a real title.
  */
-export function looksLikeTagkey(s: string): boolean {
-	const segs = s.match(/[A-Za-z]+|[0-9]+/g);
-	return segs !== null && segs.length >= 2 && segs.join("") === s;
-}
-
 /**
  * Pick the first location tag (by config namespace) from a list of tags and
  * return its tagkey, or null if none. TRELLIS treats one note as having one
@@ -945,12 +991,12 @@ export function separatorConflicts(schema: TrellisSchema): SeparatorConflict[] {
 	for (let slotIndex = 0; slotIndex < schema.slots.length; slotIndex++) {
 		const slot = schema.slots[slotIndex];
 		if (slot.role !== "tag" || !slot.segmentSeparator) continue;
+		const internalSeparator = hierarchySeparator(slot);
 		for (const gapIndex of [slotIndex - 1, slotIndex]) {
 			if (
 				gapIndex >= 0 &&
 				gapIndex < schema.separators.length &&
-				separatorSpacingAt(schema, gapIndex) === "none" &&
-				schema.separators[gapIndex] === slot.segmentSeparator
+				boundarySeparator(schema, gapIndex) === internalSeparator
 			) {
 				conflicts.push({ slotIndex, gapIndex });
 			}
@@ -1032,9 +1078,14 @@ export function portableBasenameIssue(basename: string): PortableBasenameIssue |
 	if ([...basename].some((char) => char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char)))
 		return "reserved-character";
 	if (/[. ]$/.test(basename)) return "trailing-dot-or-space";
-	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9]|conin\$|conout\$)(\..*)?$/i.test(basename))
+	if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(\..*)?$/i.test(basename))
 		return "reserved-name";
 	return null;
+}
+
+/** Compare prospective paths conservatively across case-insensitive filesystems. */
+export function portablePathKey(path: string): string {
+	return path.normalize("NFC").toLowerCase();
 }
 
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */
@@ -1085,6 +1136,21 @@ export function slotTagkeys(
 		keys[match.slotIndex] = tagPathToFilenameKey(match.keyPath, slot);
 	}
 	return keys;
+}
+
+/** Tag-key values that are physically present in filenames. Display-only
+ * values remain available through slotTagkeys(), but never participate in
+ * parsing or assembling an on-disk basename. */
+export function physicalSlotTagkeys(
+	tags: string[],
+	schema: TrellisSchema
+): (string | null)[] {
+	const keys = slotTagkeys(tags, schema);
+	return schema.slots.map((slot, index) =>
+		slot.role === "tag" && slotSyncMode(slot) === "metadata-to-filename"
+			? keys[index]
+			: null
+	);
 }
 
 /**
@@ -1143,6 +1209,14 @@ export function extractNameMulti(
 ): string {
 	const nameIdx = schema.slots.findIndex((s) => s.role === "name");
 	if (nameIdx === -1) return "";
+	// A short-lived local migration appended an empty trailing title slot to
+	// tag-only schemas. Keep those already-loaded shapes lossless until their
+	// settings migration is saved: an unspaced wrapped tail such as `(test)` has
+	// no boundary by which the directional parser could otherwise consume it.
+	const tagOnlyValues = schema.slots.map((slot, index) =>
+		slot.role === "name" ? null : tagkeys[index]
+	);
+	if (assembleBasenameMulti(tagOnlyValues, schema) === basename) return "";
 	const seps = sepsLongestFirst(schema);
 	let rest = basename;
 	// Left side: slots 0 .. nameIdx-1, consumed left to right. A tag slot is
@@ -1239,8 +1313,8 @@ export function tagChangeProjectedName(
 	afterTags: string[],
 	schema: TrellisSchema
 ): string | null {
-	const beforeKeys = slotTagkeys(beforeTags, schema);
-	const afterKeys = slotTagkeys(afterTags, schema);
+	const beforeKeys = physicalSlotTagkeys(beforeTags, schema);
+	const afterKeys = physicalSlotTagkeys(afterTags, schema);
 	if (
 		!afterKeys.some(Boolean) &&
 		!schema.slots.some((slot) => slot.role === "name")
@@ -1263,9 +1337,9 @@ export function schemaMigratedName(
 	oldSchema: TrellisSchema,
 	newSchema: TrellisSchema
 ): string | null {
-	const newKeys = slotTagkeys(tags, newSchema);
+	const newKeys = physicalSlotTagkeys(tags, newSchema);
 	const hasNewTag = newSchema.slots.some((slot, i) => slot.role === "tag" && newKeys[i]);
-	const oldKeys = slotTagkeys(tags, oldSchema);
+	const oldKeys = physicalSlotTagkeys(tags, oldSchema);
 	const hasOldTag = oldSchema.slots.some((slot, i) => slot.role === "tag" && oldKeys[i]);
 	if (!hasNewTag) {
 		if (!hasOldTag || !newSchema.slots.some((slot) => slot.role === "name")) return null;
@@ -1443,189 +1517,6 @@ export function rootMigratedTag(
 	if (!managed) return null;
 	const next = newRoot ? `${newRoot}/${rest}` : rest;
 	return next === tag ? null : next;
-}
-
-// --- ID scheme presets (0.3.0 experimental, B26) ----------------------------
-// A scheme touches ONLY ① new-note segment suggestion and ② bootstrap parsing.
-// Live sync stays format-agnostic: it mirrors whatever segments the tag holds.
-
-/** The next letter run in alphabetical base-26: "A"→"B", "Z"→"AA", "AZ"→"BA". */
-function nextLetterRun(s: string): string {
-	const upper = s === s.toUpperCase();
-	const chars = s.toUpperCase().split("");
-	let i = chars.length - 1;
-	while (i >= 0) {
-		if (chars[i] !== "Z") {
-			chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
-			break;
-		}
-		chars[i] = "A";
-		i--;
-	}
-	if (i < 0) chars.unshift("A");
-	const out = chars.join("");
-	return upper ? out : out.toLowerCase();
-}
-
-/** max+1 over numeric siblings, zero-padded to the widest sibling. */
-function nextNumberRun(siblings: string[]): string {
-	let max = 0;
-	let width = 1;
-	for (const s of siblings) {
-		const n = parseInt(s, 10);
-		if (n > max) max = n;
-		if (s.length > width) width = s.length;
-	}
-	return String(max + 1).padStart(width, "0");
-}
-
-function formattedNumber(value: number, width: TagValueRule["numberWidth"]): string {
-	return width === undefined || width === "auto"
-		? String(value)
-		: String(value).padStart(width, "0");
-}
-
-function nextConfiguredNumber(
-	siblings: string[],
-	start: number,
-	width: TagValueRule["numberWidth"]
-): string | null {
-	if (siblings.some((segment) => !/^[0-9]+$/.test(segment))) return null;
-	const max = siblings.reduce((value, segment) => Math.max(value, Number(segment)), start - 1);
-	const automaticWidth = siblings.reduce(
-		(value, segment) => Math.max(value, segment.length),
-		1
-	);
-	return width === undefined || width === "auto"
-		? String(max + 1).padStart(automaticWidth, "0")
-		: formattedNumber(max + 1, width);
-}
-
-function dateParts(now: Date, timezone: TagValueRule["timezone"]) {
-	const utc = timezone === "utc";
-	return {
-		year: utc ? now.getUTCFullYear() : now.getFullYear(),
-		month: (utc ? now.getUTCMonth() : now.getMonth()) + 1,
-		day: utc ? now.getUTCDate() : now.getDate(),
-		hour: utc ? now.getUTCHours() : now.getHours(),
-		minute: utc ? now.getUTCMinutes() : now.getMinutes(),
-		second: utc ? now.getUTCSeconds() : now.getSeconds(),
-		millisecond: utc ? now.getUTCMilliseconds() : now.getMilliseconds(),
-	};
-}
-
-/** Detailed 0.5 tag-value suggestion. `parentDepth` is relative to the managed
- * namespace (0 = creating its first child). Mixed sibling formats return null
- * instead of guessing; the new-note field then remains manual. */
-export function suggestTagValue(
-	rule: TagValueRule,
-	parentDepth: number,
-	siblings: string[],
-	now: Date
-): string | null {
-	if (rule.kind === "alternating") {
-		const first = rule.firstLevel ?? "alphabet";
-		const alphabetLevel = parentDepth % 2 === 0 ? first === "alphabet" : first !== "alphabet";
-		if (alphabetLevel) {
-			if (siblings.some((segment) => !/^[A-Za-z]+$/.test(segment))) return null;
-			const lower = rule.letterCase === "lower";
-			if (siblings.length === 0) return lower ? "a" : "A";
-			const ordered = [...siblings].sort((a, b) =>
-				a.length !== b.length
-					? a.length - b.length
-					: a.toUpperCase().localeCompare(b.toUpperCase())
-			);
-			const next = nextLetterRun(ordered[ordered.length - 1]);
-			return lower ? next.toLowerCase() : next.toUpperCase();
-		}
-		return nextConfiguredNumber(siblings, 1, rule.numberWidth ?? "auto");
-	}
-	if (rule.kind === "sequence") {
-		return nextConfiguredNumber(siblings, rule.start ?? 1, rule.numberWidth ?? "auto");
-	}
-	const parts = dateParts(now, rule.kind === "timestamp" ? rule.timezone : "local");
-	const year = String(parts.year);
-	const date = `${year}${pad2(parts.month)}${pad2(parts.day)}`;
-	if (rule.kind === "date") {
-		if (rule.dateFormat === "YYYY-MM-DD") {
-			return `${year}-${pad2(parts.month)}-${pad2(parts.day)}`;
-		}
-		if (rule.dateFormat === "YYMMDD") return date.slice(2);
-		return date;
-	}
-	let timestamp = `${date}${pad2(parts.hour)}${pad2(parts.minute)}`;
-	if (rule.timestampPrecision !== "minute") timestamp += pad2(parts.second);
-	if (rule.timestampPrecision === "millisecond") {
-		timestamp += String(parts.millisecond).padStart(3, "0");
-	}
-	return timestamp;
-}
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-/**
- * Suggest the next child segment under a parent, per scheme. The suggestion is
- * exactly that — the new-note modal prefills it and the user can overtype, so
- * a wrong guess costs one edit, never a wrong file.
- *  - spark:  siblings all digits → next number (width kept); all letters →
- *            next letter run; none → alternate with the parent's class
- *            (letters → "01", digits → a letter); mixed/unknown → "01".
- *  - seq:    next number over numeric siblings ("1" when none).
- *  - zettel: YYYYMMDDHHMMSS of `now`.
- *  - date:   YYYYMMDD of `now`.
- */
-export function suggestSegment(
-	scheme: SchemeId,
-	parentSegment: string,
-	siblings: string[],
-	now: Date
-): string {
-	if (scheme === "zettel") {
-		return (
-			`${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}` +
-			`${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
-		);
-	}
-	if (scheme === "date") {
-		return `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
-	}
-	if (scheme === "seq") {
-		const nums = siblings.filter((s) => /^[0-9]+$/.test(s));
-		return nums.length ? nextNumberRun(nums) : "1";
-	}
-	// spark — alternating letter/digit layers.
-	const digitSibs = siblings.filter((s) => /^[0-9]+$/.test(s));
-	const letterSibs = siblings.filter((s) => /^[A-Za-z]+$/.test(s));
-	if (siblings.length > 0) {
-		if (digitSibs.length === siblings.length) return nextNumberRun(digitSibs);
-		if (letterSibs.length === siblings.length) {
-			// Base-26 order = length FIRST, then lexicographic — plain lexicographic
-			// would rank "Z" above "AA" and re-suggest an existing "AA".
-			const max = [...letterSibs].sort((a, b) => {
-				if (a.length !== b.length) return a.length - b.length;
-				return a.toUpperCase() < b.toUpperCase() ? -1 : 1;
-			})[letterSibs.length - 1];
-			return nextLetterRun(max);
-		}
-		return digitSibs.length ? nextNumberRun(digitSibs) : "01";
-	}
-	if (/^[A-Za-z]+$/.test(parentSegment)) return "01";
-	if (/^[0-9]+$/.test(parentSegment)) return "A";
-	return "01";
-}
-
-/**
- * Scheme-aware bootstrap segmentation of a flat tagkey. Returns the segments,
- * or null when the tagkey doesn't fit the scheme (caller falls back to the
- * generic character-class run split). Single-ID schemes accept ONE run the
- * generic guard would reject; spark is exactly the generic split.
- */
-export function schemeSegments(scheme: SchemeId, tagkey: string): string[] | null {
-	if (scheme === "zettel") return /^[0-9]{12,14}$/.test(tagkey) ? [tagkey] : null;
-	if (scheme === "date") return /^[0-9]{8}$/.test(tagkey) ? [tagkey] : null;
-	if (scheme === "seq") return /^[0-9]+$/.test(tagkey) ? [tagkey] : null;
-	// spark — same alternating run split as the generic path, same guards.
-	return looksLikeTagkey(tagkey) ? tagkey.match(/[A-Za-z]+|[0-9]+/g)! : null;
 }
 
 /**

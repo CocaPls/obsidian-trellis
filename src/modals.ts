@@ -449,12 +449,13 @@ export class BootstrapSelectModal extends Modal {
 	private lastClicked: string | null = null;
 	private nextBtn?: ButtonComponent;
 	/** Drag-to-select: while dragging we update checkboxes IN PLACE (no
-	 *  re-render) so mouseenter keeps firing; mouseup does a final render to sync
+	 *  re-render) so pointerenter keeps firing; pointerup does a final render to sync
 	 *  folder tristates. The start row's state flips the mode (select/deselect). */
 	private dragging = false;
 	private dragMode: "select" | "deselect" = "select";
 	private readonly cbByPath = new Map<string, HTMLInputElement>();
-	private readonly onMouseUp = () => {
+	private pointerDocument: Document | null = null;
+	private readonly onPointerEnd = () => {
 		if (!this.dragging) return;
 		this.dragging = false;
 		this.renderTree();
@@ -511,7 +512,9 @@ export class BootstrapSelectModal extends Modal {
 			);
 
 		this.treeEl = contentEl.createDiv({ cls: "trellis-bootstrap-tree" });
-		activeDocument.addEventListener("mouseup", this.onMouseUp);
+		this.pointerDocument = this.contentEl.ownerDocument;
+		this.pointerDocument.addEventListener("pointerup", this.onPointerEnd);
+		this.pointerDocument.addEventListener("pointercancel", this.onPointerEnd);
 		this.renderTree();
 
 		new Setting(contentEl)
@@ -662,7 +665,7 @@ export class BootstrapSelectModal extends Modal {
 			this.visibleFiles.push(node.path);
 			const tagged = this.isTagged(node);
 
-			const row = parent.createDiv({
+			const row = parent.createEl("label", {
 				cls: tagged
 					? "trellis-bootstrap-treerow trellis-bootstrap-file trellis-bootstrap-tagged"
 					: "trellis-bootstrap-treerow trellis-bootstrap-file",
@@ -674,6 +677,14 @@ export class BootstrapSelectModal extends Modal {
 			const cb = row.createEl("input", { type: "checkbox" });
 			cb.checked = this.selected.has(node.path);
 			this.cbByPath.set(node.path, cb);
+			cb.addEventListener("change", () => {
+				if (cb.checked) this.selected.add(node.path);
+				else this.selected.delete(node.path);
+				this.lastClicked = node.path;
+				const restoreFocus = cb === this.contentEl.ownerDocument.activeElement;
+				this.renderTree();
+				if (restoreFocus) this.cbByPath.get(node.path)?.focus();
+			});
 
 			row.createSpan({
 				cls: "trellis-bootstrap-filename",
@@ -690,9 +701,12 @@ export class BootstrapSelectModal extends Modal {
 			// The start row's current state flips the mode (select vs deselect),
 			// so one drag both selects and clears. A press without moving = toggle.
 			// Shift+press extends the visible range from the last click.
-			row.addEventListener("mousedown", (e) => {
-				if (e.button !== 0) return;
+			let selectedByMouse = false;
+			row.addEventListener("pointerdown", (e) => {
+				// Leave touch/pen scrolling and checkbox activation to the browser.
+				if (e.pointerType !== "mouse" || e.button !== 0) return;
 				e.preventDefault();
+				selectedByMouse = true;
 				if (e.shiftKey && this.lastClicked) {
 					this.selectRange(this.lastClicked, node.path);
 					this.renderTree();
@@ -703,14 +717,18 @@ export class BootstrapSelectModal extends Modal {
 				this.applyDrag(node.path);
 				this.lastClicked = node.path;
 			});
-			row.addEventListener("mouseenter", () => {
-				if (this.dragging) this.applyDrag(node.path);
+			row.addEventListener("pointerenter", (e) => {
+				if (e.pointerType === "mouse" && this.dragging) this.applyDrag(node.path);
+			});
+			row.addEventListener("click", (e) => {
+				// Mouse painting already selected this row; do not activate its label twice.
+				if (selectedByMouse) e.preventDefault();
 			});
 		}
 	}
 
 	/** Apply the active drag mode to one note, updating its checkbox in place
-	 *  (no re-render — keeps the drag's mouseenter stream alive). */
+	 *  (no re-render — keeps the drag's pointerenter stream alive). */
 	private applyDrag(path: string) {
 		if (this.dragMode === "select") this.selected.add(path);
 		else this.selected.delete(path);
@@ -719,7 +737,9 @@ export class BootstrapSelectModal extends Modal {
 	}
 
 	onClose() {
-		activeDocument.removeEventListener("mouseup", this.onMouseUp);
+		this.pointerDocument?.removeEventListener("pointerup", this.onPointerEnd);
+		this.pointerDocument?.removeEventListener("pointercancel", this.onPointerEnd);
+		this.pointerDocument = null;
 		this.contentEl.empty();
 	}
 }
@@ -829,7 +849,7 @@ export class BootstrapErrorsModal extends Modal {
 	}
 }
 
-/** Confirm dialog for a separator change. Small by default — shows the count
+/** Confirm dialog for a filename-structure change. Small by default — shows the count
  *  and a collapsible list of exactly which files would be renamed — with a
  *  warning-styled apply and a cancel. Closing it always calls onClose (the
  *  settings tab re-renders so the input matches the final state). */
@@ -927,7 +947,7 @@ export class BulkProgressModal extends Modal {
 	private metaEl!: HTMLElement;
 	private hintEl!: HTMLElement;
 
-	constructor(app: App, private readonly title: string) {
+	constructor(app: App, private readonly title: string, private readonly cancelPolicy: "rollback" | "keep" = "rollback") {
 		super(app);
 	}
 
@@ -936,6 +956,7 @@ export class BulkProgressModal extends Modal {
 		const { contentEl } = this;
 		contentEl.addClass("trellis-progress-modal");
 		contentEl.createEl("h3", { text: this.title });
+		contentEl.createEl("p", { text: t(this.cancelPolicy === "rollback" ? "bulk.cancelPolicyRollback" : "bulk.cancelPolicyKeep") });
 
 		this.barEl = contentEl.createDiv({
 			cls: "trellis-progress-bar",
@@ -1008,16 +1029,18 @@ export class BulkProgressModal extends Modal {
 		processed: number;
 		skipped: string[];
 		outcome?: "done" | "rolled-back";
+		recoveryRemaining?: string[];
+		changeFailures?: number;
 	}) {
 		this.finished = true;
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("trellis-progress-modal");
-		const outcomeLabel = this.cancelled
-			? t("bulk.cancelledLabel")
+		const outcomeLabel = opts.recoveryRemaining?.length
+			? t("bulk.partialRollback")
 			: opts.outcome === "rolled-back"
 				? t("bulk.rolledBack")
-				: t("bulk.done");
+				: this.cancelled ? t("bulk.cancelledLabel") : t("bulk.done");
 		contentEl.createEl("h3", {
 			text: `${this.title} — ${outcomeLabel}`,
 		});
@@ -1037,10 +1060,15 @@ export class BulkProgressModal extends Modal {
 
 		const summary = contentEl.createDiv({
 			cls: "trellis-progress-count",
-			text: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
+			text: opts.outcome === "rolled-back"
+				? t("bulk.recoverySummary", { done: opts.processed, remaining: opts.recoveryRemaining?.length ?? 0, failed: opts.changeFailures ?? opts.skipped.length })
+				: t("bulk.summary", { done: opts.processed, skipped: opts.skipped.length }),
 		});
 		summary.setAttribute("aria-live", "polite");
 
+		if (opts.recoveryRemaining?.length) {
+			contentEl.createEl("p", { text: `${t("bulk.partialRollback")}: ${opts.recoveryRemaining.join(", ")}` });
+		}
 		if (opts.skipped.length) {
 			const details = contentEl.createEl("details", { cls: "trellis-progress-skipped" });
 			details.createEl("summary", {

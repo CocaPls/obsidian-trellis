@@ -1,7 +1,7 @@
 {
 	"id": "trellis",
 	"name": "Trellis",
-	"version": "0.5.2",
+	"version": "0.7.0",
 	"minAppVersion": "1.8.7",
 	"description": "Use hierarchical tags to manage filenames across notes, preview bulk changes, and keep internal links updated.",
 	"author": "CocaPls",

@@ -1,6 +1,6 @@
 {
 	"name": "trellis-plugin",
-	"version": "0.5.2",
+	"version": "0.7.0",
 	"description": "Use hierarchical tags to manage filenames across notes, preview bulk changes, and keep internal links updated.",
 	"main": "main.js",
 	"type": "module",
@@ -37,7 +37,7 @@
 		"@types/node": "^22.0.0",
 		"esbuild": "^0.25.5",
 		"eslint": "^9.39.4",
-		"eslint-plugin-obsidianmd": "^0.4.1",
+		"eslint-plugin-obsidianmd": "^0.4.2",
 		"globals": "^17.6.0",
 		"jiti": "^2.6.1",
 		"obsidian": "1.13.1",

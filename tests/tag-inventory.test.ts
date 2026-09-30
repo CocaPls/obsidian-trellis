@@ -182,6 +182,26 @@ test("registered sidebar-only tags are inventoried but never projected into file
 	]);
 });
 
+test("display-only filename slots are inventoried without physical filename drift", () => {
+	const displaySchema: TrellisSchema = {
+		slots: [
+			{ role: "tag", namespace: "state", syncMode: "display-only" },
+			{ role: "name" },
+		],
+		separators: ["-"],
+	};
+	const inventory = new TagInventory(displaySchema);
+	inventory.upsertFile({
+		path: "Research notes.md",
+		allTags: ["#state/wip"],
+		frontmatterTags: ["state/wip"],
+	});
+	const snapshot = inventory.snapshot();
+	assert.equal(snapshot.tagKeys[0].notes, 1);
+	assert.deepEqual(snapshot.filenameDrift, []);
+	assert.deepEqual(snapshot.filenameCollisions, []);
+});
+
 test("inline managed tags are reported but do not create filename drift", () => {
 	const inventory = new TagInventory(schema);
 	inventory.upsertFile({
