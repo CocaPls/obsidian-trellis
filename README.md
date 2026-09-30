@@ -64,7 +64,6 @@ The initial settings register the `trel` tag namespace and use one tag slot
 followed by one free title:
 
 ```text
-tag        #trel/PRJ/01/DOC/01
 structure  [trel tag] - [free title]
 filename   PRJ01DOC01-meeting-notes.md
 ```
