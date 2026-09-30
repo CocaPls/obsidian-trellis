@@ -2,9 +2,17 @@
 
 **English** | [한국어](README.ko.md)
 
-Trellis uses hierarchical managed tags to keep filename parts consistent across
-many notes. Tags remain the source of truth, and renames go through Obsidian so
-internal links can update with the file.
+Trellis uses hierarchical tags to organize note names in two ways:
+
+- **Change actual filenames:** build parts of a filename from tags. Renames go
+  through Obsidian so internal links can update with the file.
+- **Change display names only:** keep a file such as `Note.md` unchanged and show
+  `PRJ01-Note` in selected Obsidian views using a display-only `projects/PRJ/01`
+  tag slot. Enable the views you want under **Display names in Obsidian**; all six
+  switches start off. No other display-name plugin is required.
+
+Tags supply the structured parts of either name. Actual-filename and display-only
+slots can also be combined. The following example changes an actual filename:
 
 ```text
 tag   #projects/PRJ/01/DOC/01
@@ -52,12 +60,17 @@ name shown for a note.
 
 ## Filename structures
 
-The default structure is one tag slot followed by one free title:
+The initial settings register the `trel` tag namespace and use one tag slot
+followed by one free title:
 
 ```text
-[projects tag] - [free title]
-PRJ01DOC01-meeting-notes
+tag        #trel/PRJ/01/DOC/01
+structure  [trel tag] - [free title]
+filename   PRJ01DOC01-meeting-notes.md
 ```
+
+The `projects` examples elsewhere in this guide use a namespace you register in
+settings; `projects` is not preconfigured.
 
 You can also combine several optional tag slots:
 
@@ -267,6 +280,11 @@ Enable Trellis from Obsidian's Community plugins settings.
 - Runs locally inside Obsidian. Native display names also use internal view structures.
 - Makes no network requests and collects no telemetry.
 - Does not access files outside the current vault.
+
+For 0.7.0, core filename and display-only flows were tested on macOS with Obsidian
+1.8.7 and 1.13.7. Windows Obsidian UI and execution on physical Android/iOS devices
+have not been tested for this version. See the [release notes](RELEASE_NOTES.md)
+for the compatibility and recovery details.
 
 Filename and tag migrations can affect many notes. Review the preview and keep a
 normal vault backup before large changes.

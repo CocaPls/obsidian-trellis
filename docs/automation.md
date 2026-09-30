@@ -2,7 +2,7 @@
 
 [한국어](automation.ko.md)
 
-Trellis 0.5 exposes an experimental, in-process surface for an AI tool or script
+Trellis exposes an experimental, in-process surface for an AI tool or script
 that already has access to the running Obsidian app. It is designed for one
 reviewable note change at a time:
 
