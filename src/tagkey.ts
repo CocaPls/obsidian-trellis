@@ -1078,9 +1078,14 @@ export function portableBasenameIssue(basename: string): PortableBasenameIssue |
 	if ([...basename].some((char) => char.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(char)))
 		return "reserved-character";
 	if (/[. ]$/.test(basename)) return "trailing-dot-or-space";
-	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9]|conin\$|conout\$)(\..*)?$/i.test(basename))
+	if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(\..*)?$/i.test(basename))
 		return "reserved-name";
 	return null;
+}
+
+/** Compare prospective paths conservatively across case-insensitive filesystems. */
+export function portablePathKey(path: string): string {
+	return path.normalize("NFC").toLowerCase();
 }
 
 /** tagToTagkey for an explicit namespace (multi-key: each tag slot has its own). */

@@ -33,6 +33,9 @@ development milestones; `0.1.0` is the first public release.
 - Revalidate change previews against current files, tags and naming rules before
   and during writes. Preserve concurrent tag edits and older undo records when
   a change aborts, and report incomplete recovery explicitly.
+- Support native touch, pen, and keyboard selection of bootstrap notes while
+  retaining mouse drag and Shift-range selection. Reject Windows superscript
+  device names and case or canonical Unicode collisions before changing notes.
 - Cancel queued callbacks and flush pending settings on unload; load sidebar
   views and the startup tag scan only when needed. Extend compatibility and
   regression tests for 0.5 settings, display-only changes, collisions and undo.

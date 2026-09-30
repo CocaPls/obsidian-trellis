@@ -449,13 +449,13 @@ export class BootstrapSelectModal extends Modal {
 	private lastClicked: string | null = null;
 	private nextBtn?: ButtonComponent;
 	/** Drag-to-select: while dragging we update checkboxes IN PLACE (no
-	 *  re-render) so mouseenter keeps firing; mouseup does a final render to sync
+	 *  re-render) so pointerenter keeps firing; pointerup does a final render to sync
 	 *  folder tristates. The start row's state flips the mode (select/deselect). */
 	private dragging = false;
 	private dragMode: "select" | "deselect" = "select";
 	private readonly cbByPath = new Map<string, HTMLInputElement>();
-	private mouseDocument: Document | null = null;
-	private readonly onMouseUp = () => {
+	private pointerDocument: Document | null = null;
+	private readonly onPointerEnd = () => {
 		if (!this.dragging) return;
 		this.dragging = false;
 		this.renderTree();
@@ -512,8 +512,9 @@ export class BootstrapSelectModal extends Modal {
 			);
 
 		this.treeEl = contentEl.createDiv({ cls: "trellis-bootstrap-tree" });
-		this.mouseDocument = this.contentEl.ownerDocument;
-		this.mouseDocument.addEventListener("mouseup", this.onMouseUp);
+		this.pointerDocument = this.contentEl.ownerDocument;
+		this.pointerDocument.addEventListener("pointerup", this.onPointerEnd);
+		this.pointerDocument.addEventListener("pointercancel", this.onPointerEnd);
 		this.renderTree();
 
 		new Setting(contentEl)
@@ -664,7 +665,7 @@ export class BootstrapSelectModal extends Modal {
 			this.visibleFiles.push(node.path);
 			const tagged = this.isTagged(node);
 
-			const row = parent.createDiv({
+			const row = parent.createEl("label", {
 				cls: tagged
 					? "trellis-bootstrap-treerow trellis-bootstrap-file trellis-bootstrap-tagged"
 					: "trellis-bootstrap-treerow trellis-bootstrap-file",
@@ -676,6 +677,14 @@ export class BootstrapSelectModal extends Modal {
 			const cb = row.createEl("input", { type: "checkbox" });
 			cb.checked = this.selected.has(node.path);
 			this.cbByPath.set(node.path, cb);
+			cb.addEventListener("change", () => {
+				if (cb.checked) this.selected.add(node.path);
+				else this.selected.delete(node.path);
+				this.lastClicked = node.path;
+				const restoreFocus = cb === this.contentEl.ownerDocument.activeElement;
+				this.renderTree();
+				if (restoreFocus) this.cbByPath.get(node.path)?.focus();
+			});
 
 			row.createSpan({
 				cls: "trellis-bootstrap-filename",
@@ -692,9 +701,12 @@ export class BootstrapSelectModal extends Modal {
 			// The start row's current state flips the mode (select vs deselect),
 			// so one drag both selects and clears. A press without moving = toggle.
 			// Shift+press extends the visible range from the last click.
-			row.addEventListener("mousedown", (e) => {
-				if (e.button !== 0) return;
+			let selectedByMouse = false;
+			row.addEventListener("pointerdown", (e) => {
+				// Leave touch/pen scrolling and checkbox activation to the browser.
+				if (e.pointerType !== "mouse" || e.button !== 0) return;
 				e.preventDefault();
+				selectedByMouse = true;
 				if (e.shiftKey && this.lastClicked) {
 					this.selectRange(this.lastClicked, node.path);
 					this.renderTree();
@@ -705,14 +717,18 @@ export class BootstrapSelectModal extends Modal {
 				this.applyDrag(node.path);
 				this.lastClicked = node.path;
 			});
-			row.addEventListener("mouseenter", () => {
-				if (this.dragging) this.applyDrag(node.path);
+			row.addEventListener("pointerenter", (e) => {
+				if (e.pointerType === "mouse" && this.dragging) this.applyDrag(node.path);
+			});
+			row.addEventListener("click", (e) => {
+				// Mouse painting already selected this row; do not activate its label twice.
+				if (selectedByMouse) e.preventDefault();
 			});
 		}
 	}
 
 	/** Apply the active drag mode to one note, updating its checkbox in place
-	 *  (no re-render — keeps the drag's mouseenter stream alive). */
+	 *  (no re-render — keeps the drag's pointerenter stream alive). */
 	private applyDrag(path: string) {
 		if (this.dragMode === "select") this.selected.add(path);
 		else this.selected.delete(path);
@@ -721,8 +737,9 @@ export class BootstrapSelectModal extends Modal {
 	}
 
 	onClose() {
-		this.mouseDocument?.removeEventListener("mouseup", this.onMouseUp);
-		this.mouseDocument = null;
+		this.pointerDocument?.removeEventListener("pointerup", this.onPointerEnd);
+		this.pointerDocument?.removeEventListener("pointercancel", this.onPointerEnd);
+		this.pointerDocument = null;
 		this.contentEl.empty();
 	}
 }

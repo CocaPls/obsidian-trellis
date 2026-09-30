@@ -1,6 +1,7 @@
 import {
 	Plugin,
 	TFile,
+	TFolder,
 	getAllTags,
 	getFrontMatterInfo,
 	Notice,
@@ -8,6 +9,7 @@ import {
 	normalizePath,
 	parseYaml,
 	type WorkspaceLeaf,
+	type TAbstractFile,
 } from "obsidian";
 import {
 	TrellisSchema,
@@ -49,6 +51,7 @@ import {
 	slotTagkeys,
 	physicalSlotTagkeys,
 	portableBasenameIssue,
+	portablePathKey,
 	matchTagKey,
 	normalizeSchemaModel,
 	tagDefinitionById,
@@ -1534,8 +1537,8 @@ export default class TrellisPlugin extends Plugin {
 			};
 		}
 		if (verifiedPlan.changes.rename) {
-			const target = this.app.vault.getAbstractFileByPath(verifiedPlan.next.path);
-			if (target && target !== file) {
+			const target = this.filenameConflict(verifiedPlan.next.path, file);
+			if (target) {
 				return {
 					ok: false,
 					error: {
@@ -2103,7 +2106,7 @@ export default class TrellisPlugin extends Plugin {
 		}
 
 		const path = normalizePath(`${base}.md`);
-		if (this.app.vault.getAbstractFileByPath(path)) {
+		if (this.filenameConflict(path)) {
 			new Notice(t("notice.exists", { base }));
 			return;
 		}
@@ -2365,14 +2368,14 @@ export default class TrellisPlugin extends Plugin {
 				row.afterTags
 			);
 			if (!targetPath || targetPath === row.path) continue;
-			const firstSource = targetSources.get(targetPath);
+			const targetKey = portablePathKey(targetPath);
+			const firstSource = targetSources.get(targetKey);
 			if (firstSource && firstSource !== row.path) {
 				conflicts.add(targetPath);
 			} else {
-				targetSources.set(targetPath, row.path);
+				targetSources.set(targetKey, row.path);
 			}
-			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
-			if (occupied && occupied !== file) conflicts.add(targetPath);
+			if (this.filenameConflict(targetPath, file)) conflicts.add(targetPath);
 		}
 		return [...conflicts].sort();
 	}
@@ -2993,29 +2996,30 @@ export default class TrellisPlugin extends Plugin {
 		return count;
 	}
 
-	/** Prospective exact-path collisions under a staged schema. Only groups that
+	/** Prospective portable-path collisions under a staged schema. Only groups that
 	 * include a file this schema edit would rename block the apply; unrelated
 	 * pre-existing drift remains visible in the live settings inventory. */
 	private schemaFilenameCollisions(
 		rows: { path: string; newName: string }[]
 	): { targetPath: string; notePaths: string[] }[] {
-		const sources = new Map<string, Set<string>>();
+		const sources = new Map<string, { targetPath: string; notePaths: Set<string> }>();
 		for (const row of rows) {
 			const file = this.app.vault.getAbstractFileByPath(row.path);
 			if (!(file instanceof TFile)) continue;
 			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 			const targetPath = normalizePath(`${dir}${row.newName}.${file.extension}`);
-			const group = sources.get(targetPath) ?? new Set<string>();
-			group.add(row.path);
-			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
-			if (occupied && occupied !== file) group.add(targetPath);
-			sources.set(targetPath, group);
+			const targetKey = portablePathKey(targetPath);
+			const group = sources.get(targetKey) ?? { targetPath, notePaths: new Set<string>() };
+			group.notePaths.add(row.path);
+			const occupied = this.filenameConflict(targetPath, file);
+			if (occupied) group.notePaths.add(occupied.path);
+			sources.set(targetKey, group);
 		}
-		return [...sources.entries()]
-			.filter(([, paths]) => paths.size > 1)
-			.map(([targetPath, paths]) => ({
-				targetPath,
-				notePaths: [...paths].sort(),
+		return [...sources.values()]
+			.filter((group) => group.notePaths.size > 1)
+			.map((group) => ({
+				targetPath: group.targetPath,
+				notePaths: [...group.notePaths].sort(),
 			}));
 	}
 
@@ -3327,11 +3331,11 @@ export default class TrellisPlugin extends Plugin {
 			if (!(file instanceof TFile) || seenCurrent.has(file.path)) return null;
 			const dir = file.parent && file.parent.path !== "/" ? `${file.parent.path}/` : "";
 			const targetPath = normalizePath(`${dir}${rename.oldBasename}.${file.extension}`);
-			if (seenTargets.has(targetPath)) return null;
-			const occupied = this.app.vault.getAbstractFileByPath(targetPath);
-			if (occupied && occupied !== file) return null;
+			const targetKey = portablePathKey(targetPath);
+			if (seenTargets.has(targetKey)) return null;
+			if (this.filenameConflict(targetPath, file)) return null;
 			seenCurrent.add(file.path);
-			seenTargets.add(targetPath);
+			seenTargets.add(targetKey);
 			rows.push({ currentPath: file.path, targetPath });
 		}
 		return { oldSchema, rows };
@@ -3551,6 +3555,19 @@ export default class TrellisPlugin extends Plugin {
 		});
 	}
 
+	/** Check cached siblings, including folders, without scanning the whole vault. */
+	private filenameConflict(path: string, source?: TFile): TAbstractFile | null {
+		const exact = this.app.vault.getAbstractFileByPath(path);
+		if (exact && exact !== source) return exact;
+		const slash = path.lastIndexOf("/");
+		const parent = slash < 0
+			? this.app.vault.getRoot()
+			: this.app.vault.getAbstractFileByPath(path.slice(0, slash));
+		if (!(parent instanceof TFolder)) return null;
+		const key = portablePathKey(path);
+		return parent.children.find((child) => child !== source && portablePathKey(child.path) === key) ?? null;
+	}
+
 	/** Apply every filename safety rule through Obsidian's link-safe rename API. */
 	private async performGuardedRename(
 		file: TFile,
@@ -3567,8 +3584,7 @@ export default class TrellisPlugin extends Plugin {
 		}
 		// Collision guard: refuse to rename onto a different existing file so a
 		// separator migration / undo can never clobber an unrelated note.
-		const existing = this.app.vault.getAbstractFileByPath(newPath);
-		if (existing && existing !== file) {
+		if (this.filenameConflict(newPath, file)) {
 			return { status: "collision", basename };
 		}
 		// Capture the OLD path — renameFile mutates file.path to newPath in place.

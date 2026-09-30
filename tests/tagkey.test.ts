@@ -44,6 +44,7 @@ import {
 	separatorConflicts,
 	schemaMigratedName,
 	portableBasenameIssue,
+	portablePathKey,
 	normalizeSchemaModel,
 	renderSlotValue,
 	unwrapSlotValue,
@@ -1377,7 +1378,7 @@ test("isValidTagPath: slash-joined valid segments, no empty levels", () => {
 });
 
 test("portableBasenameIssue enforces the cross-platform filename subset", () => {
-	for (const name of ["S88-사과", "S.88-note", "S88-CON", "COM10", "한글 문서"]) {
+	for (const name of ["S88-사과", "S.88-note", "S88-CON", "COM10", "COM⁴", "한글 문서"]) {
 		assert.equal(portableBasenameIssue(name), null, name);
 	}
 	assert.equal(portableBasenameIssue(""), "empty");
@@ -1389,6 +1390,19 @@ test("portableBasenameIssue enforces the cross-platform filename subset", () => 
 	for (const name of ["CON", "con.txt", "PRN", "AUX", "NUL", "COM1", "LPT9", "CONOUT$"]) {
 		assert.equal(portableBasenameIssue(name), "reserved-name", name);
 	}
+	for (const digit of ["¹", "²", "³"]) {
+		for (const prefix of ["COM", "LPT"]) {
+			for (const suffix of ["", ".txt"]) {
+				assert.equal(portableBasenameIssue(prefix + digit + suffix), "reserved-name");
+				assert.equal(portableBasenameIssue(prefix.toLowerCase() + digit + suffix), "reserved-name");
+			}
+		}
+	}
+});
+
+test("portable path comparison handles case and canonical Unicode without merging folders", () => {
+	assert.equal(portablePathKey("Notes/CAFÉ.md"), portablePathKey("notes/cafe\u0301.md"));
+	assert.notEqual(portablePathKey("One/Note.md"), portablePathKey("Two/note.md"));
 });
 
 test("0.5 schema migration assigns stable definition and slot ids without changing output", () => {

@@ -17,6 +17,11 @@
 - Preserve newer tag edits when an automatic rename fails, and report incomplete
   recovery instead of overwriting those edits.
 - Clarify cancellation and recovery results for bulk operations.
+- Select individual bootstrap notes using touch, pen, or keyboard, while
+  retaining mouse drag selection and Shift-range selection.
+- Block Windows reserved filenames, including superscript device names, and
+  destinations that collide by letter case or canonical Unicode spelling.
+  Check collisions both before bulk changes and immediately before renaming.
 - Restore normal labels when display options or the plugin are disabled, and
   clean up queued callbacks and window-specific event handlers on unload.
 

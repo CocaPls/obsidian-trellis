@@ -101,10 +101,6 @@
 	user-select: none;
 	flex: 1 1 auto;
 }
-/* File checkboxes are display-only — the row click/drag drives selection. */
-.trellis-bootstrap-file input[type="checkbox"] {
-	pointer-events: none;
-}
 .trellis-bootstrap-file:hover,
 .trellis-bootstrap-folder:hover {
 	background: var(--background-modifier-hover);
