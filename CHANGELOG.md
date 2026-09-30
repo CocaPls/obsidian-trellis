@@ -10,8 +10,8 @@ development milestones; `0.1.0` is the first public release.
 
 ## 0.7.0 — Filename structures and optional display names
 
-- Model filenames as an ordered structure of managed-tag slots and an optional
-  free title. Tag-only structures remain tag-only instead of receiving a hidden
+- Extend filename structures with an optional free title and per-slot placement.
+  Tag-only structures remain tag-only instead of receiving a hidden
   title slot, and sparse notes collapse unused slots and boundaries safely.
 - Let each managed-tag slot either change the physical filename or contribute
   only to a display name. Changing a structure shows an exact rename preview;

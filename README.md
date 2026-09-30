@@ -264,7 +264,7 @@ Enable Trellis from Obsidian's Community plugins settings.
 
 - Requires Obsidian 1.8.7 or newer.
 - Supports desktop and mobile.
-- Runs locally through Obsidian's public APIs.
+- Runs locally inside Obsidian. Native display names also use internal view structures.
 - Makes no network requests and collects no telemetry.
 - Does not access files outside the current vault.
 

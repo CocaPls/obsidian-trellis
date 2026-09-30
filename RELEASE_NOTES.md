@@ -2,8 +2,8 @@
 
 ## What's new
 
-- Build names from managed tags and an optional free title. Tag slots can affect
-  the physical filename or contribute only to the displayed name.
+- Extend filename structures with an optional free title and per-slot placement.
+  Tag slots can affect the physical filename or contribute only to the displayed name.
 - Optionally show Trellis names in the file explorer, tabs, note titles, search
   results, backlinks, and Quick Switcher. Quick Switcher can find display names.
 - Configure each display surface separately. All six display options start off.
@@ -31,6 +31,15 @@ existing filenames after you confirm the structure change. Turning a native
 display switch on or off changes labels only; it does not change stored filenames
 or link destinations. Custom link aliases, link text, bookmarks, Graph, and Canvas
 are outside the native display-name feature.
+
+## Compatibility
+
+Requires Obsidian 1.8.7 or newer. Core filename and display-only flows were tested
+on macOS with Obsidian 1.8.7 and 1.13.7. Windows Obsidian UI and physical Android
+and iOS execution have not been tested for this version.
+
+Native display names use Obsidian's internal view structure as well as its public
+APIs. Compatibility can vary with app versions, themes, and other display plugins.
 
 ## Recovery and support
 
