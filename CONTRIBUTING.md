@@ -58,9 +58,14 @@ Trellis runs offline; its Node-based build tools are not shipped runtime code.
    The scanner chooses `build` before `build:plugin` or `compile`; keep `build` a
    production build. Review manifest, release, source, and build-verification
    findings separately; a warning is not automatically a submission blocker.
-5. After authorization to release, the tag-triggered workflow builds and creates
-   a **draft** GitHub Release with `main.js`, `manifest.json`, and `styles.css` as
-   individual assets. Check the source commit, assets and `RELEASE_NOTES.md` before
+5. After authorization to release, merge the reviewed source into the default
+   branch, `main`, and tag that exact commit. Check that the version in `main`'s
+   `manifest.json`, the plain `x.y.z` tag, and the release asset's manifest agree.
+   Obsidian checks the default branch's manifest to discover the version and
+   downloads the assets from its matching release; pushing only a preparation
+   branch or publishing a differently versioned release is not sufficient.
+   The tag-triggered workflow builds and creates a **draft** GitHub Release with
+   `main.js`, `manifest.json`, and `styles.css` as individual assets. Check the source commit, assets and `RELEASE_NOTES.md` before
    publishing. The workflow uses this reviewed file as the release body; update
    it for each release. A manual-install ZIP alone is not sufficient. Obsidian makes CSS
    optional generally, but Trellis needs its stylesheet.

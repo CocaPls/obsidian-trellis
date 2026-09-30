@@ -2,7 +2,7 @@
 
 [English](automation.md)
 
-Trellis 0.5는 실행 중인 Obsidian 앱에 이미 접근할 수 있는 AI 도구나 스크립트를
+Trellis는 실행 중인 Obsidian 앱에 이미 접근할 수 있는 AI 도구나 스크립트를
 위해 실험적인 프로세스 내부 표면을 제공합니다. 한 번에 검토 가능한 노트 하나를
 바꾸도록 설계했습니다.
 
