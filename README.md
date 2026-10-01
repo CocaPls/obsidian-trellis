@@ -183,8 +183,6 @@ is retained.
 - **Filename slot inspector** — run **Inspect filename slots** to compare
   actual filenames, physical targets, and Trellis-only names, including drift
   and blocking tag issues. Opening it does not change tags or filenames.
-- **Inventory** — inspect usage counts, combinations, inline-tag warnings,
-  filename drift, and exact collisions per managed definition.
 
 ## Safe writes and completion
 
