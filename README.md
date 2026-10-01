@@ -204,6 +204,11 @@ Trellis treats filename and tag changes as managed write operations.
 Renames use Obsidian's file manager and follow Obsidian's **Automatically update
 internal links** setting.
 
+**Import undo removes the tags added by the import.** With filename sync enabled,
+removing the final physical tag can also remove its filename prefix: importing
+`PRJ04-Imported.md` and then undoing the tag import can leave `Imported.md`.
+The original manually typed prefix is not restored by this undo operation.
+
 ## Quick start
 
 1. Install and enable Trellis.
@@ -224,6 +229,25 @@ tags:
 
 Frontmatter tags are the management source. Inline tags are not rewritten and
 are reported separately when they overlap a managed namespace.
+
+## Screenshots
+
+These screenshots show the public 0.7.0 plugin installed from Obsidian's community
+browser on macOS, using test notes and a custom naming structure.
+
+![Filename structure settings](docs/images/filename-settings.png)
+
+The structure combines an actual-filename Projects slot, a free title, and a
+display-only Areas slot. This example uses test namespaces `releasecheck` and
+`areascheck`; new installations start with `trel`.
+
+| Native display options off | Native display options on |
+| --- | --- |
+| ![Original native note names](docs/images/native-name-before.png) | ![Trellis names in native note views](docs/images/native-name-after.png) |
+
+The actual file remains `PRJ01-Meeting notes.md` in both screenshots. Enabling
+native display names adds `ENG02` to the tab, note header, and inline title.
+The Trellis sidebar shows its calculated name in both cases.
 
 ## Automation for tools and AI
 
